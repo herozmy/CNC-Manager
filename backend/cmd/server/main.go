@@ -31,7 +31,7 @@ import (
 //
 // 服务启动时会打印这个版本号，GET /api/meta 也会返回，
 // 界面上显示出来——现场排查问题时第一件事就是确认装的是哪一版。
-var version = "v0.01"
+var version = "v0.02"
 
 func main() {
 	if err := run(); err != nil {
