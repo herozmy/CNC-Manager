@@ -3,7 +3,6 @@
  *
  * 现在只剩**刀具识别**相关的部分（程序号一律由人工输入，不做识别也不做对比）。
  */
-import type { ToolUse } from '../api/types'
 
 /* -------------------------------------------------------------- 刀具 */
 
@@ -16,9 +15,4 @@ export function normalizeToolNo(value: string): string {
   const body = text.startsWith('T') ? text.slice(1) : text
   const trimmed = body.replace(/^0+/, '')
   return trimmed === '' ? body : trimmed
-}
-
-/** 刀具展示文案：有刀补号时拼成 T01/D01，识别不到刀补号就只显示 T01 */
-export function formatToolLabel(tool: ToolUse): string {
-  return tool.offsetNo ? `${tool.toolNo}/${tool.offsetNo}` : tool.toolNo
 }

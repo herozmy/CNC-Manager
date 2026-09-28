@@ -160,9 +160,13 @@ async function onFileChange(event: Event): Promise<void> {
   }
 }
 
-/** 识别结果里的刀具已确认加入，提示条数并让父组件刷新详情 */
-function onToolsAdded(count: number): void {
-  ElMessage.success(`已加入 ${count} 把刀`)
+/**
+ * 识别结果里的刀具已确认加入，让父组件刷新详情。
+ *
+ * 提示由识别面板自己弹：只有它知道加进去几把、跳过几把，
+ * 这边再弹一条就成两条了。
+ */
+function onToolsAdded(): void {
   emit('changed')
 }
 </script>
@@ -191,7 +195,7 @@ function onToolsAdded(count: number): void {
       <el-button size="small" type="primary" plain :loading="uploading" @click="pickFile">
         上传新版本
       </el-button>
-      <span class="upload-hint">上传后自动识别数控系统与刀具，识别到的刀可一键加入刀具补偿表</span>
+      <span class="upload-hint">上传后自动识别数控系统与刀具，识别结果可以先改再加入刀具补偿表</span>
       <input ref="fileInputRef" type="file" class="hidden-file" @change="onFileChange" />
     </div>
 
@@ -200,7 +204,6 @@ function onToolsAdded(count: number): void {
       :parse="uploadResult.parse ?? null"
       :program-id="programId"
       :title="`第 ${uploadResult.versionNo} 版上传成功`"
-      allow-add-tools
       closable
       @tools-added="onToolsAdded"
       @close="uploadResult = null"

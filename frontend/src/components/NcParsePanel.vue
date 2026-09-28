@@ -2,22 +2,24 @@
 /**
  * NC 自动识别结果面板（**只展示刀具识别结果**）。
  *
- * 两个地方共用：
- *   - 上传成功后，就地贴在上传位置（OperationCard / VersionDialog），带版本号标题、
- *     「加入刀具补偿表」按钮；
- *   - 只读查看程序时的「识别程序」（ProgramEditorDialog），只有识别内容，没有记录可比。
+ * 三处共用：上传成功后（OperationCard）、版本弹窗里上传后（VersionDialog）、
+ * 以及查看程序时的「识别程序」（ProgramEditorDialog）。
+ *
+ * 识别结果**可以直接在这里改**再确认加入。原先是"识别到什么就往刀具补偿表里灌什么"，
+ * 一键下去没法回头；现场的写法五花八门，识别偶尔看走眼很正常，所以这里给一份
+ * 可编辑的清单：改刀具号、改刀补号、删掉多出来的、补上漏掉的，确认没问题再点加入。
  *
  * 程序号由人工输入，这里既不显示也不与记录对比。
  *
  * 判空纪律：parse 可能是 null（后端读文件失败），tools 可能是空数组，
  * offsetNo 可能是空串——都要显示成明确的「未识别到」而不是空白。
  */
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { ParseResult, ProgramToolInput } from '../api/types'
 import { getProgramTools, saveProgramTools } from '../api'
 import { errorMessage } from '../api/client'
-import { formatToolLabel, normalizeToolNo } from '../utils/nc'
+import { normalizeToolNo } from '../utils/nc'
 
 const props = defineProps<{
   /** 识别结果；后端读取程序正文失败时为 null */
@@ -26,8 +28,6 @@ const props = defineProps<{
   programId: number
   /** 面板标题，例如「第 2 版上传成功」 */
   title?: string
-  /** 是否显示「加入刀具补偿表」按钮 */
-  allowAddTools?: boolean
   /** 是否显示「收起」 */
   closable?: boolean
 }>()
@@ -40,29 +40,61 @@ const emit = defineEmits<{
 
 /* ------------------------------------------------------------ 展示数据 */
 
-const tools = computed(() => props.parse?.tools ?? [])
-
 const controllerText = computed(() => props.parse?.controller ?? '')
 
 /**
  * 既没识别出数控系统、也没识别出刀具时，整块只剩行数可看，
  * 这时候给一句明确的「没有识别到刀具调用」，免得用户对着空面板猜。
  */
-const nothingRecognized = computed(() => controllerText.value === '' && tools.value.length === 0)
-
-/** 刀具文案：T01/D01、T02/D02；offsetNo 为空时只显示刀号 */
-const toolText = computed(() => tools.value.map(formatToolLabel).join('、'))
+const nothingRecognized = computed(() => controllerText.value === '' && rows.value.length === 0)
 
 /** 现场要看的提醒，内联展示，不打扰用户 */
 const warnings = computed(() => props.parse?.warnings ?? [])
+
+/* -------------------------------------------------------- 可编辑的刀具行 */
+
+interface ToolRow {
+  uid: number
+  toolNo: string
+  offsetNo: string
+}
+
+let uidSeed = 0
+const rows = ref<ToolRow[]>([])
+
+function newRow(toolNo = '', offsetNo = ''): ToolRow {
+  uidSeed += 1
+  return { uid: uidSeed, toolNo, offsetNo }
+}
+
+/** 后端有识别结果就照抄一份成可编辑的行；没有就从空开始 */
+function reset(): void {
+  rows.value = (props.parse?.tools ?? []).map((tool) => newRow(tool.toolNo, tool.offsetNo))
+}
+
+watch(() => props.parse, reset, { immediate: true })
+
+function addRow(): void {
+  // 新增的行给个顺下去的刀号，省得每次都从头敲
+  const next = rows.value.length + 1
+  rows.value.push(newRow(`T${String(next).padStart(2, '0')}`, `D${String(next).padStart(2, '0')}`))
+}
+
+function removeRow(index: number): void {
+  rows.value.splice(index, 1)
+}
+
+/** 刀具号不能为空——后端整表替换时它是必填的，空着提交必然失败 */
+const emptyToolNo = computed(() => rows.value.some((row) => row.toolNo.trim() === ''))
+
+const canAdd = computed(() => rows.value.length > 0 && !emptyToolNo.value)
 
 /* -------------------------------------------------------- 加入刀具补偿表 */
 
 const adding = ref(false)
 
 async function addTools(): Promise<void> {
-  const result = props.parse
-  if (!result || result.tools.length === 0 || adding.value) return
+  if (!canAdd.value || adding.value) return
 
   adding.value = true
   try {
@@ -92,17 +124,22 @@ async function addTools(): Promise<void> {
     const known = new Set(existing.map((tool) => normalizeToolNo(tool.toolNo)))
     let maxSeq = existing.reduce((max, tool) => Math.max(max, tool.seq), 0)
     const added: ProgramToolInput[] = []
+    let skipped = 0
 
-    for (const tool of result.tools) {
-      const key = normalizeToolNo(tool.toolNo)
-      if (!key || known.has(key)) continue
+    for (const row of rows.value) {
+      const toolNo = row.toolNo.trim()
+      const key = normalizeToolNo(toolNo)
+      if (!key || known.has(key)) {
+        skipped += 1
+        continue
+      }
       known.add(key)
       maxSeq += 1
       added.push({
         seq: maxSeq,
         toolId: null,
-        toolNo: tool.toolNo,
-        offsetNo: tool.offsetNo,
+        toolNo,
+        offsetNo: row.offsetNo.trim(),
         toolName: '',
         toolDia: 0,
         cornerRadius: 0,
@@ -119,11 +156,16 @@ async function addTools(): Promise<void> {
     }
 
     if (added.length === 0) {
-      ElMessage.info('刀具补偿表里已经有了')
+      ElMessage.info(skipped > 0 ? '这些刀具在补偿表里已经有了' : '没有要加入的刀具')
       return
     }
 
     await saveProgramTools(props.programId, [...items, ...added])
+    if (skipped > 0) {
+      ElMessage.success(`已加入 ${added.length} 把刀，另有 ${skipped} 把表里已有，已跳过`)
+    } else {
+      ElMessage.success(`已加入 ${added.length} 把刀`)
+    }
     emit('toolsAdded', added.length)
   } catch (error) {
     ElMessage.error(errorMessage(error))
@@ -157,29 +199,71 @@ async function addTools(): Promise<void> {
           <dt>行数</dt>
           <dd>{{ parse.lineCount }} 行</dd>
         </div>
-
-        <div class="row">
-          <dt>刀具</dt>
-          <dd>
-            <template v-if="tools.length > 0">
-              <span class="tool-list">{{ toolText }}</span>
-              <el-button
-                v-if="allowAddTools"
-                size="small"
-                type="primary"
-                plain
-                :loading="adding"
-                @click="addTools"
-              >
-                加入刀具补偿表
-              </el-button>
-            </template>
-            <span v-else class="badge-none">
-              {{ nothingRecognized ? '没有识别到刀具调用' : '未识别到刀具' }}
-            </span>
-          </dd>
-        </div>
       </dl>
+
+      <!-- 识别到的刀具：可改、可删、可补，确认没问题再加入 -->
+      <div class="tool-head">
+        <span class="tool-label">
+          刀具
+          <span v-if="rows.length" class="tool-count">{{ rows.length }} 把</span>
+        </span>
+        <el-button size="small" @click="addRow">+ 添加一行</el-button>
+      </div>
+
+      <p v-if="rows.length === 0" class="tool-empty">
+        {{
+          nothingRecognized
+            ? '没有识别到刀具调用，可以点「+ 添加一行」自己填。'
+            : '识别到的刀具已被删空，可以点「+ 添加一行」自己填。'
+        }}
+      </p>
+
+      <table v-else class="tool-table">
+        <thead>
+          <tr>
+            <th class="col-seq">#</th>
+            <th>刀具号</th>
+            <th>刀补号</th>
+            <th class="col-op"></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="(row, index) in rows" :key="row.uid">
+            <td class="col-seq">{{ index + 1 }}</td>
+            <td>
+              <el-input
+                v-model="row.toolNo"
+                size="small"
+                placeholder="T01"
+                :class="{ 'is-empty': row.toolNo.trim() === '' }"
+              />
+            </td>
+            <td>
+              <el-input v-model="row.offsetNo" size="small" placeholder="D01（可留空）" />
+            </td>
+            <td class="col-op">
+              <el-button link type="danger" size="small" @click="removeRow(index)">删除</el-button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="tool-actions">
+        <el-button
+          size="small"
+          type="primary"
+          plain
+          :disabled="!canAdd"
+          :loading="adding"
+          @click="addTools"
+        >
+          加入刀具补偿表
+        </el-button>
+        <span v-if="emptyToolNo" class="tool-tip">刀具号不能为空</span>
+        <span v-else-if="rows.length" class="tool-tip">
+          加入前可以先改，改错了在这里删掉就行
+        </span>
+      </div>
 
       <el-alert
         v-for="(text, index) in warnings"
@@ -234,7 +318,7 @@ async function addTools(): Promise<void> {
 }
 
 .rows {
-  margin: 0;
+  margin: 0 0 10px;
 }
 
 .row {
@@ -261,12 +345,79 @@ async function addTools(): Promise<void> {
   word-break: break-all;
 }
 
-.badge-none {
-  color: var(--el-text-color-placeholder);
+.tool-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
 }
 
-.tool-list {
-  font-family: Consolas, 'Courier New', monospace;
+.tool-label {
+  color: var(--el-text-color-regular);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.tool-count {
+  margin-left: 6px;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.tool-empty {
+  margin: 4px 0 8px;
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+}
+
+.tool-table {
+  width: 100%;
+  max-width: 480px;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.tool-table th,
+.tool-table td {
+  padding: 4px 6px;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.tool-table th {
+  color: var(--el-text-color-regular);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.col-seq {
+  width: 32px;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
+
+.col-op {
+  width: 52px;
+  text-align: right;
+}
+
+/* 刀具号空着时给个红边，别等点了加入才报错 */
+.tool-table :deep(.is-empty .el-input__wrapper) {
+  box-shadow: 0 0 0 1px var(--el-color-danger) inset;
+}
+
+.tool-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.tool-tip {
+  color: var(--el-text-color-secondary);
   font-size: 12px;
 }
 

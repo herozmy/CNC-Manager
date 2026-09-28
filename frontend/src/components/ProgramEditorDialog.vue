@@ -41,6 +41,8 @@ const emit = defineEmits<{
   'update:modelValue': [value: boolean]
   /** 保存成功（版本数 / 当前版本号可能变了），父组件需要重新拉详情 */
   saved: []
+  /** 「识别程序」里把刀具加进了刀具补偿表，父组件需要重新拉详情 */
+  toolsAdded: []
 }>()
 
 const visible = computed({
@@ -396,8 +398,14 @@ async function overwriteCurrent(): Promise<void> {
 
     <p class="info-hint">保存时会按原编码写回，不会改变文件编码</p>
 
-    <!-- 识别结果：只在只读模式下出现 -->
-    <NcParsePanel v-if="parseVisible && !editing && current" :parse="parsed" :program-id="programId" />
+    <!-- 识别结果：只在只读模式下出现。
+         这里的刀具也能改完再加入——上传那次如果没顺手加，回头就靠这条路补。 -->
+    <NcParsePanel
+      v-if="parseVisible && !editing && current"
+      :parse="parsed"
+      :program-id="programId"
+      @tools-added="emit('toolsAdded')"
+    />
 
     <!-- 程序内容区 -->
     <div v-loading="contentLoading" class="viewer-wrap">

@@ -382,9 +382,12 @@ async function onFileChange(event: Event): Promise<void> {
   }
 }
 
-/** 识别结果里的刀具已确认加入，提示条数并刷新详情 */
-function onToolsAdded(count: number): void {
-  ElMessage.success(`已加入 ${count} 把刀`)
+/**
+ * 识别结果里的刀具已确认加入，刷新详情让刀具补偿表显示出来。
+ *
+ * 提示由识别面板自己弹：只有它知道加进去几把、跳过几把。
+ */
+function onToolsAdded(): void {
   emit('reload')
 }
 </script>
@@ -475,13 +478,12 @@ function onToolsAdded(count: number): void {
           <el-button link type="primary" @click="openVersions(item)">版本历史</el-button>
         </div>
 
-        <!-- 上传成功后就在上传区下面给出识别结果，不藏在别的弹窗里 -->
+        <!-- 上传成功后就在上传区下面给出识别结果，可以在那里改完再加入 -->
         <NcParsePanel
           v-if="uploadResultOf(item.source.id)"
           :parse="uploadResultOf(item.source.id)?.parse ?? null"
           :program-id="item.source.id"
           :title="`第 ${uploadResultOf(item.source.id)?.versionNo ?? ''} 版上传成功`"
-          allow-add-tools
           closable
           @tools-added="onToolsAdded"
           @close="dismissUploadResult(item.source.id)"
@@ -521,6 +523,7 @@ function onToolsAdded(count: number): void {
       :program-no="editorProgram.programNo"
       :current-version-id="editorProgram.currentVersionId"
       @saved="emit('reload')"
+      @tools-added="onToolsAdded"
     />
   </section>
 </template>
