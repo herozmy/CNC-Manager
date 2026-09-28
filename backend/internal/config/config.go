@@ -18,6 +18,7 @@ type Config struct {
 	DataDir     string   // 数据根目录（数据库文件 + NC 文件库）
 	DBPath      string   // SQLite 数据库文件绝对路径
 	NCDir       string   // NC 文件托管目录绝对路径
+	WebDir      string   // 可选：前端静态文件目录，设了就在同一端口顺带托管前端
 	MaxUploadMB int64    // 单个 NC 文件上传上限（MB）
 	CORSOrigins []string // 允许跨域访问的前端来源，开发时是 Vite 的 5173
 	LogLevel    string   // debug / info / warn / error
@@ -39,6 +40,19 @@ func Load() (*Config, error) {
 	c.DataDir = absData
 	c.DBPath = getEnv("CNC_DB_PATH", filepath.Join(absData, "cnccool.db"))
 	c.NCDir = getEnv("CNC_NC_DIR", filepath.Join(absData, "nc"))
+
+	// 可选：设了就顺带在同一端口托管前端静态文件。
+	//
+	// 开发时不设，前端由 Vite 提供，前后端保持独立、前端可以热更新；
+	// 打包发布时设上它，解压一个目录、双击 start.cmd 就能用，
+	// 不需要 Node、也不需要 nginx。
+	if webDir := getEnv("CNC_WEB_DIR", ""); webDir != "" {
+		absWeb, err := filepath.Abs(webDir)
+		if err != nil {
+			return nil, fmt.Errorf("解析前端目录失败: %w", err)
+		}
+		c.WebDir = absWeb
+	}
 
 	for _, o := range strings.Split(getEnv("CNC_CORS_ORIGINS", "http://127.0.0.1:5173,http://localhost:5173"), ",") {
 		if o = strings.TrimSpace(o); o != "" {

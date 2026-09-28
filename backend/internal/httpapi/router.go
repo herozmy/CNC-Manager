@@ -98,6 +98,10 @@ func (s *Server) Router() http.Handler {
 		r.Delete("/machines/{id}", s.handleDeleteMachine)
 	})
 
+	// 可选：把前端也挂上来（仅在设置了 CNC_WEB_DIR 时生效）。
+	// /api 是显式路由，优先级高于这里的通配，两者不会互相抢。
+	s.mountWeb(r)
+
 	r.NotFound(func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "接口不存在："+r.Method+" "+r.URL.Path)
 	})
