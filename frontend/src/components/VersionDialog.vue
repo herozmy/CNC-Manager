@@ -2,9 +2,11 @@
 /**
  * 版本历史弹窗（不占主页面）。
  *
- * 内容：上传新版本（上传后就地展示正文识别结果）、版本列表
+ * 内容：上传新版本（上传后就地展示刀具识别结果）、版本列表
  * （版本号 / 文件名 / 大小 / 变更说明 / 时间）、下载、设为当前版本，
  * 以及选两个版本做逐行对比（add / del / change 三色左右分栏）。
+ *
+ * 程序号由人工输入记录，这里不识别也不对比；programNo 只用于标题文案。
  */
 import { computed, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -13,16 +15,12 @@ import { diffVersions, listVersions, setCurrentVersion, versionDownloadUrl } fro
 import { errorMessage } from '../api/client'
 import { formatBytes, formatDateTime } from '../utils/format'
 import NcParsePanel from './NcParsePanel.vue'
-import { applyRecognizedProgramNo, uploadNcVersion } from '../utils/ncUpload'
+import { uploadNcVersion } from '../utils/ncUpload'
 
 const props = defineProps<{
   modelValue: boolean
   programId: number
   programNo: string
-  /** 记录里界面上不显示的字段；改正程序号时按原值带回（PUT 是整体替换） */
-  programName: string
-  controller: string
-  remark: string
 }>()
 
 const emit = defineEmits<{
@@ -148,7 +146,7 @@ async function onFileChange(event: Event): Promise<void> {
 
   uploading.value = true
   try {
-    // 变更说明输入、上传、以及「程序号对不上」的叫停弹窗都在这里统一处理
+    // 变更说明弹窗与上传统一在 uploadNcVersion 里处理
     const result = await uploadNcVersion(props.programId, file, props.programNo)
     // null = 用户在上传前取消了
     if (!result) return
@@ -160,18 +158,6 @@ async function onFileChange(event: Event): Promise<void> {
   } finally {
     uploading.value = false
   }
-}
-
-/** 把记录里的程序号改成识别到的那个（其余字段按加载到的原值带回） */
-async function fixProgramNo(recognizedNo: string): Promise<void> {
-  const done = await applyRecognizedProgramNo(props.programId, recognizedNo, {
-    programNo: props.programNo,
-    programName: props.programName,
-    controller: props.controller,
-    remark: props.remark
-  })
-  if (!done) return
-  emit('changed')
 }
 
 /** 识别结果里的刀具已确认加入，提示条数并让父组件刷新详情 */
@@ -205,7 +191,7 @@ function onToolsAdded(count: number): void {
       <el-button size="small" type="primary" plain :loading="uploading" @click="pickFile">
         上传新版本
       </el-button>
-      <span class="upload-hint">上传后自动识别程序号与刀具，程序号对不上会立刻提醒</span>
+      <span class="upload-hint">上传后自动识别数控系统与刀具，识别到的刀可一键加入刀具补偿表</span>
       <input ref="fileInputRef" type="file" class="hidden-file" @change="onFileChange" />
     </div>
 
@@ -213,11 +199,9 @@ function onToolsAdded(count: number): void {
       v-if="uploadResult"
       :parse="uploadResult.parse ?? null"
       :program-id="programId"
-      :record-program-no="programNo"
       :title="`第 ${uploadResult.versionNo} 版上传成功`"
       allow-add-tools
       closable
-      @fix-program-no="fixProgramNo"
       @tools-added="onToolsAdded"
       @close="uploadResult = null"
     />

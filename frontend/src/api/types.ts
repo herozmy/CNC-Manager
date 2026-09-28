@@ -228,18 +228,18 @@ export interface ToolUse {
   raw: string
 }
 
-/** 一段 NC 文本的识别结果（POST /api/nc/parse 与上传接口的 parse 字段共用） */
+/**
+ * 一段 NC 文本的识别结果（POST /api/nc/parse 与上传接口的 parse 字段共用）。
+ *
+ * 只做**刀具识别**：程序号一律由人工输入记录，后端不再返回、前端也不做对比。
+ */
 export interface ParseResult {
-  /** 识别到的程序号，如 "O9999"；识别不到是**空串** */
-  programNo: string
-  /** 原文里的写法 */
-  programNoRaw: string
   /** 推测的数控系统："FANUC" / "SIEMENS" / 空串 */
   controller: string
   /** 识别到的刀具调用，可能是空数组 */
   tools: ToolUse[]
   lineCount: number
-  /** 现场要看的提醒；可能包含「程序号对不上」这条 */
+  /** 需要人工看一眼的提醒，如「没有识别到刀具调用」「同一把刀出现多个刀补号」 */
   warnings: string[]
 }
 

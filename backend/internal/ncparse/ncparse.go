@@ -1,14 +1,14 @@
-// Package ncparse 从 NC 程序文本里识别程序号、刀具调用等信息。
+// Package ncparse 从 NC 程序文本里识别刀具调用。
 //
-// 为什么需要它：
-//   现场最容易犯、又最难自己发现的错误就是「把 O1235 传到了 O1234 下面」。
-//   文件名可能被改过、U 盘里可能拿错，但程序正文第一行的程序号才是机床真正要执行的。
-//   上传时读一遍正文并和记录里的程序号对一下，这类错误当场就能拦住。
+// 用途：上传 NC 后把程序里用到的刀具抓出来，界面可以一键加进刀具补偿表，
+// 省掉手工敲一遍，也避免敲错。
 //
-// 顺带把程序里调用的刀具抓出来，省掉在刀具补偿表里手工敲一遍。
+// 刻意**不识别程序号**：程序号由用户手工填写。现场的程序号写法五花八门
+// （O1234 / 1234 / O01234 / Siemens 的 %_N_名称_MPF），机器判断不如人一眼看得准，
+// 误报还会打断正常的上传流程。
 //
 // 解析策略偏保守：宁可少识别，不要乱识别。
-// 识别不到就返回空，由调用方提示用户手工确认，绝不猜。
+// 识别不到就返回空，由界面提示用户手工确认，绝不猜。
 package ncparse
 
 import (
@@ -24,9 +24,8 @@ const (
 	// maxParseBytes 限制解析的文本量，避免超大文件拖慢上传响应。
 	maxParseBytes = 2 << 20
 
-	// programNoScanLines 只在文件开头这些行里找程序号。
-	// 数控程序的程序号必须写在最前面；往后找只会在注释里翻出假货。
-	programNoScanLines = 30
+	// controllerScanLines 推测数控系统时最多看开头这些行。
+	controllerScanLines = 200
 
 	// maxScanLines 扫描刀具时最多看这么多行。
 	maxScanLines = 200000
@@ -36,14 +35,12 @@ const (
 )
 
 var (
-	// FANUC / 广数 / 三菱等：一行就是程序号，可能前面带 %
-	reProgramNoStrict = regexp.MustCompile(`^[%]?\s*[Oo:]\s*(\d{1,8})\s*(?:\(.*)?$`)
-	// 同上的宽松版：行首有 O1234，后面还跟着别的东西
-	reProgramNoLoose = regexp.MustCompile(`^[%]?\s*[Oo]\s*(\d{1,8})\b`)
+	// FANUC 系程序的头：一行就是 O1234，可能前面带 %。
+	// 现在只用来推测数控系统，不再当程序号使用。
+	reFanucHeaderStrict = regexp.MustCompile(`^[%]?\s*[Oo:]\s*(\d{1,8})\s*(?:\(.*)?$`)
+	reFanucHeaderLoose  = regexp.MustCompile(`^[%]?\s*[Oo]\s*(\d{1,8})\b`)
 	// Siemens：%_N_名称_MPF / _SPF
-	reSiemensProgramNo = regexp.MustCompile(`^%\s*_N_([A-Za-z0-9_\-]+?)_(MPF|SPF)\s*$`)
-	// 西门子 / 海德汉风格的 NAME 声明
-	reNameDecl = regexp.MustCompile(`(?i)^;?\s*NAME\s*[:=]\s*([A-Za-z0-9_\-]+)\s*$`)
+	reSiemensHeader = regexp.MustCompile(`^%\s*_N_([A-Za-z0-9_\-]+?)_(MPF|SPF)\s*$`)
 
 	// 刀具与刀补调用。
 	//
@@ -86,69 +83,41 @@ func Parse(text string) domain.ParseResult {
 		res.LineCount--
 	}
 
-	detectProgramNo(lines, &res)
-	detectController(lines, &res)
+	res.Controller = detectController(lines)
 	detectTools(lines, &res)
 
-	if res.ProgramNo == "" {
-		res.Warnings = append(res.Warnings,
-			"没有识别到程序号。数控程序一般在第一行写 O 加数字（如 O1234），Siemens 是 %_N_名称_MPF")
-	}
 	if len(res.Tools) == 0 {
 		res.Warnings = append(res.Warnings, "没有识别到刀具调用（T 号）")
 	}
 	return res
 }
 
-// detectProgramNo 在文件开头若干行里找程序号。
-func detectProgramNo(lines []string, res *domain.ParseResult) {
-	limit := min(len(lines), programNoScanLines)
-	for i := 0; i < limit; i++ {
-		raw := strings.TrimSpace(lines[i])
-		if raw == "" {
-			continue
-		}
-
-		if m := reSiemensProgramNo.FindStringSubmatch(raw); m != nil {
-			res.ProgramNoRaw = raw
-			res.ProgramNo = m[1]
-			return
-		}
-		if m := reProgramNoStrict.FindStringSubmatch(raw); m != nil {
-			res.ProgramNoRaw = raw
-			res.ProgramNo = "O" + m[1]
-			return
-		}
-		if m := reProgramNoLoose.FindStringSubmatch(raw); m != nil {
-			res.ProgramNoRaw = raw
-			res.ProgramNo = "O" + m[1]
-			return
-		}
-		if m := reNameDecl.FindStringSubmatch(raw); m != nil {
-			res.ProgramNoRaw = raw
-			res.ProgramNo = m[1]
-			return
-		}
-	}
-}
-
-// detectController 根据特征推测数控系统，认不准就留空。
-func detectController(lines []string, res *domain.ParseResult) {
-	for i := 0; i < min(len(lines), 200); i++ {
-		if reSiemensProgramNo.MatchString(strings.TrimSpace(lines[i])) {
-			res.Controller = "SIEMENS"
-			return
+// detectController 根据特征推测数控系统，认不准就返回空串。
+//
+// 这只是给用户一个参考值（界面填数控系统时不用自己想），
+// 猜错没有后果，所以可以稍微积极一点；但仍然不做无根据的猜测。
+func detectController(lines []string) string {
+	for i := 0; i < min(len(lines), controllerScanLines); i++ {
+		if reSiemensHeader.MatchString(strings.TrimSpace(lines[i])) {
+			return "SIEMENS"
 		}
 	}
 	for i := 0; i < min(len(lines), 2000); i++ {
 		if reSiemensMarker.MatchString(lines[i]) {
-			res.Controller = "SIEMENS"
-			return
+			return "SIEMENS"
 		}
 	}
-	if strings.HasPrefix(strings.ToUpper(strings.TrimSpace(res.ProgramNoRaw)), "O") {
-		res.Controller = "FANUC"
+	// FANUC 系（含广数、三菱等）的程序一般以 O+数字 或 % 开头
+	for i := 0; i < min(len(lines), controllerScanLines); i++ {
+		raw := strings.TrimSpace(lines[i])
+		if raw == "" {
+			continue
+		}
+		if reFanucHeaderStrict.MatchString(raw) || reFanucHeaderLoose.MatchString(raw) {
+			return "FANUC"
+		}
 	}
+	return ""
 }
 
 // stripComments 去掉行内注释。

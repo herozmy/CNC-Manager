@@ -10,13 +10,15 @@ type ToolUse struct {
 }
 
 // ParseResult 是从 NC 程序文本里识别出来的信息。
+//
+// 只识别刀具相关的内容。程序号由用户手工填写，系统不做识别、也不做比对——
+// 现场的程序号写法五花八门，机器判断反而不如人一眼看得准，
+// 误报还会打断正常的上传流程。
 type ParseResult struct {
-	ProgramNo    string    `json:"programNo"`    // 规范化后的程序号，如 O1234
-	ProgramNoRaw string    `json:"programNoRaw"` // 原文里的写法
-	Controller   string    `json:"controller"`   // 推测的数控系统，识别不出为空
-	Tools        []ToolUse `json:"tools"`
-	LineCount    int       `json:"lineCount"`
-	Warnings     []string  `json:"warnings"`
+	Controller string    `json:"controller"` // 推测的数控系统，识别不出为空
+	Tools      []ToolUse `json:"tools"`
+	LineCount  int       `json:"lineCount"`
+	Warnings   []string  `json:"warnings"`
 }
 
 // ParseTextInput 是「解析一段 NC 文本」的请求体。
@@ -26,8 +28,8 @@ type ParseTextInput struct {
 
 // UploadVersionResult 是上传 NC 新版本的响应。
 //
-// 除了版本信息，还附带从程序正文里识别出来的内容。
-// 上传是自动识别最合适的时机：文件刚落到系统里，此刻发现传错了代价最小。
+// 除了版本信息，还附带从程序正文里识别出来的刀具调用，
+// 界面可以据此一键把它们加进刀具补偿表，省掉手工敲一遍。
 type UploadVersionResult struct {
 	Version
 	Parse *ParseResult `json:"parse,omitempty"`

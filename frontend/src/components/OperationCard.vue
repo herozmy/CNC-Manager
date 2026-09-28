@@ -36,7 +36,7 @@ import type {
   UploadVersionResult
 } from '../api/types'
 import { formatOpNo, parseOpNo, toNumber } from '../utils/format'
-import { applyRecognizedProgramNo, uploadNcVersion } from '../utils/ncUpload'
+import { uploadNcVersion } from '../utils/ncUpload'
 
 const props = defineProps<{
   operation: DetailOperation
@@ -316,8 +316,8 @@ function openProgramEditor(item: ProgramForm): void {
 }
 
 /**
- * 详情重新拉取后，弹窗里持有的对象引用会变成旧的（程序号可能刚被改正过），
- * 这里换成同 id 的新对象，避免弹窗标题与识别结果面板一直显示旧值。
+ * 详情重新拉取后，弹窗里持有的对象引用会变成旧的，
+ * 这里换成同 id 的新对象，避免弹窗标题一直显示旧值。
  */
 watch(
   () => props.operation.programs,
@@ -369,7 +369,7 @@ async function onFileChange(event: Event): Promise<void> {
 
   uploadingId.value = target.source.id
   try {
-    // 变更说明输入、上传、以及「程序号对不上」的叫停弹窗都在这里统一处理
+    // 变更说明弹窗与上传统一在 uploadNcVersion 里处理
     const result = await uploadNcVersion(target.source.id, file, target.baselineNo)
     // null = 用户在上传前取消了
     if (!result) return
@@ -385,21 +385,6 @@ async function onFileChange(event: Event): Promise<void> {
 /** 识别结果里的刀具已确认加入，提示条数并刷新详情 */
 function onToolsAdded(count: number): void {
   ElMessage.success(`已加入 ${count} 把刀`)
-  emit('reload')
-}
-
-/** 把记录里的程序号改成识别到的那个（其余字段按加载到的原值带回） */
-async function fixProgramNo(item: ProgramForm, recognizedNo: string): Promise<void> {
-  const done = await applyRecognizedProgramNo(item.source.id, recognizedNo, {
-    programNo: item.source.programNo,
-    programName: item.source.programName,
-    controller: item.source.controller,
-    remark: item.source.remark
-  })
-  if (!done) return
-  // 本地先同步，免得等详情刷新的这段间隙输入框里还是旧号
-  item.programNo = recognizedNo
-  item.baselineNo = recognizedNo
   emit('reload')
 }
 </script>
@@ -495,11 +480,9 @@ async function fixProgramNo(item: ProgramForm, recognizedNo: string): Promise<vo
           v-if="uploadResultOf(item.source.id)"
           :parse="uploadResultOf(item.source.id)?.parse ?? null"
           :program-id="item.source.id"
-          :record-program-no="item.source.programNo"
           :title="`第 ${uploadResultOf(item.source.id)?.versionNo ?? ''} 版上传成功`"
           allow-add-tools
           closable
-          @fix-program-no="fixProgramNo(item, $event)"
           @tools-added="onToolsAdded"
           @close="dismissUploadResult(item.source.id)"
         />
@@ -528,9 +511,6 @@ async function fixProgramNo(item: ProgramForm, recognizedNo: string): Promise<vo
       v-model="versionVisible"
       :program-id="versionProgram.id"
       :program-no="versionProgram.programNo"
-      :program-name="versionProgram.programName"
-      :controller="versionProgram.controller"
-      :remark="versionProgram.remark"
       @changed="emit('reload')"
     />
 

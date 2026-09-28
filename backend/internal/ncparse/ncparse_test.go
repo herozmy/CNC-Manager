@@ -8,6 +8,9 @@ import (
 // 这些用例都按真实机床程序的写法来，不是编出来的。
 // 解析器最容易在「注释里的 T 号」「跨行的刀补」「中文注释」上出错，
 // 所以每种情况都单独立一个用例。
+//
+// 注意：本包**不识别程序号**（程序号由用户手工填写），
+// 所以用例里只断言刀具与数控系统。
 
 func TestFanucTurning(t *testing.T) {
 	src := `%
@@ -23,9 +26,6 @@ M30
 %`
 	got := Parse(src)
 
-	if got.ProgramNo != "O1234" {
-		t.Errorf("程序号 = %q，期望 O1234", got.ProgramNo)
-	}
 	if got.Controller != "FANUC" {
 		t.Errorf("数控系统 = %q，期望 FANUC", got.Controller)
 	}
@@ -54,9 +54,6 @@ M30
 %`
 	got := Parse(src)
 
-	if got.ProgramNo != "O2001" {
-		t.Errorf("程序号 = %q，期望 O2001", got.ProgramNo)
-	}
 	if len(got.Tools) != 1 {
 		t.Fatalf("刀具数 = %d，期望 1: %+v", len(got.Tools), got.Tools)
 	}
@@ -88,9 +85,6 @@ G54 G0 X100 Z100
 M30`
 	got := Parse(src)
 
-	if got.ProgramNo != "PART_A" {
-		t.Errorf("程序号 = %q，期望 PART_A", got.ProgramNo)
-	}
 	if got.Controller != "SIEMENS" {
 		t.Errorf("数控系统 = %q，期望 SIEMENS", got.Controller)
 	}
@@ -112,9 +106,6 @@ M30
 %`
 	got := Parse(src)
 
-	if got.ProgramNo != "O3001" {
-		t.Errorf("程序号 = %q，期望 O3001", got.ProgramNo)
-	}
 	if len(got.Tools) != 1 || got.Tools[0].ToolNo != "T01" {
 		t.Errorf("中文注释里的 T02/T03 不该被识别，实际: %+v", got.Tools)
 	}
@@ -157,22 +148,23 @@ M30
 	}
 }
 
-func TestNoProgramNumber(t *testing.T) {
+func TestNoTools(t *testing.T) {
+	// 程序里没有刀具调用时，要给出提示而不是静默返回空
 	src := `G21 G40
-T1 M06
+G00 X0 Y0
 M30`
 	got := Parse(src)
-	if got.ProgramNo != "" {
-		t.Errorf("不该识别出程序号，实际 = %q", got.ProgramNo)
+	if len(got.Tools) != 0 {
+		t.Errorf("不该识别出刀具，实际: %+v", got.Tools)
 	}
 	found := false
 	for _, w := range got.Warnings {
-		if strings.Contains(w, "没有识别到程序号") {
+		if strings.Contains(w, "没有识别到刀具") {
 			found = true
 		}
 	}
 	if !found {
-		t.Errorf("应给出「没有识别到程序号」的提示，实际：%v", got.Warnings)
+		t.Errorf("应给出「没有识别到刀具调用」的提示，实际：%v", got.Warnings)
 	}
 }
 
