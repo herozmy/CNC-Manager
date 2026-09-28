@@ -17,15 +17,17 @@
  */
 import { computed, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import type { Version, VersionContent } from '../api/types'
+import type { ParseResult, Version, VersionContent } from '../api/types'
 import {
   getVersionContent,
   listVersions,
   overwriteVersionContent,
+  parseNcText,
   saveVersionContentAsNew
 } from '../api'
 import { errorMessage } from '../api/client'
 import { formatBytes } from '../utils/format'
+import NcParsePanel from './NcParsePanel.vue'
 
 const props = defineProps<{
   modelValue: boolean
@@ -89,6 +91,43 @@ const lineNoText = computed(() => {
   return lines.map((_, index) => index + 1).join('\n')
 })
 
+/* ------------------------------------------------------------ 识别程序 */
+
+/**
+ * 只读模式下的识别结果。
+ * 编辑模式下按钮与面板都不出现——内容正在改，识别出来的东西没意义。
+ */
+const parseVisible = ref(false)
+const parsed = ref<ParseResult | null>(null)
+const parsing = ref(false)
+
+function clearParse(): void {
+  parseVisible.value = false
+  parsed.value = null
+}
+
+/** 「识别程序」/「收起」：拿当前已加载的正文去 POST /api/nc/parse */
+async function toggleRecognize(): Promise<void> {
+  if (parseVisible.value) {
+    parseVisible.value = false
+    return
+  }
+  const snapshot = current.value
+  if (!snapshot) return
+
+  parsing.value = true
+  try {
+    parsed.value = await parseNcText(snapshot.content)
+    parseVisible.value = true
+  } catch (error) {
+    parsed.value = null
+    parseVisible.value = false
+    ElMessage.error(errorMessage(error))
+  } finally {
+    parsing.value = false
+  }
+}
+
 /** 拉取程序的版本列表 */
 async function loadVersions(): Promise<void> {
   listLoading.value = true
@@ -113,6 +152,8 @@ async function loadContent(): Promise<void> {
   }
   contentLoading.value = true
   loadError.value = ''
+  // 换了版本，上一次的识别结果就作废了
+  clearParse()
   try {
     const data = await getVersionContent(id)
     current.value = data
@@ -153,6 +194,7 @@ async function open(): Promise<void> {
   current.value = null
   selectedVersionId.value = null
   versions.value = []
+  clearParse()
 
   await loadVersions()
 
@@ -190,6 +232,8 @@ function startEdit(): void {
   draft.value = current.value.content
   changeNote.value = ''
   editing.value = true
+  // 编辑模式下不展示识别结果，收起面板免得和正在改的内容混淆
+  clearParse()
 }
 
 async function cancelEdit(): Promise<void> {
@@ -329,6 +373,15 @@ async function overwriteCurrent(): Promise<void> {
         <el-button
           v-if="!editing"
           size="small"
+          :disabled="!current"
+          :loading="parsing"
+          @click="toggleRecognize"
+        >
+          {{ parseVisible ? '收起' : '识别程序' }}
+        </el-button>
+        <el-button
+          v-if="!editing"
+          size="small"
           type="primary"
           plain
           :disabled="!current"
@@ -341,6 +394,9 @@ async function overwriteCurrent(): Promise<void> {
     </div>
 
     <p class="info-hint">保存时会按原编码写回，不会改变文件编码</p>
+
+    <!-- 识别结果：只在只读模式下出现 -->
+    <NcParsePanel v-if="parseVisible && !editing && current" :parse="parsed" :program-id="programId" />
 
     <!-- 程序内容区 -->
     <div v-loading="contentLoading" class="viewer-wrap">

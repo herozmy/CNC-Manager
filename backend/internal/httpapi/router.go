@@ -82,6 +82,9 @@ func (s *Server) Router() http.Handler {
 		r.Get("/versions/{id}/content", s.handleGetVersionContent)
 		r.Put("/versions/{id}/content", s.handleOverwriteVersionContent)
 
+		// 从 NC 文本里识别程序号与刀具调用
+		r.Post("/nc/parse", s.handleParseText)
+
 		// 刀具字典
 		r.Get("/tools", s.handleListTools)
 		r.Post("/tools", s.handleCreateTool)

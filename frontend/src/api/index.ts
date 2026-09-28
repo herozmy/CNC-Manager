@@ -16,10 +16,12 @@ import type {
   Operation,
   OperationInput,
   Page,
+  ParseResult,
   Program,
   ProgramInput,
   ProgramTool,
   ProgramToolInput,
+  UploadVersionResult,
   Version,
   VersionContent
 } from './types'
@@ -91,6 +93,11 @@ export function deleteProgram(id: number): Promise<void> {
 
 /* -------------------------------------------------------------- 刀具刀补 */
 
+/** 某个程序当前的刀具补偿行（「加入刀具补偿表」先拿它做去重比较） */
+export function getProgramTools(programId: number): Promise<ProgramTool[]> {
+  return apiGet<ProgramTool[]>(`/programs/${programId}/tools`)
+}
+
 /**
  * 整表提交刀具补偿。
  * 未显示的列必须按加载到的原值带回（见 ProgramToolInput 的注释）。
@@ -108,12 +115,16 @@ export function listVersions(programId: number): Promise<Version[]> {
   return apiGet<Version[]>(`/programs/${programId}/versions`)
 }
 
-/** 上传新版本（multipart/form-data：file + changeNote） */
-export function uploadVersion(programId: number, file: File, changeNote: string): Promise<Version> {
+/** 上传新版本（multipart/form-data：file + changeNote）；返回体里带正文识别结果 parse */
+export function uploadVersion(
+  programId: number,
+  file: File,
+  changeNote: string
+): Promise<UploadVersionResult> {
   const form = new FormData()
   form.append('file', file)
   form.append('changeNote', changeNote)
-  return apiUpload<Version>(`/programs/${programId}/versions`, form)
+  return apiUpload<UploadVersionResult>(`/programs/${programId}/versions`, form)
 }
 
 /** 版本文件下载地址（后端返回 attachment，直接跳转即下载） */
@@ -161,6 +172,17 @@ export function saveVersionContentAsNew(
   input: ContentInput
 ): Promise<Version> {
   return apiPost<Version>(`/programs/${programId}/versions/content`, input)
+}
+
+/* ------------------------------------------------------------ 程序自动识别 */
+
+/**
+ * 解析一段 NC 文本，返回识别到的程序号 / 数控系统 / 刀具调用 / 警告。
+ *
+ * 内容为空或超过 4MB 时后端返回 400 + { error }，这里会抛出 ApiError。
+ */
+export function parseNcText(content: string): Promise<ParseResult> {
+  return apiPost<ParseResult>('/nc/parse', { content })
 }
 
 /* ------------------------------------------------------------------ 机台 */

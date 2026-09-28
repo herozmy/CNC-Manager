@@ -2,20 +2,27 @@
 /**
  * 版本历史弹窗（不占主页面）。
  *
- * 内容：版本列表（版本号 / 文件名 / 大小 / 变更说明 / 时间）、下载、设为当前版本，
+ * 内容：上传新版本（上传后就地展示正文识别结果）、版本列表
+ * （版本号 / 文件名 / 大小 / 变更说明 / 时间）、下载、设为当前版本，
  * 以及选两个版本做逐行对比（add / del / change 三色左右分栏）。
  */
 import { computed, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import type { DiffResult, Version } from '../api/types'
+import type { DiffResult, UploadVersionResult, Version } from '../api/types'
 import { diffVersions, listVersions, setCurrentVersion, versionDownloadUrl } from '../api'
 import { errorMessage } from '../api/client'
 import { formatBytes, formatDateTime } from '../utils/format'
+import NcParsePanel from './NcParsePanel.vue'
+import { applyRecognizedProgramNo, uploadNcVersion } from '../utils/ncUpload'
 
 const props = defineProps<{
   modelValue: boolean
   programId: number
   programNo: string
+  /** 记录里界面上不显示的字段；改正程序号时按原值带回（PUT 是整体替换） */
+  programName: string
+  controller: string
+  remark: string
 }>()
 
 const emit = defineEmits<{
@@ -113,6 +120,65 @@ async function makeCurrent(version: Version): Promise<void> {
     switchingId.value = null
   }
 }
+
+/* ------------------------------------------------------------ 上传新版本 */
+
+const fileInputRef = ref<HTMLInputElement | null>(null)
+const uploading = ref(false)
+
+/** 最近一次上传的返回体（版本信息 + 正文识别结果），就地展示在下面 */
+const uploadResult = ref<UploadVersionResult | null>(null)
+
+function pickFile(): void {
+  fileInputRef.value?.click()
+}
+
+/** 弹窗每次打开都清掉上一次的识别结果，避免和这次看到的版本对不上号 */
+async function onOpen(): Promise<void> {
+  uploadResult.value = null
+  await load()
+}
+
+async function onFileChange(event: Event): Promise<void> {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  // 立刻清空，否则连续选同一个文件不会再触发 change
+  input.value = ''
+  if (!file) return
+
+  uploading.value = true
+  try {
+    // 变更说明输入、上传、以及「程序号对不上」的叫停弹窗都在这里统一处理
+    const result = await uploadNcVersion(props.programId, file, props.programNo)
+    // null = 用户在上传前取消了
+    if (!result) return
+    uploadResult.value = result
+    await load()
+    emit('changed')
+  } catch (error) {
+    ElMessage.error(errorMessage(error))
+  } finally {
+    uploading.value = false
+  }
+}
+
+/** 把记录里的程序号改成识别到的那个（其余字段按加载到的原值带回） */
+async function fixProgramNo(recognizedNo: string): Promise<void> {
+  const done = await applyRecognizedProgramNo(props.programId, recognizedNo, {
+    programNo: props.programNo,
+    programName: props.programName,
+    controller: props.controller,
+    remark: props.remark
+  })
+  if (!done) return
+  emit('changed')
+}
+
+/** 识别结果里的刀具已确认加入，提示条数并让父组件刷新详情 */
+function onToolsAdded(count: number): void {
+  ElMessage.success(`已加入 ${count} 把刀`)
+  emit('changed')
+}
 </script>
 
 <template>
@@ -121,7 +187,7 @@ async function makeCurrent(version: Version): Promise<void> {
     :title="`版本历史 · ${programNo}`"
     width="920px"
     top="6vh"
-    @open="load"
+    @open="onOpen"
   >
     <el-alert
       v-if="loadError"
@@ -133,6 +199,28 @@ async function makeCurrent(version: Version): Promise<void> {
     >
       <el-button link type="primary" @click="load">重试</el-button>
     </el-alert>
+
+    <!-- 上传区：上传成功后识别结果就贴在它下面 -->
+    <div class="upload-bar">
+      <el-button size="small" type="primary" plain :loading="uploading" @click="pickFile">
+        上传新版本
+      </el-button>
+      <span class="upload-hint">上传后自动识别程序号与刀具，程序号对不上会立刻提醒</span>
+      <input ref="fileInputRef" type="file" class="hidden-file" @change="onFileChange" />
+    </div>
+
+    <NcParsePanel
+      v-if="uploadResult"
+      :parse="uploadResult.parse ?? null"
+      :program-id="programId"
+      :record-program-no="programNo"
+      :title="`第 ${uploadResult.versionNo} 版上传成功`"
+      allow-add-tools
+      closable
+      @fix-program-no="fixProgramNo"
+      @tools-added="onToolsAdded"
+      @close="uploadResult = null"
+    />
 
     <div v-loading="loading">
       <p v-if="!loading && versions.length === 0" class="empty">该程序还没有上传过 NC 文件。</p>
@@ -238,6 +326,25 @@ async function makeCurrent(version: Version): Promise<void> {
 <style scoped>
 .dialog-error {
   margin-bottom: 12px;
+}
+
+.upload-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+}
+
+.upload-hint {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
+
+.hidden-file {
+  display: none;
 }
 
 .empty {

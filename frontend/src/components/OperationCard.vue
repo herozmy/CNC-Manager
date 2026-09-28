@@ -18,23 +18,25 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import ToolTable from './ToolTable.vue'
 import VersionDialog from './VersionDialog.vue'
 import ProgramEditorDialog from './ProgramEditorDialog.vue'
+import NcParsePanel from './NcParsePanel.vue'
 import {
   createProgram,
   deleteOperation,
   deleteProgram,
   saveProgramTools,
   updateOperation,
-  updateProgram,
-  uploadVersion
+  updateProgram
 } from '../api'
 import { errorMessage } from '../api/client'
 import type {
   DetailOperation,
   DetailProgram,
   OperationInput,
-  ProgramToolInput
+  ProgramToolInput,
+  UploadVersionResult
 } from '../api/types'
 import { formatOpNo, parseOpNo, toNumber } from '../utils/format'
+import { applyRecognizedProgramNo, uploadNcVersion } from '../utils/ncUpload'
 
 const props = defineProps<{
   operation: DetailOperation
@@ -313,9 +315,42 @@ function openProgramEditor(item: ProgramForm): void {
   editorVisible.value = true
 }
 
+/**
+ * 详情重新拉取后，弹窗里持有的对象引用会变成旧的（程序号可能刚被改正过），
+ * 这里换成同 id 的新对象，避免弹窗标题与识别结果面板一直显示旧值。
+ */
+watch(
+  () => props.operation.programs,
+  (programs) => {
+    const versionTarget = versionProgram.value
+    if (versionTarget) {
+      versionProgram.value = programs.find((item) => item.id === versionTarget.id) ?? null
+    }
+    const editorTarget = editorProgram.value
+    if (editorTarget) {
+      editorProgram.value = programs.find((item) => item.id === editorTarget.id) ?? null
+    }
+  }
+)
+
+/* -------------------------------------------------------------- 上传 NC */
+
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const uploadTarget = ref<ProgramForm | null>(null)
 const uploadingId = ref<number | null>(null)
+
+/** 每个程序最近一次上传的识别结果，就地显示在上传区下面，按程序 id 存 */
+const uploadResults = ref<Record<number, UploadVersionResult>>({})
+
+function uploadResultOf(programId: number): UploadVersionResult | null {
+  return uploadResults.value[programId] ?? null
+}
+
+function dismissUploadResult(programId: number): void {
+  const next = { ...uploadResults.value }
+  delete next[programId]
+  uploadResults.value = next
+}
 
 function pickFile(item: ProgramForm): void {
   uploadTarget.value = item
@@ -332,28 +367,40 @@ async function onFileChange(event: Event): Promise<void> {
   uploadTarget.value = null
   if (!file || !target) return
 
-  let changeNote = ''
-  try {
-    const answer = await ElMessageBox.prompt('请填写本次变更说明（可留空）', `上传 NC · ${target.baselineNo}`, {
-      confirmButtonText: '上传',
-      cancelButtonText: '取消',
-      inputPlaceholder: '如：提高主轴转速'
-    })
-    changeNote = answer.value ?? ''
-  } catch {
-    return
-  }
-
   uploadingId.value = target.source.id
   try {
-    await uploadVersion(target.source.id, file, changeNote)
-    ElMessage.success('NC 文件上传成功')
+    // 变更说明输入、上传、以及「程序号对不上」的叫停弹窗都在这里统一处理
+    const result = await uploadNcVersion(target.source.id, file, target.baselineNo)
+    // null = 用户在上传前取消了
+    if (!result) return
+    uploadResults.value = { ...uploadResults.value, [target.source.id]: result }
     emit('reload')
   } catch (error) {
     ElMessage.error(errorMessage(error))
   } finally {
     uploadingId.value = null
   }
+}
+
+/** 识别结果里的刀具已确认加入，提示条数并刷新详情 */
+function onToolsAdded(count: number): void {
+  ElMessage.success(`已加入 ${count} 把刀`)
+  emit('reload')
+}
+
+/** 把记录里的程序号改成识别到的那个（其余字段按加载到的原值带回） */
+async function fixProgramNo(item: ProgramForm, recognizedNo: string): Promise<void> {
+  const done = await applyRecognizedProgramNo(item.source.id, recognizedNo, {
+    programNo: item.source.programNo,
+    programName: item.source.programName,
+    controller: item.source.controller,
+    remark: item.source.remark
+  })
+  if (!done) return
+  // 本地先同步，免得等详情刷新的这段间隙输入框里还是旧号
+  item.programNo = recognizedNo
+  item.baselineNo = recognizedNo
+  emit('reload')
 }
 </script>
 
@@ -442,6 +489,20 @@ async function onFileChange(event: Event): Promise<void> {
           <span class="bar-sep">|</span>
           <el-button link type="primary" @click="openVersions(item)">版本历史</el-button>
         </div>
+
+        <!-- 上传成功后就在上传区下面给出识别结果，不藏在别的弹窗里 -->
+        <NcParsePanel
+          v-if="uploadResultOf(item.source.id)"
+          :parse="uploadResultOf(item.source.id)?.parse ?? null"
+          :program-id="item.source.id"
+          :record-program-no="item.source.programNo"
+          :title="`第 ${uploadResultOf(item.source.id)?.versionNo ?? ''} 版上传成功`"
+          allow-add-tools
+          closable
+          @fix-program-no="fixProgramNo(item, $event)"
+          @tools-added="onToolsAdded"
+          @close="dismissUploadResult(item.source.id)"
+        />
       </div>
 
       <p v-if="programForms.length === 0" class="hint">该工序还没有程序，点击下方「+ 添加程序」。</p>
@@ -467,6 +528,9 @@ async function onFileChange(event: Event): Promise<void> {
       v-model="versionVisible"
       :program-id="versionProgram.id"
       :program-no="versionProgram.programNo"
+      :program-name="versionProgram.programName"
+      :controller="versionProgram.controller"
+      :remark="versionProgram.remark"
       @changed="emit('reload')"
     />
 

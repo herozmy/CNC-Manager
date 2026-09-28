@@ -329,7 +329,16 @@ func (s *Server) handleUploadVersion(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, v)
+
+	// 上传的这一刻顺便读一遍程序正文：识别程序号和刀具调用。
+	// 这是自动识别最合适的时机——文件刚进系统，此刻发现传错了代价最小。
+	parse := s.parseStoredProgram(saved.RelPath)
+	s.checkProgramNoMatch(r.Context(), programID, parse)
+
+	writeJSON(w, http.StatusOK, domain.UploadVersionResult{
+		Version: *v,
+		Parse:   parse,
+	})
 }
 
 func (s *Server) handleSetCurrentVersion(w http.ResponseWriter, r *http.Request) {

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"cnccool/internal/domain"
+	"cnccool/internal/ncparse"
 	"cnccool/internal/ncstore"
 )
 
@@ -222,6 +223,92 @@ func validateContent(in *domain.ContentInput) error {
 		return fmt.Errorf("%w：程序内容不能为空", domain.ErrInvalid)
 	}
 	return nil
+}
+
+// ---------------------------------------------------------------------------
+// 程序内容识别
+// ---------------------------------------------------------------------------
+
+// handleParseText 解析一段 NC 文本，返回识别到的程序号与刀具调用。
+//
+// 用途：前端可以拿它做「选一个 NC 文件，自动填上程序号」，
+// 省掉手敲程序号，也避免手敲时打错。
+func (s *Server) handleParseText(w http.ResponseWriter, r *http.Request) {
+	var in domain.ParseTextInput
+	if !decodeJSON(w, r, &in) {
+		return
+	}
+	if strings.TrimSpace(in.Content) == "" {
+		s.fail(w, fmt.Errorf("%w：内容不能为空", domain.ErrInvalid))
+		return
+	}
+	if len(in.Content) > maxContentBytes {
+		s.fail(w, fmt.Errorf("%w：内容超过 %d MB，无法解析", domain.ErrInvalid, maxContentBytes>>20))
+		return
+	}
+	res := ncparse.Parse(in.Content)
+	writeJSON(w, http.StatusOK, res)
+}
+
+// parseStoredProgram 读取文件库里的程序并解析。
+//
+// 解析失败不影响上传结果——上传本身已经成功了。识别信息只是附加提醒，
+// 绝不能因为它让用户以为上传失败。
+func (s *Server) parseStoredProgram(relPath string) *domain.ParseResult {
+	raw, err := s.files.ReadAll(relPath)
+	if err != nil {
+		s.log.Warn("读取程序内容失败，跳过自动识别", "relPath", relPath, "err", err)
+		return nil
+	}
+	text, err := ncstore.DecodeToUTF8(raw, ncstore.DetectEncoding(raw))
+	if err != nil {
+		s.log.Warn("解码程序内容失败，跳过自动识别", "relPath", relPath, "err", err)
+		return nil
+	}
+	res := ncparse.Parse(text)
+	return &res
+}
+
+// checkProgramNoMatch 把「文件里的程序号和记录对不上」这件事顶到警告最前面。
+//
+// 这是现场最危险、又最难自己发现的一类错误：文件名可能被改过、U 盘里可能拿错，
+// 但程序正文第一行的程序号才是机床真正要执行的。传错文件轻则白干，
+// 重则撞刀。所以这条警告必须排在最前，且措辞要能把人叫停。
+func (s *Server) checkProgramNoMatch(ctx context.Context, programID int64, res *domain.ParseResult) {
+	if res == nil || res.ProgramNo == "" {
+		return
+	}
+	p, err := s.repo.GetProgram(ctx, programID)
+	if err != nil {
+		return
+	}
+	if programNoEqual(p.ProgramNo, res.ProgramNo) {
+		return
+	}
+	res.Warnings = append([]string{fmt.Sprintf(
+		"程序号对不上：这条记录写的是 %s，但文件正文里的程序号是 %s。"+
+			"请确认是不是传错了文件；如果记录里的程序号写错了，请一并改正。",
+		p.ProgramNo, res.ProgramNo)}, res.Warnings...)
+}
+
+// programNoEqual 判断两个程序号是否是同一个。
+//
+// 现场写法不统一：O1234、o1234、1234、O01234 都可能指同一个程序，
+// 直接字符串比较会误报。
+func programNoEqual(a, b string) bool {
+	na, nb := normalizeProgramNo(a), normalizeProgramNo(b)
+	return na != "" && na == nb
+}
+
+func normalizeProgramNo(s string) string {
+	s = strings.ToUpper(strings.TrimSpace(s))
+	s = strings.TrimPrefix(s, "O")
+	s = strings.TrimPrefix(s, ":")
+	trimmed := strings.TrimLeft(s, "0")
+	if trimmed == "" {
+		return s // 全是 0 的情况退回原样比较，避免归一化后变成空串
+	}
+	return trimmed
 }
 
 // countLines 统计行数，最后一行没有换行符也算一行。

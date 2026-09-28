@@ -213,6 +213,46 @@ export interface ContentInput {
   changeNote: string
 }
 
+/* ------------------------------------------------------------ 程序自动识别 */
+
+/** 从 NC 程序正文里识别到的一次刀具调用 */
+export interface ToolUse {
+  seq: number
+  /** 刀具号，如 "T01" */
+  toolNo: string
+  /** 刀补号，如 "D01" / "H01"；识别不到时是**空串** */
+  offsetNo: string
+  /** 出现在第几行，便于人工核对 */
+  lineNo: number
+  /** 该行原文，供人工核对 */
+  raw: string
+}
+
+/** 一段 NC 文本的识别结果（POST /api/nc/parse 与上传接口的 parse 字段共用） */
+export interface ParseResult {
+  /** 识别到的程序号，如 "O9999"；识别不到是**空串** */
+  programNo: string
+  /** 原文里的写法 */
+  programNoRaw: string
+  /** 推测的数控系统："FANUC" / "SIEMENS" / 空串 */
+  controller: string
+  /** 识别到的刀具调用，可能是空数组 */
+  tools: ToolUse[]
+  lineCount: number
+  /** 现场要看的提醒；可能包含「程序号对不上」这条 */
+  warnings: string[]
+}
+
+/**
+ * 上传 NC 新版本的返回体：版本信息 + 正文识别结果。
+ *
+ * 注意：后端该字段带 `omitempty` 标签，读取/解码文件失败时**整个 parse 字段都不会出现**
+ * （不是 null）。所以这里声明成可选，取用时一律写成 `result.parse ?? null`。
+ */
+export interface UploadVersionResult extends Version {
+  parse?: ParseResult | null
+}
+
 /* ------------------------------------------------------------------ 对比 */
 
 export interface DiffLine {

@@ -20,6 +20,7 @@
 | 工序管理 | 工序号用 10# / 20# / 30# 留插入余量；装夹方式、Z 轴高度垫高、备注 |
 | 程序管理 | 程序号（如 O1234）；一道工序可挂多个程序 |
 | NC 文件托管 | 上传原始 NC 文件，按内容 sha256 寻址去重，相同内容秒传；自动识别 GBK / UTF-8 |
+| **程序号自动识别** | 上传时自动读程序正文，识别出程序号、数控系统与刀具调用；**程序号与记录对不上会当场告警**，防止传错文件 |
 | 版本管理 | 每次上传产生新版本，可回滚、可两版逐行对比、可下载 |
 | 程序查看与编辑 | 在软件里直接打开 NC 程序查看；可在线修改，保存时可选「另存为新版本」（留历史）或「覆盖当前版本」（不留历史） |
 | 刀具补偿表 | 序号 / 刀具号 / 刀补号 / 直径 / 补偿量 |
@@ -63,6 +64,7 @@ backend\                          Go 后端（只提供 JSON 接口，不托管�
    │  └─ migrations\              0001_init.sql 等，编译进二进制
    ├─ repo\                       所有 SQL 都在这里，手写，无 ORM
    ├─ ncstore\                    NC 文件库：sha256 内容寻址、去重、编码转换
+   ├─ ncparse\                    从 NC 正文识别程序号、数控系统、刀具调用
    ├─ diff\                       NC 程序逐行对比
    └─ httpapi\                    路由、参数校验、错误映射、响应编码
 
@@ -240,6 +242,7 @@ GET    /api/programs/{id}/tools
 PUT    /api/programs/{id}/tools               整表替换
 GET    /api/programs/{id}/versions
 POST   /api/programs/{id}/versions            multipart：file + changeNote
+                                              响应里附带 parse：识别到的程序号与刀具调用
 POST   /api/programs/{id}/versions/content    编辑后「另存为新版本」
 PUT    /api/programs/{id}/current-version     切换 / 回滚当前版本
 GET    /api/programs/{id}/logs
@@ -251,10 +254,29 @@ PUT    /api/versions/{id}/content             覆盖这一版的内容（版本�
 
 GET    /api/tools?q=      POST /api/tools      PUT/DELETE /api/tools/{id}
 GET    /api/machines      POST /api/machines   PUT/DELETE /api/machines/{id}
+
+POST   /api/nc/parse                          解析一段 NC 文本，识别程序号与刀具调用
 ```
 
 `GET /api/drawings/{id}/detail` 是界面主视图用的接口：
 选中一张图纸只发这一个请求，就能拿到整页要渲染的全部数据。
+
+### 程序识别
+
+`ncparse` 会从程序正文里读出：
+
+- **程序号**：FANUC / 广数 / 三菱的 `O1234`、`%_N_名称_MPF`（Siemens）
+- **数控系统**：按特征推测，认不准就留空
+- **刀具调用**：`T0101`（拆成刀号 01、刀补 D01）、`T1 D01`，
+  以及铣床常见的 `T1 M06` 跨行跟在后面的 `G43 H01` / `G41 D01`
+
+解析偏保守：**宁可少识别，不要乱识别**。注释里出现的 `T` 号会被正确忽略
+（FANUC 的圆括号注释、Siemens 的分号注释都处理了）。识别不到就返回空，
+由界面提示人工确认，绝不猜。
+
+上传时若识别到的程序号与记录里的不一致，响应会在 `parse.warnings` 里
+给出明确警告——文件名可能被改过、U 盘里可能拿错，但程序正文里的程序号
+才是机床真正要执行的。传错文件轻则白干，重则撞刀。
 
 ---
 
@@ -359,4 +381,4 @@ volumes: { pg-data:, nc-data: }
 4. **登录与权限** —— 表已就位，加用户表与鉴权即可
 5. **孤儿文件回收** —— 定期清理 `nc_file` 里没人引用的物理文件
 6. **按机台筛选程序** —— 车间想知道「这台机床今天要跑哪些程序」
-7. **程序号自动识别** —— 上传时从 NC 内容里自动解析 `O1234`、刀具调用等信息
+7. **程序内容校验** —— 在已识别的刀具基础上，检查程序里调用的刀具是否都在刀具补偿表里
