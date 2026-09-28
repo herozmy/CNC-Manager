@@ -14,6 +14,13 @@ export interface Meta {
   version: string
   serverTime: string
   dataDir: string
+  /**
+   * 服务器当前 index.html 引用的入口脚本，例如 /assets/index-CpuQPsoE.js。
+   *
+   * 页面拿它和自己正在跑的那个脚本比对，不一致就说明 web\ 目录被覆盖过，
+   * 该提示用户刷新了。开发模式（前端由 Vite 提供）下后端返回空串，跳过比对。
+   */
+  webEntry: string
 }
 
 /** 通用分页结构 */

@@ -23,12 +23,12 @@ import {
   createOperation,
   deleteDrawing,
   getDrawingDetail,
-  getMeta,
   listDrawings,
   updateDrawing
 } from '../api'
 import { errorMessage } from '../api/client'
 import type { Drawing, DrawingDetail, DrawingInput } from '../api/types'
+import { useVersionWatch } from '../composables/useVersionWatch'
 import { formatOpNo, parseOpNo } from '../utils/format'
 
 /* ------------------------------------------------------------ 图纸列表 */
@@ -112,29 +112,25 @@ async function retry(): Promise<void> {
 }
 
 onMounted(async () => {
-  void loadMeta()
   await loadDrawings()
   if (drawings.value.length > 0) {
     await selectDrawing(drawings.value[0].id)
   }
 })
 
-/* ------------------------------------------------------------ 版本号 */
+/* -------------------------------------------------- 版本号与更新提示 */
 
 /**
- * 后端版本号，显示在左侧面板底部。
- * 拿不到就留空不显示——这是辅助信息，不能因为它影响主流程。
+ * appVersion 显示在左侧面板底部。
+ *
+ * 同时它会盯着服务器上的前端有没有被换掉：免安装版的升级方式就是覆盖
+ * `web\` 目录，而开着的页面不会自己发现这件事，得主动提示用户刷新。
  */
-const appVersion = ref('')
-
-async function loadMeta(): Promise<void> {
-  try {
-    const meta = await getMeta()
-    appVersion.value = meta.version
-  } catch {
-    appVersion.value = ''
-  }
-}
+const {
+  version: appVersion,
+  notice: updateNotice,
+  reload: reloadPage
+} = useVersionWatch()
 
 /* -------------------------------------------------------- 图纸写操作 */
 
@@ -281,6 +277,11 @@ async function confirmCreateOperation(): Promise<void> {
     />
 
     <main class="detail">
+      <div v-if="updateNotice" class="update-bar">
+        <span class="update-text">{{ updateNotice }}</span>
+        <el-button type="primary" size="small" @click="reloadPage">立即刷新</el-button>
+      </div>
+
       <div v-if="loadError" class="error-bar">
         <span class="error-text">{{ loadError }}</span>
         <el-button link type="primary" @click="retry">重试</el-button>
@@ -397,6 +398,24 @@ async function confirmCreateOperation(): Promise<void> {
   background: var(--el-color-danger-light-9);
   color: var(--el-color-danger);
   font-size: 13px;
+}
+
+/* 有新版本时的提示条。用主色而不是警告色：这不是出错，是正常的升级。 */
+.update-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--el-color-primary-light-5);
+  background: var(--el-color-primary-light-9);
+  color: var(--el-color-primary-dark-2);
+  font-size: 13px;
+}
+
+.update-text {
+  flex: 1;
+  min-width: 0;
 }
 
 .error-text {

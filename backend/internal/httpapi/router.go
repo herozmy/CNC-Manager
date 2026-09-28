@@ -23,6 +23,9 @@ type Server struct {
 	cfg     *config.Config
 	log     *slog.Logger
 	version string
+
+	// web 是前端入口脚本地址的缓存，用于「页面是不是旧版」的比对。
+	web webEntryCache
 }
 
 // NewServer 构造 HTTP 服务。
@@ -113,11 +116,16 @@ func (s *Server) Router() http.Handler {
 }
 
 // handleMeta 返回服务元信息。
-// 前端用它做版本比对：前端构建号与后端版本不一致时提示用户刷新，实现无感热更新。
+//
+// 前端用它判断自己是不是旧版：把这里的 webEntry 和自己正在跑的入口脚本比一比，
+// 不一致就说明 web\ 目录已经被换掉了，提示用户刷新。
+// 免安装版的升级方式正是「覆盖 web\ 目录」，而开着的页面不会自己发现这件事。
 func (s *Server) handleMeta(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"version":    s.version,
 		"serverTime": nowString(),
 		"dataDir":    s.cfg.DataDir,
+		// 当前 index.html 引用的入口脚本；没配置前端目录时为空，前端据此跳过比对
+		"webEntry": s.webEntry(),
 	})
 }
