@@ -25,7 +25,8 @@
 | 程序查看与编辑 | 在软件里直接打开 NC 程序查看；可在线修改，保存时可选「另存为新版本」（留历史）或「覆盖当前版本」（不留历史） |
 | 刀具补偿表 | 序号 / 刀具号 / 刀补号 / 直径 / 补偿量 |
 | 搜索 | 图纸号、名称、客户、材料；也支持用程序号反查图纸 |
-| **升级提示** | 服务器上的前端被换过时，开着的页面会自己发现并提示刷新（比对入口脚本指纹）；开发模式不误报 |
+| **版本检查** | 启动时问一次 GitHub 有没有新版本，有就在左下角版本号旁标出「有新版本 vX.Y.Z」 |
+| **离线安装** | 在界面里选中下载好的离线包即可升级：校验 → 换 exe 和前端 → 自动重启。数据不动 |
 | 级联删除 | 删图纸连带清掉其下工序、程序、版本引用 |
 | 操作日志 | 记录新增、修改、上传、切版、删除（数据库与 API 已提供，界面暂未展示） |
 | 字典表 | 刀具字典、机台字典（表结构与 API 已提供，当前界面未使用） |
@@ -67,15 +68,17 @@ backend\                          Go 后端（默认只提供 JSON 接口；设�
    ├─ ncstore\                    NC 文件库：sha256 内容寻址、去重、编码转换
    ├─ ncparse\                    从 NC 正文识别数控系统与刀具调用
    ├─ diff\                       NC 程序逐行对比
+   ├─ update\                     版本检查（问 GitHub）与离线安装（校验、替换脚本）
    └─ httpapi\                    路由、参数校验、错误映射、响应编码
                                   web.go 是可选的静态托管（含 SPA 回落与缓存头）
 
 frontend\                         Vue 3 + TypeScript + Vite + Element Plus
 ├─ src\api\                      接口封装与类型定义
-├─ src\composables\              组合式逻辑（useVersionWatch：盯着前端有没有被换掉）
+├─ src\composables\              组合式逻辑（useUpdate：查新版本、装离线包）
 ├─ src\components\               DrawingList 图纸列表 / DrawingCard 图纸卡片
 │                                OperationCard 工序卡片 / ToolTable 刀具补偿表
 │                                VersionDialog 版本历史 / ProgramEditorDialog 查看程序
+│                                UpdateDialog 版本更新与离线安装
 └─ src\views\MainView.vue        主界面
 
 scripts\                          运行项目所需的脚本
@@ -122,6 +125,9 @@ README.txt           随包使用说明
 数据全部落在包内 `data\` 目录（`cnccool.db` + `nc\`），
 **拷走整个文件夹就是一份完整备份**。
 
+左下角版本号旁边出现「有新版本 vX.Y.Z」时，点它就能在界面里装新的离线包，
+不用手工替换文件——详见[版本升级](#版本升级)。
+
 自己打包：
 
 ```
@@ -135,6 +141,9 @@ scripts\build-release.cmd
 > 设上它，后端会顺带把前端静态文件托管出去（`/api/**` 仍然是接口，
 > 其余路径走前端，静态资源长缓存、`index.html` 不缓存）。
 > 开发时不设这个变量，前后端保持分离，前端照旧由 Vite 提供、照旧热更新。
+>
+> 包内的 `VERSION` 文件不是摆设：离线安装要先读它才知道装的是哪一版，
+> 读到比当前版本旧就直接拒绝。少了它的包会被后端挡下来。
 
 ### 方式二：从源码运行
 
@@ -204,7 +213,14 @@ scripts\seed-demo.cmd
 | `CNC_WEB_DIR` | 空 | 前端静态文件目录。设上则同一端口顺带托管前端（免安装包模式）；留空则只提供接口，前端交给 Vite / nginx |
 | `CNC_MAX_UPLOAD_MB` | `64` | 单个 NC 文件上传上限 |
 | `CNC_CORS_ORIGINS` | `http://127.0.0.1:5173,...` | 允许跨域的前端地址 |
+| `CNC_UPDATE_REPO` | `herozmy/CNC-Manager` | 查新版本用的 GitHub 仓库 `owner/name`。**留空则不检查更新**，服务完全不去连外网 |
+| `CNC_UPDATE_API` | GitHub 官方地址 | 仓库 API 地址。内网自建 GitHub 或测试时改它 |
 | `CNC_LOG_LEVEL` | `info` | `debug` / `info` / `warn` / `error` |
+
+> `CNC_ADDR` 改成 `0.0.0.0:8080` 之后局域网上的机器就能访问了。但要注意
+> `POST /api/update/install` 能把 exe 换掉，等于一个"随意执行代码"的口子，
+> 所以那个接口**只接受来自本机的请求**，局域网上的机器调用会拿到 403。
+> 这是刻意的：数据可以共享，程序只能在本机换。
 
 ---
 
@@ -299,6 +315,10 @@ GET    /api/tools?q=      POST /api/tools      PUT/DELETE /api/tools/{id}
 GET    /api/machines      POST /api/machines   PUT/DELETE /api/machines/{id}
 
 POST   /api/nc/parse                          解析一段 NC 文本，识别刀具调用
+
+GET    /api/update/check?fresh=1              问 GitHub 上有没有新版本（fresh 绕过缓存）
+POST   /api/update/install                    multipart：file，安装离线包
+                                              只接受来自本机的请求（见下）
 ```
 
 `GET /api/drawings/{id}/detail` 是界面主视图用的接口：
@@ -378,6 +398,35 @@ go run ./cmd/dbcheck -backup "D:\backup\cnccool-20260928.db"
 
 ### 版本升级
 
+**在界面里升级（免安装版）**
+
+左下角版本号旁边出现「有新版本 vX.Y.Z」时，点它打开对话框，
+从发布页下载新的 `cnccool-vX.Y.Z-windows-amd64.zip`，再在对话框里选中它，
+点「安装并重启」即可。服务会自己换掉 exe 和 `web\`、自己重启，`data\` 一动不动。
+
+上不了外网的机器就在别的电脑上下载好，用 U 盘拷过来，同样是在这个对话框里选文件。
+
+升级过程中服务必然要退出一次——Windows 上运行中的 exe 是锁着的，不退出就换不了。
+所以后端会：
+
+1. 校验上传的包（必须是完整免安装包、带 `VERSION`、版本不低于当前）
+2. 解压到安装目录下的 `.update\stage\`
+3. 生成 `.update\apply-update.cmd` 并以**脱离控制台**的方式拉起它
+4. 自己退出，退出码 `99`（`start.cmd` 认这个码：说明是升级重启，不停在 pause 上）
+
+替换脚本等旧进程释放 exe 后，用**改名**（而不是逐个覆盖）把 `web\` 换掉——
+改名快且基本不会中途失败，失败时旧的还在 `web.old`，可以退回去。
+替换完它会用 `start.cmd` 重新拉起服务，并沿用原来的端口。
+
+> 那个脚本里**一条管道都没有**（不用 `tasklist | find` 判断进程是否退出）。
+> 它是被"无控制台"方式拉起来的，实测管道会卡死：`find` 迟迟等不到管道关闭，
+> 安装就停在那里不动，用户看到的现象是"装完打不开了"。
+> 所以判断方式改成直接重试真正要做的那个操作——反正真正关心的只是"文件能不能换"。
+
+升级没生效时看安装目录下的 `.update\apply-update.log`，里面记了每一步。
+
+**从源码升级**
+
 1. 先备份
 2. 停掉后端
 3. 改 `VERSION` 文件里的版本号（发新版本时才需要）
@@ -387,16 +436,17 @@ go run ./cmd/dbcheck -backup "D:\backup\cnccool-20260928.db"
 原有数据全部保留。迁移只增不改，执行过的记进 `schema_migration` 表，
 且整体在事务里执行，失败会回滚。
 
-前端升级更简单：跑 `frontend\build.cmd`，替换 `dist` 即可，后端和数据库不动。
+前端也可以单独升级：跑 `frontend\build.cmd`，替换 `dist` 即可，后端和数据库不动。
 
-换完不用挨个通知用户刷新：页面每隔一分钟、以及每次切回标签页时会问一次
-`GET /api/meta`，把里面的 `webEntry`（当前 `index.html` 引用的入口脚本）
-和自己正在跑的那个比一比，不一致就在顶部亮一条「立即刷新」。
-免安装版覆盖 `web\` 目录后也是同样的效果。
+### 检查更新会不会联网
 
-> 为什么用入口脚本文件名当指纹：Vite 产物的文件名带内容哈希，前端一改名字就变。
-> 这样前后端各自从 `index.html` 取同一个值，不必在构建时往代码里塞版本号。
-> 开发模式下后端不返回 `webEntry`（前端由 Vite 提供），只比对版本号，不会误报。
+会，但只在两处：启动时查一次 GitHub 的 `releases/latest`，以及你在对话框里点
+「重新检查」时。查的是公开接口，不发任何本地数据出去。结果缓存 30 分钟，
+避免多台机器共用出口 IP 撞上 GitHub 的限流。
+
+**离线车间可以把 `CNC_UPDATE_REPO` 设成空**，服务就完全不去连外网，
+界面上的更新入口自然也不会出现。查不到时不报错、不弹窗——
+没网是常态，不该为这件事打扰正在干活的人。
 
 ---
 

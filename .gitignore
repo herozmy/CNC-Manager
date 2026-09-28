@@ -35,7 +35,8 @@ scripts/ui-check.*
 scripts/ui-editor-check.*
 scripts/ui-save-check.*
 scripts/ui-recognize-check.*
-scripts/ui-version-check.*
+scripts/ui-update-check.*
+scripts/update-install-check.*
 scripts/check-github-token.*
 scripts/push-to-github.*
 scripts/git-push.*

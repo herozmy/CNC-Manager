@@ -17,12 +17,17 @@ defineProps<{
   keyword: string
   /** 后端版本号，来自 GET /api/meta；取不到时为空串 */
   version: string
+  /** 仓库上有比当前更新的版本 */
+  hasUpdate: boolean
+  /** 仓库上的最新版本号，hasUpdate 为真时有意义 */
+  latestVersion: string
 }>()
 
 const emit = defineEmits<{
   'update:keyword': [value: string]
   select: [id: number]
   create: []
+  update: []
 }>()
 
 function onInput(value: string): void {
@@ -62,7 +67,14 @@ function onInput(value: string): void {
     </div>
 
     <!-- 版本号放在左下角：现场排查问题时第一件事就是确认装的是哪一版 -->
-    <div v-if="version" class="list-foot">CNC 加工程序管理 {{ version }}</div>
+    <div v-if="version" class="list-foot">
+      <div class="foot-version">CNC 加工程序管理 {{ version }}</div>
+
+      <!-- 有新版本时在版本号旁边点一下就能去装 -->
+      <button v-if="hasUpdate" type="button" class="update-badge" @click="emit('update')">
+        有新版本 {{ latestVersion }} · 去安装
+      </button>
+    </div>
   </aside>
 </template>
 
@@ -155,5 +167,29 @@ function onInput(value: string): void {
   color: var(--el-text-color-placeholder);
   font-size: 12px;
   text-align: center;
+}
+
+.foot-version {
+  white-space: nowrap;
+}
+
+/* 更新提示用主色：这是正常的升级，不是出错，别用警告色吓人 */
+.update-badge {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  padding: 4px 8px;
+  border: 1px solid var(--el-color-primary-light-5);
+  border-radius: 10px;
+  background: var(--el-color-primary-light-9);
+  color: var(--el-color-primary);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.update-badge:hover {
+  background: var(--el-color-primary-light-8);
 }
 </style>

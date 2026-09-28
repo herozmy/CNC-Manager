@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"cnccool/internal/config"
 )
@@ -222,113 +221,5 @@ func TestWebReportsMissingIndex(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), "index.html") {
 		t.Errorf("错误信息没有点明缺少 index.html：%q", rec.Body.String())
-	}
-}
-
-// ---------------------------------------------------------------------------
-// 前端版本比对
-// ---------------------------------------------------------------------------
-
-// viteIndex 拼一份和 Vite 构建产物同形的 index.html。
-func viteIndex(entry string) string {
-	return `<!doctype html><html><head>` +
-		`<script type="module" crossorigin src="` + entry + `"></script>` +
-		`<link rel="stylesheet" crossorigin href="/assets/index-aaa111.css">` +
-		`</head><body><div id="app"></div></body></html>`
-}
-
-// TestParseEntryScript 验证能从各种写法的 index.html 里挑出入口脚本。
-func TestParseEntryScript(t *testing.T) {
-	cases := []struct {
-		name string
-		html string
-		want string
-	}{
-		{"Vite 默认产出", viteIndex("/assets/index-CpuQPsoE.js"), "/assets/index-CpuQPsoE.js"},
-		{"属性顺序反过来", `<script src="/assets/a.js" type="module"></script>`, "/assets/a.js"},
-		{"属性用单引号", `<script type='module' src='/assets/b.js'></script>`, "/assets/b.js"},
-		{"模块脚本排在后面", `<script src="/x.js"></script><script type="module" src="/assets/c.js"></script>`, "/assets/c.js"},
-		{"只有普通脚本", `<script src="/legacy.js"></script>`, ""},
-		{"没有 src", `<script type="module">console.log(1)</script>`, ""},
-		{"空文档", "", ""},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			if got := parseEntryScript([]byte(c.html)); got != c.want {
-				t.Errorf("parseEntryScript = %q，期望 %q", got, c.want)
-			}
-		})
-	}
-}
-
-// TestWebEntryReadsIndex 验证能报出当前 index.html 引用的入口脚本。
-func TestWebEntryReadsIndex(t *testing.T) {
-	dir := t.TempDir()
-	writeFile(t, filepath.Join(dir, "index.html"), viteIndex("/assets/index-CpuQPsoE.js"))
-
-	h := newWebServer(t, dir)
-	rec := doGet(t, h, "/api/meta")
-
-	if !strings.Contains(rec.Body.String(), "/assets/index-CpuQPsoE.js") {
-		t.Errorf("/api/meta 没有带出 webEntry：%q", rec.Body.String())
-	}
-}
-
-// TestWebEntryFollowsReplacement 是本组里最关键的一条。
-//
-// 免安装版的升级方式就是把 web\ 目录整个覆盖掉，而服务进程不一定重启。
-// 如果缓存不失效，页面永远等不到「该刷新了」的提示，这个功能就等于没有。
-func TestWebEntryFollowsReplacement(t *testing.T) {
-	dir := t.TempDir()
-	indexPath := filepath.Join(dir, "index.html")
-	writeFile(t, indexPath, viteIndex("/assets/index-OLD111.js"))
-
-	s := NewServer(nil, nil, &config.Config{WebDir: dir, MaxUploadMB: 64},
-		slog.New(slog.NewTextHandler(io.Discard, nil)), "test")
-
-	if got := s.webEntry(); got != "/assets/index-OLD111.js" {
-		t.Fatalf("首次解析 = %q，期望 /assets/index-OLD111.js", got)
-	}
-
-	// 连续两次调用走的是缓存，结果必须一样
-	if got := s.webEntry(); got != "/assets/index-OLD111.js" {
-		t.Fatalf("缓存命中时 = %q，期望 /assets/index-OLD111.js", got)
-	}
-
-	// 覆盖成新版本。显式把修改时间往后推，避免文件系统时间精度不够导致漏判。
-	writeFile(t, indexPath, viteIndex("/assets/index-NEW222.js"))
-	future := time.Now().Add(2 * time.Second)
-	if err := os.Chtimes(indexPath, future, future); err != nil {
-		t.Fatalf("调整修改时间失败: %v", err)
-	}
-
-	if got := s.webEntry(); got != "/assets/index-NEW222.js" {
-		t.Errorf("覆盖后 = %q，期望 /assets/index-NEW222.js（缓存没有失效）", got)
-	}
-}
-
-// TestWebEntryEmptyWithoutWebDir 验证开发模式下报空串，前端据此跳过比对。
-//
-// 宁可不提示，也不能拿一个假指纹去误报「有新版本」。
-func TestWebEntryEmptyWithoutWebDir(t *testing.T) {
-	dir := t.TempDir()
-	writeFile(t, filepath.Join(dir, "index.html"), viteIndex("/assets/index-CpuQPsoE.js"))
-
-	// 注意这里故意不配 WebDir，模拟开发模式
-	s := NewServer(nil, nil, &config.Config{MaxUploadMB: 64},
-		slog.New(slog.NewTextHandler(io.Discard, nil)), "test")
-
-	if got := s.webEntry(); got != "" {
-		t.Errorf("未配置前端目录时 webEntry = %q，期望空串", got)
-	}
-}
-
-// TestWebEntryEmptyWhenIndexUnreadable 验证 index.html 缺失时不会 panic、也不会瞎报。
-func TestWebEntryEmptyWhenIndexUnreadable(t *testing.T) {
-	s := NewServer(nil, nil, &config.Config{WebDir: t.TempDir(), MaxUploadMB: 64},
-		slog.New(slog.NewTextHandler(io.Discard, nil)), "test")
-
-	if got := s.webEntry(); got != "" {
-		t.Errorf("index.html 不存在时 webEntry = %q，期望空串", got)
 	}
 }

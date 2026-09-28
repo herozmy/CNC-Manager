@@ -28,7 +28,8 @@ import {
 } from '../api'
 import { errorMessage } from '../api/client'
 import type { Drawing, DrawingDetail, DrawingInput } from '../api/types'
-import { useVersionWatch } from '../composables/useVersionWatch'
+import UpdateDialog from '../components/UpdateDialog.vue'
+import { useUpdate } from '../composables/useUpdate'
 import { formatOpNo, parseOpNo } from '../utils/format'
 
 /* ------------------------------------------------------------ 图纸列表 */
@@ -118,19 +119,45 @@ onMounted(async () => {
   }
 })
 
-/* -------------------------------------------------- 版本号与更新提示 */
+/* -------------------------------------------------- 版本号与更新 */
 
 /**
- * appVersion 显示在左侧面板底部。
+ * appVersion 显示在左侧面板底部：现场排查问题时第一件事就是确认装的是哪一版。
  *
- * 同时它会盯着服务器上的前端有没有被换掉：免安装版的升级方式就是覆盖
- * `web\` 目录，而开着的页面不会自己发现这件事，得主动提示用户刷新。
+ * 顺带查仓库上有没有新版本，有就在版本号旁边挂一个可点的角标。
+ * 查不到（车间没网）时安静地什么都不显示。
  */
 const {
   version: appVersion,
-  notice: updateNotice,
-  reload: reloadPage
-} = useVersionWatch()
+  canInstall,
+  status: updateStatus,
+  checking: updateChecking,
+  install: installPackage
+} = useUpdate()
+
+const updateVisible = ref(false)
+const installing = ref(false)
+const installMessage = ref('')
+
+/**
+ * 装上用户选的离线包。
+ *
+ * 服务会退出、换文件、再重启，整个过程由 installPackage 一路等到新版本起来。
+ * 等到了就刷新页面——新版本的前端文件也一起换过了，不刷新用的是旧的。
+ */
+async function handleInstall(file: File): Promise<void> {
+  installing.value = true
+  installMessage.value = `正在上传并安装 ${file.name}…`
+  try {
+    const result = await installPackage(file)
+    installMessage.value = `已安装 ${result.version}，服务已重启，正在刷新页面…`
+    window.location.reload()
+  } catch (error) {
+    installMessage.value = errorMessage(error)
+  } finally {
+    installing.value = false
+  }
+}
 
 /* -------------------------------------------------------- 图纸写操作 */
 
@@ -272,16 +299,14 @@ async function confirmCreateOperation(): Promise<void> {
       :selected-id="selectedId"
       :loading="drawingsLoading"
       :version="appVersion"
+      :has-update="updateStatus?.hasUpdate === true"
+      :latest-version="updateStatus?.latest ?? ''"
       @select="selectDrawing"
       @create="openCreateDrawing"
+      @update="updateVisible = true"
     />
 
     <main class="detail">
-      <div v-if="updateNotice" class="update-bar">
-        <span class="update-text">{{ updateNotice }}</span>
-        <el-button type="primary" size="small" @click="reloadPage">立即刷新</el-button>
-      </div>
-
       <div v-if="loadError" class="error-bar">
         <span class="error-text">{{ loadError }}</span>
         <el-button link type="primary" @click="retry">重试</el-button>
@@ -369,6 +394,17 @@ async function confirmCreateOperation(): Promise<void> {
         </el-button>
       </template>
     </el-dialog>
+
+    <UpdateDialog
+      v-model="updateVisible"
+      :status="updateStatus"
+      :can-install="canInstall"
+      :current-version="appVersion"
+      :checking="updateChecking"
+      :installing="installing"
+      :install-message="installMessage"
+      @install="handleInstall"
+    />
   </div>
 </template>
 
@@ -398,24 +434,6 @@ async function confirmCreateOperation(): Promise<void> {
   background: var(--el-color-danger-light-9);
   color: var(--el-color-danger);
   font-size: 13px;
-}
-
-/* 有新版本时的提示条。用主色而不是警告色：这不是出错，是正常的升级。 */
-.update-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 8px 16px;
-  border-bottom: 1px solid var(--el-color-primary-light-5);
-  background: var(--el-color-primary-light-9);
-  color: var(--el-color-primary-dark-2);
-  font-size: 13px;
-}
-
-.update-text {
-  flex: 1;
-  min-width: 0;
 }
 
 .error-text {

@@ -125,11 +125,16 @@ rem  folder next to this file, so copying the whole folder is a
 rem  complete backup.
 rem
 rem  To use another port:   start.cmd 8090
+rem
+rem  CNC_ADDR is only defaulted here, not forced: when the server restarts
+rem  itself to install an update, the apply script passes the port it was
+rem  running on through the environment, so a server started with
+rem  "start.cmd 8090" comes back on 8090 instead of silently moving to 8080.
 rem ---------------------------------------------------------------
 setlocal
 cd /d "%~dp0"
 
-set "CNC_ADDR=127.0.0.1:8080"
+if not defined CNC_ADDR set "CNC_ADDR=127.0.0.1:8080"
 if not "%~1"=="" set "CNC_ADDR=127.0.0.1:%~1"
 set "CNC_DATA_DIR=%~dp0data"
 set "CNC_WEB_DIR=%~dp0web"
@@ -148,9 +153,20 @@ echo   Close this window to stop the server.
 echo ============================================================
 echo.
 
+rem CNC_NO_BROWSER is set by the apply script while restarting after an
+rem update: the tab the user already has open reconnects by itself, so
+rem opening another one would just be noise.
+if defined CNC_NO_BROWSER goto skip_browser
 start "" powershell.exe -NoProfile -WindowStyle Hidden -Command "Start-Sleep -Seconds 3; Start-Process 'http://%CNC_ADDR%'"
+:skip_browser
+
 "%~dp0cnccool-server.exe"
 set "RC=%ERRORLEVEL%"
+
+rem Exit code 99 means "restarting in order to install an update", not a crash.
+rem The apply script is already waiting to swap the files and will open a fresh
+rem window, so this one must close instead of sitting on a pause.
+if "%RC%"=="99" exit /b 0
 
 echo.
 echo Server stopped (exit code %RC%).
@@ -216,11 +232,26 @@ data\ 目录，就在 exe 旁边：
 
 更新到新版本
 ------------------------------------------------------------
-1. 关掉服务（关掉黑窗口）。
-2. 先备份 data\ 目录。
-3. 用新版本的 cnccool-server.exe 和 web\ 覆盖旧的，
-   data\ 目录保持不动。
-4. 重新双击 start.cmd。数据库结构升级在启动时自动完成。
+方式一（推荐）：在界面里装
+    界面左下角版本号旁边出现「有新版本 vX.Y.Z」时，点它打开对话框，
+    按提示从发布页下载新的 zip，再在对话框里选中那个 zip，
+    点「安装并重启」即可。服务会自己换文件、自己重启，data\ 不动。
+
+    如果这台机器上不了外网，就在别的电脑上下载好，用 U 盘拷过来，
+    同样是在这个对话框里选文件安装。
+
+方式二：手工替换
+    1. 关掉服务（关掉黑窗口）。
+    2. 先备份 data\ 目录。
+    3. 用新版本的 cnccool-server.exe 和 web\ 覆盖旧的，
+       data\ 目录保持不动。
+    4. 重新双击 start.cmd。数据库结构升级在启动时自动完成。
+
+
+装完之后没反应 / 没装上
+------------------------------------------------------------
+    看安装目录下的 .update\apply-update.log，里面记了每一步的结果。
+    更新失败会自动回滚，程序仍然能照常启动，只是版本没变。
 
 
 出问题了怎么办
@@ -236,7 +267,8 @@ data\ 目录，就在 exe 旁边：
 
 杀毒软件报警
     这是自己编译的、没有数字签名的程序，加个信任即可。
-    程序不会联网，只监听本机 127.0.0.1。
+    程序只监听本机 127.0.0.1。只有你点「检查更新」时才会去
+    github.com 查一下最新版本号，不会上传任何数据。
 
 页面显示不正常
     按 Ctrl+F5 强制刷新一次，清掉浏览器缓存。
@@ -250,6 +282,11 @@ data\ 目录，就在 exe 旁边：
 
 [System.IO.File]::WriteAllText((Join-Path $stage 'start.cmd'), $startCmd, $gbk)
 [System.IO.File]::WriteAllText((Join-Path $stage 'README.txt'), $readme, $gbk)
+
+# VERSION 必须放进包里：离线安装要先读它才知道装的是哪一版，
+# 读到比较当前版本更新才允许装。少了它后端会直接拒绝这个包。
+# 用 ASCII 写，不带行尾换行，跟仓库里那个文件保持一致。
+[System.IO.File]::WriteAllText((Join-Path $stage 'VERSION'), $version, [System.Text.Encoding]::ASCII)
 
 # ---- 4. 压缩 ------------------------------------------------------------
 Write-Host "`n[4/4] 压缩 ..." -ForegroundColor Cyan

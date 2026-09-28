@@ -1,8 +1,8 @@
 // Command server 是 CNC 加工程序管理系统的后端服务。
 //
-// 它只提供 JSON 接口，不托管前端静态文件——
-// 前端是独立的 Vue 工程，开发时跑 Vite（热更新），
-// 部署时由 nginx 单独提供静态文件。这样前端改版完全不用重启这个服务。
+// 它默认只提供 JSON 接口；配置了 CNC_WEB_DIR 时会顺带托管前端静态文件，
+// 这样免安装版一个 exe 就能交付。开发时前端由 Vite 提供（热更新），
+// 也可以交给 nginx 单独提供。
 package main
 
 import (
@@ -21,6 +21,7 @@ import (
 	"cnccool/internal/ncstore"
 	"cnccool/internal/repo"
 	"cnccool/internal/store"
+	"cnccool/internal/update"
 )
 
 // version 是产品版本号。
@@ -32,6 +33,12 @@ import (
 // 服务启动时会打印这个版本号，GET /api/meta 也会返回，
 // 界面上显示出来——现场排查问题时第一件事就是确认装的是哪一版。
 var version = "v0.03"
+
+// exitRestarting 是「正在为安装离线包而重启」的退出码。
+//
+// 用 99 这个不常见的值，是为了让 start.cmd 能区分「正常退出」和「升级重启」：
+// 后者不该停在 pause 上等用户按键，因为替换脚本马上会另起一个新窗口。
+const exitRestarting = 99
 
 func main() {
 	if err := run(); err != nil {
@@ -50,6 +57,9 @@ func run() error {
 	slog.SetDefault(logger)
 
 	ctx := context.Background()
+
+	// 0) 清掉上一次离线安装留下的暂存内容
+	update.CleanLeftovers()
 
 	// 1) 打开数据库（不存在会自动创建），并应用内嵌的迁移脚本
 	db, err := store.Open(cfg.DBPath)
@@ -74,9 +84,33 @@ func run() error {
 	}
 
 	// 3) 启动 HTTP 服务
-	srv := &http.Server{
+	//
+	// srv 先声明再赋值：下面的重启回调里要用到它，而回调又必须在
+	// srv 构造之前注册进去（构造时要拿 Handler）。
+	var srv *http.Server
+
+	apiServer := httpapi.NewServer(r, files, cfg, logger, version)
+
+	// 离线包装好之后，替换脚本会等这个进程退出才动手（Windows 上运行中的
+	// exe 是锁着的），所以这里要主动、尽快地退出去。
+	apiServer.SetRestartHook(func() {
+		go func() {
+			// 留一点时间把响应发完，否则前端只会看到一个连接被断开
+			time.Sleep(1200 * time.Millisecond)
+
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			_ = srv.Shutdown(shutdownCtx)
+
+			// 退出码 99 是给 start.cmd 看的：这是升级重启，不是出错，
+			// 别停在 pause 上让用户按键，替换脚本会另起一个新窗口。
+			os.Exit(exitRestarting)
+		}()
+	})
+
+	srv = &http.Server{
 		Addr:    cfg.Addr,
-		Handler: httpapi.NewServer(r, files, cfg, logger, version).Router(),
+		Handler: apiServer.Router(),
 		// 上传几十 MB 的 NC 程序可能比较慢，读写超时给足；
 		// 只把读请求头的时间卡紧，防止慢速攻击占住连接。
 		ReadHeaderTimeout: 10 * time.Second,

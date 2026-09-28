@@ -15,12 +15,43 @@ export interface Meta {
   serverTime: string
   dataDir: string
   /**
-   * 服务器当前 index.html 引用的入口脚本，例如 /assets/index-CpuQPsoE.js。
+   * 能不能自己安装离线包。
    *
-   * 页面拿它和自己正在跑的那个脚本比对，不一致就说明 web\ 目录被覆盖过，
-   * 该提示用户刷新了。开发模式（前端由 Vite 提供）下后端返回空串，跳过比对。
+   * 只有「exe 旁边就是 web 目录」的免安装版布局才为 true；
+   * 开发模式下为 false，界面据此把安装入口藏起来，
+   * 而不是让用户点了才发现不支持。
    */
-  webEntry: string
+  canInstall: boolean
+}
+
+/* ---------------------------------------------------------------- 版本更新 */
+
+/** GET /api/update/check 的结果 */
+export interface UpdateStatus {
+  current: string
+  latest: string
+  hasUpdate: boolean
+  releaseUrl: string
+  publishedAt: string
+  assetName: string
+  assetUrl: string
+  assetSize: number
+  checkedAt: string
+  /**
+   * 查不到时的原因（没网、限流、仓库不存在等）。
+   *
+   * 这不是「错误」：车间没网是常态，界面上安静处理即可，不该弹红叉吓人。
+   */
+  error: string
+}
+
+/** POST /api/update/install 的结果 */
+export interface InstallResult {
+  /** 装上去的新版本 */
+  version: string
+  /** 装之前的版本 */
+  previous: string
+  restarting: boolean
 }
 
 /** 通用分页结构 */

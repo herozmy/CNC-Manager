@@ -22,6 +22,13 @@ type Config struct {
 	MaxUploadMB int64    // 单个 NC 文件上传上限（MB）
 	CORSOrigins []string // 允许跨域访问的前端来源，开发时是 Vite 的 5173
 	LogLevel    string   // debug / info / warn / error
+
+	// UpdateRepo 是查新版本用的 GitHub 仓库，形如 owner/name。
+	// 留空表示不检查更新——离线车间可以这么关掉，服务就完全不去连外网。
+	UpdateRepo string
+	// UpdateAPI 是 GitHub API 的地址，默认用官方地址。
+	// 做成可配置是为了两件事：企业内网自建，以及测试时指向一个本地假服务。
+	UpdateAPI string
 }
 
 // Load 从环境变量装载配置，缺省值适用于本机开发。
@@ -30,6 +37,9 @@ func Load() (*Config, error) {
 		Addr:        getEnv("CNC_ADDR", "127.0.0.1:8080"),
 		MaxUploadMB: getEnvInt("CNC_MAX_UPLOAD_MB", 64),
 		LogLevel:    getEnv("CNC_LOG_LEVEL", "info"),
+
+		UpdateRepo: getEnv("CNC_UPDATE_REPO", "herozmy/CNC-Manager"),
+		UpdateAPI:  getEnv("CNC_UPDATE_API", ""),
 	}
 
 	// 数据目录统一解析成绝对路径，避免因为启动目录不同而"数据找不到"。

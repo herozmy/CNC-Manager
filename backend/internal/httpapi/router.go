@@ -14,6 +14,7 @@ import (
 	"cnccool/internal/config"
 	"cnccool/internal/ncstore"
 	"cnccool/internal/repo"
+	"cnccool/internal/update"
 )
 
 // Server 持有 HTTP 层需要的全部依赖。
@@ -24,14 +25,32 @@ type Server struct {
 	log     *slog.Logger
 	version string
 
-	// web 是前端入口脚本地址的缓存，用于「页面是不是旧版」的比对。
-	web webEntryCache
+	// layout 描述当前程序装成什么形态，决定能不能自更新。
+	layout update.Layout
+	// update 负责查仓库上有没有新版本。
+	update *update.Client
+	// restart 是「离线包装好了，准备重启」时要执行的动作，由 main 注入。
+	restart func()
 }
 
 // NewServer 构造 HTTP 服务。
 func NewServer(r *repo.Repo, files *ncstore.Store, cfg *config.Config, log *slog.Logger, version string) *Server {
-	return &Server{repo: r, files: files, cfg: cfg, log: log, version: version}
+	return &Server{
+		repo:    r,
+		files:   files,
+		cfg:     cfg,
+		log:     log,
+		version: version,
+		layout:  update.DetectLayout(),
+		update:  update.NewClient(cfg.UpdateAPI, cfg.UpdateRepo, version),
+	}
 }
+
+// SetRestartHook 注册「离线包装好了，准备重启」时要执行的动作。
+//
+// 用 setter 而不是构造参数：只有 main 需要关心这件事，
+// 测试里造 Server 时不必凭空编一个出来。
+func (s *Server) SetRestartHook(fn func()) { s.restart = fn }
 
 // Router 组装全部路由。
 //
@@ -88,6 +107,10 @@ func (s *Server) Router() http.Handler {
 		// 从 NC 文本里识别程序号与刀具调用
 		r.Post("/nc/parse", s.handleParseText)
 
+		// 版本更新：查仓库上有没有新版本，以及安装离线包
+		r.Get("/update/check", s.handleUpdateCheck)
+		r.Post("/update/install", s.handleUpdateInstall)
+
 		// 刀具字典
 		r.Get("/tools", s.handleListTools)
 		r.Post("/tools", s.handleCreateTool)
@@ -116,16 +139,13 @@ func (s *Server) Router() http.Handler {
 }
 
 // handleMeta 返回服务元信息。
-//
-// 前端用它判断自己是不是旧版：把这里的 webEntry 和自己正在跑的入口脚本比一比，
-// 不一致就说明 web\ 目录已经被换掉了，提示用户刷新。
-// 免安装版的升级方式正是「覆盖 web\ 目录」，而开着的页面不会自己发现这件事。
 func (s *Server) handleMeta(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"version":    s.version,
 		"serverTime": nowString(),
 		"dataDir":    s.cfg.DataDir,
-		// 当前 index.html 引用的入口脚本；没配置前端目录时为空，前端据此跳过比对
-		"webEntry": s.webEntry(),
+		// 只有「exe 旁边就是 web\index.html」这种免安装布局才谈得上离线安装；
+		// 开发模式下 exe 在 backend\ 而前端在别处，界面据此把安装入口藏起来。
+		"canInstall": s.layout.CanSelfUpdate,
 	})
 }

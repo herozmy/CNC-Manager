@@ -11,6 +11,7 @@ import type {
   DrawingDetail,
   DrawingInput,
   ContentInput,
+  InstallResult,
   Machine,
   Meta,
   Operation,
@@ -21,6 +22,7 @@ import type {
   ProgramInput,
   ProgramTool,
   ProgramToolInput,
+  UpdateStatus,
   UploadVersionResult,
   Version,
   VersionContent
@@ -190,4 +192,31 @@ export function parseNcText(content: string): Promise<ParseResult> {
 /** 机台字典。界面上不展示机台选择，保留该函数仅为契约完整性。 */
 export function listMachines(): Promise<Machine[]> {
   return apiGet<Machine[]>('/machines')
+}
+
+/* ---------------------------------------------------------------- 版本更新 */
+
+/**
+ * 问仓库上有没有新版本。
+ *
+ * 查不到不会抛错，而是在返回值里带一个 error 字段——车间没网是常态，
+ * 界面安静地什么都不显示就好。
+ *
+ * @param fresh 用户手工点「检查更新」时传 true，绕过后端缓存重新问一次
+ */
+export function checkUpdate(fresh = false): Promise<UpdateStatus> {
+  return apiGet<UpdateStatus>('/update/check', fresh ? { fresh: 1 } : undefined)
+}
+
+/**
+ * 上传离线包安装。
+ *
+ * 服务端校验通过后会主动退出，由替换脚本换掉 exe 和 web 再重新拉起，
+ * 所以这个请求成功返回只代表「已受理」，此时服务马上就会断开。
+ * 要等服务重新起来请用 waitForRestart。
+ */
+export function installUpdate(file: File): Promise<InstallResult> {
+  const form = new FormData()
+  form.append('file', file)
+  return apiUpload<InstallResult>('/update/install', form)
 }
