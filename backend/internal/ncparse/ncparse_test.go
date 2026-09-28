@@ -178,6 +178,85 @@ func TestEmptyContent(t *testing.T) {
 	}
 }
 
+func TestMachiningCenterIgnoresPrepTool(t *testing.T) {
+	// 加工中心：只有和 M06 同行的 T 才算真正换刀。
+	// 单独一行的 T 是「备刀」——把刀转到待换位置，还没换上去，不算。
+	src := `%
+O7001 (MACHINING CENTER)
+T1 M06
+G43 H01 Z50.0
+G00 X0.0 Y0.0
+T2
+M06
+G43 H02 Z50.0
+T3
+M30
+%`
+	got := Parse(src)
+
+	if len(got.Tools) != 1 || got.Tools[0].ToolNo != "T1" {
+		t.Fatalf("加工中心模式下只应识别出 T1（T2/T3 是备刀），实际: %+v", got.Tools)
+	}
+	// 跳过了备刀必须说出来，否则用户会以为程序里的刀被漏识别了
+	found := false
+	for _, w := range got.Warnings {
+		if strings.Contains(w, "备刀") && strings.Contains(w, "T2") && strings.Contains(w, "T3") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("应提示跳过了 T2、T3 备刀，实际警告：%v", got.Warnings)
+	}
+}
+
+func TestLatheCountsAllTools(t *testing.T) {
+	// 车床程序没有 M06，T 命令本身就是换刀，所以所有 T 都要算。
+	// 若也按加工中心的规则处理，车床程序会一把刀都识别不出来。
+	src := `%
+O8001
+T0101
+G97 S1200 M03
+G00 X52.0 Z2.0
+T0303
+G00 X52.0 Z2.0
+T0202
+G70 P100 Q200
+M30
+%`
+	got := Parse(src)
+
+	if len(got.Tools) != 3 {
+		t.Fatalf("车床程序应识别出 3 把刀，实际 %d 把: %+v", len(got.Tools), got.Tools)
+	}
+	want := []string{"T01", "T03", "T02"}
+	for i, w := range want {
+		if got.Tools[i].ToolNo != w {
+			t.Errorf("第 %d 把刀 = %q，期望 %q（应保持出现顺序）", i+1, got.Tools[i].ToolNo, w)
+		}
+	}
+	for _, w := range got.Warnings {
+		if strings.Contains(w, "备刀") {
+			t.Errorf("车床程序不该出现备刀提示：%v", w)
+		}
+	}
+}
+
+func TestM06IsNotConfusedWithM60(t *testing.T) {
+	// M60 是托盘交换，不是换刀。和 M60 同行的 T 不该被当成换刀。
+	// 程序里有真正的 M06，所以走加工中心模式。
+	src := `%
+O9001
+T1 M06
+G43 H01 Z50.0
+T2 M60
+M30
+%`
+	got := Parse(src)
+	if len(got.Tools) != 1 || got.Tools[0].ToolNo != "T1" {
+		t.Errorf("M60 不是换刀，T2 不该被算进来；实际: %+v", got.Tools)
+	}
+}
+
 func TestLineNumbersPointAtRightLine(t *testing.T) {
 	src := `%
 O6001
