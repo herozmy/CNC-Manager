@@ -73,13 +73,19 @@ export function useVersionWatch(): VersionWatch {
     try {
       const meta = await getMeta()
 
+      // 主判据：服务器现在要发的入口脚本，和本页正在跑的不是同一个。
+      // 这说明 web\ 目录确实被换过了，刷新一定能拿到新界面。
       const entry = runningEntry()
       if (meta.webEntry && entry && meta.webEntry !== entry) {
         notice.value = '系统前端文件已更新，当前页面还是旧版本。刷新后才能看到新界面。'
         return
       }
+
+      // 次判据：只有后端版本号变了。前端文件不一定跟着换过——
+      // 比如用户只替换了 exe 而 web\ 还是旧的，这时刷新拿到的仍是旧界面。
+      // 所以这里只说「建议刷新」，不能承诺刷新就能对上。
       if (loadedVersion && meta.version && meta.version !== loadedVersion) {
-        notice.value = `服务已升级到 ${meta.version}，当前页面还是旧版本。刷新后才能对上。`
+        notice.value = `服务端已升级到 ${meta.version}（本页仍是 ${loadedVersion}），建议刷新页面。`
       }
     } catch {
       // 版本比对是锦上添花的功能，连不上后端时不要打扰用户
