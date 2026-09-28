@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -119,6 +120,17 @@ func run() error {
 		IdleTimeout:       2 * time.Minute,
 	}
 
+	// 3b) 先把端口绑上，再交给 http.Server。
+	//
+	// 不让 ListenAndServe 内部去绑，是为了能在失败时给一句人话：
+	// 端口被占用是最常见的启动失败，而 Go 原样抛出来的
+	// "bind: Only one usage of each socket address ... is normally permitted"
+	// 现场没人看得懂，只会以为程序坏了。
+	ln, err := net.Listen("tcp", cfg.Addr)
+	if err != nil {
+		return listenFailed(cfg.Addr, err)
+	}
+
 	logger.Info("CNC 加工程序管理服务已启动",
 		"地址", "http://"+cfg.Addr,
 		"版本", version,
@@ -128,7 +140,7 @@ func run() error {
 
 	errCh := make(chan error, 1)
 	go func() {
-		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		if err := srv.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errCh <- err
 		}
 	}()
@@ -147,6 +159,29 @@ func run() error {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	return srv.Shutdown(shutdownCtx)
+}
+
+// listenFailed 把「端口绑不上」翻译成一句能照着做的话。
+//
+// 这个失败现场太常见了：上一次的服务还开着、或者别的程序占了端口。
+// 原始错误是英文的系统调用信息，用户看到只会以为程序坏了，
+// 然后来问「为什么打不开」。
+func listenFailed(addr string, err error) error {
+	_, port, splitErr := net.SplitHostPort(addr)
+	if splitErr != nil {
+		return fmt.Errorf("监听 %s 失败: %w", addr, err)
+	}
+	return fmt.Errorf(
+		"端口 %s 已被占用。\n"+
+			"  最常见的原因是上一次的服务还开着（黑窗口没关），\n"+
+			"  或者被别的程序（另一个副本、杀毒软件等）占了。\n"+
+			"\n"+
+			"  处理办法一：关掉占用端口的程序，再重新启动。\n"+
+			"  处理办法二：换一个端口启动，例如\n"+
+			"      start.cmd 8090\n"+
+			"  然后浏览器访问 http://127.0.0.1:8090\n"+
+			"\n"+
+			"  系统原始错误：%v", port, err)
 }
 
 func newLogger(level string) *slog.Logger {
