@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -171,6 +172,15 @@ func listenFailed(addr string, err error) error {
 	if splitErr != nil {
 		return fmt.Errorf("监听 %s 失败: %w", addr, err)
 	}
+
+	// 建议的端口从当前这个推出来，不写死。
+	// 写死的话，用户本来就是用 start.cmd 8090 起的，提示再让他
+	// "例如 start.cmd 8090"，等于让他再撞一次同一堵墙。
+	alt := "8081"
+	if n, convErr := strconv.Atoi(port); convErr == nil && n > 0 && n < 65535 {
+		alt = strconv.Itoa(n + 1)
+	}
+
 	return fmt.Errorf(
 		"端口 %s 已被占用。\n"+
 			"  最常见的原因是上一次的服务还开着（黑窗口没关），\n"+
@@ -178,10 +188,10 @@ func listenFailed(addr string, err error) error {
 			"\n"+
 			"  处理办法一：关掉占用端口的程序，再重新启动。\n"+
 			"  处理办法二：换一个端口启动，例如\n"+
-			"      start.cmd 8090\n"+
-			"  然后浏览器访问 http://127.0.0.1:8090\n"+
+			"      start.cmd %s\n"+
+			"  然后浏览器访问 http://127.0.0.1:%s\n"+
 			"\n"+
-			"  系统原始错误：%v", port, err)
+			"  系统原始错误：%v", port, alt, alt, err)
 }
 
 func newLogger(level string) *slog.Logger {
