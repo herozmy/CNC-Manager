@@ -1,0 +1,64 @@
+/* 全局样式：只放跨组件的布局与通用样式，组件私有样式写在各自的 <style scoped> 里 */
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Microsoft YaHei', 'PingFang SC', 'Helvetica Neue', Arial, sans-serif;
+  font-size: 14px;
+  color: var(--el-text-color-primary);
+  background: var(--el-bg-color-page);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* 详情区里的信息卡片（图纸 / 工序 / 程序 / 版本面板共用） */
+.panel-card {
+  border-radius: 6px;
+}
+
+.panel-card + .panel-card {
+  margin-top: 0;
+}
+
+/* 滚动条统一收窄，长刀具表横向滚动时更好看 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--el-border-color-darker);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--el-text-color-placeholder);
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* 表格内的输入控件去掉多余高度，保证行高紧凑 */
+.el-table .el-input-number.is-controls-right .el-input__wrapper {
+  padding-right: 34px;
+}
+
+.el-table .el-input-number,
+.el-table .el-select {
+  width: 100%;
+}
+
+/* 版本对比区使用等宽字体 */
+.mono,
+.diff-body {
+  font-variant-ligatures: none;
+}

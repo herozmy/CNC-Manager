@@ -1,0 +1,41 @@
+# 行尾与文本处理规则
+#
+# 这个项目在 Windows 上开发和运行，但可能会被 clone 到 Linux（比如以后进 Docker 构建）。
+# 不统一行尾的话，会出现"整个文件都被改动"的假差异，Code Review 时非常痛苦。
+
+# 默认：交给 Git 自动处理，仓库里统一存 LF
+* text=auto eol=lf
+
+# Windows 专用脚本必须是 CRLF，否则 cmd.exe 解析会出错（实测踩过）
+*.cmd text eol=crlf
+*.bat text eol=crlf
+
+# Windows PowerShell 5.1 读没有 BOM 的 .ps1 会按本地代码页（GBK）解码，
+# 中文注释全变乱码并导致语法错误。所以 .ps1 必须带 BOM，
+# 这里显式声明为 text（不要当二进制），行尾用 CRLF。
+*.ps1 text eol=crlf
+
+# 源码与文本
+*.go    text eol=lf
+*.ts    text eol=lf
+*.vue   text eol=lf
+*.json  text eol=lf
+*.md    text eol=lf
+*.sql   text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.mjs   text eol=lf
+*.html  text eol=lf
+
+# NC 程序文件：数控系统对行尾敏感，测试样本保持原样，不做任何转换
+*.nc    -text
+
+# 二进制
+*.exe   binary
+*.db    binary
+*.png   binary
+*.jpg   binary
+*.ico   binary
+
+# 让 GitHub 的语言统计不把生成的 JS 算进去
+frontend/dist/**   linguist-generated=true

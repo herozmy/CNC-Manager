@@ -1,0 +1,26 @@
+{
+  "name": "cnc-program-manager-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "description": "CNC 加工程序管理系统 - 前端（Vue 3 + TypeScript + Vite + Element Plus）",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc --noEmit -p tsconfig.json && vue-tsc --noEmit -p tsconfig.node.json && vite build",
+    "build:only": "vite build",
+    "typecheck": "vue-tsc --noEmit -p tsconfig.json && vue-tsc --noEmit -p tsconfig.node.json",
+    "preview": "vite preview --port 5173 --host 127.0.0.1"
+  },
+  "dependencies": {
+    "element-plus": "^2.14.6",
+    "vue": "^3.5.43",
+    "vue-router": "^4.6.4"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "@vitejs/plugin-vue": "^6.0.9",
+    "typescript": "~5.9.3",
+    "vite": "^8.3.1",
+    "vue-tsc": "^3.3.11"
+  }
+}

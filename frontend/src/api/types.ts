@@ -1,0 +1,276 @@
+/**
+ * 后端 API 契约类型定义。
+ *
+ * 字段名与后端真实返回严格一致（已用 curl.exe 逐个接口核对过），禁止自行改名。
+ *
+ * 单位约定（现场最容易出错的地方，务必看清）：
+ *   - toolDia / cornerRadius / cutDepth / zHeight 单位 mm
+ *   - spindleSpeed 按 speedMode 解释：0 = G97 恒转速(r/min)，1 = G96 恒线速(m/min)
+ *   - feed        按 feedMode  解释：0 = G94 每分钟(mm/min)，1 = G95 每转(mm/r)
+ */
+
+/** 服务元信息 */
+export interface Meta {
+  version: string
+  serverTime: string
+  dataDir: string
+}
+
+/** 通用分页结构 */
+export interface Page<T> {
+  items: T[]
+  total: number
+  page: number
+  size: number
+}
+
+/* ------------------------------------------------------------------ 图纸 */
+
+export interface Drawing {
+  id: number
+  drawingNo: string
+  name: string
+  customer: string
+  material: string
+  drawingVersion: string
+  remark: string
+  createdAt: string
+  updatedAt: string
+  operationCount?: number
+}
+
+/**
+ * 图纸提交体。
+ *
+ * 注意：后端 PUT 是**整体替换**语义，没带的字段会被写成零值。
+ * 界面上不显示的 customer / drawingVersion 必须用「加载到的原值」带回，
+ * 不能填死空串，否则会把后端已有数据覆盖掉（详见各卡片组件里构造提交体的地方）。
+ */
+export interface DrawingInput {
+  drawingNo: string
+  name: string
+  customer: string
+  material: string
+  drawingVersion: string
+  remark: string
+}
+
+/* ------------------------------------------------------------------ 工序 */
+
+export interface Operation {
+  id: number
+  drawingId: number
+  opNo: number
+  opName: string
+  machineId: number | null
+  machineName: string
+  fixture: string
+  /** Z 轴高度垫高，单位 mm */
+  zHeight: number
+  remark: string
+  createdAt: string
+  updatedAt: string
+  programCount?: number
+}
+
+/** 工序提交体；opName / machineId 界面上不显示，提交时必须带回原值 */
+export interface OperationInput {
+  opNo: number
+  opName: string
+  machineId: number | null
+  fixture: string
+  zHeight: number
+  remark: string
+}
+
+/* ------------------------------------------------------------------ 程序 */
+
+export interface Program {
+  id: number
+  operationId: number
+  programNo: string
+  programName: string
+  controller: string
+  currentVersionId: number | null
+  currentVersionNo: number | null
+  versionCount: number
+  remark: string
+  createdAt: string
+  updatedAt: string
+}
+
+/** 程序提交体；programName / controller / remark 界面上不显示，提交时必须带回原值 */
+export interface ProgramInput {
+  programNo: string
+  programName: string
+  controller: string
+  remark: string
+}
+
+/* -------------------------------------------------------------- 刀具刀补 */
+
+/**
+ * 刀具补偿行（后端返回体）。
+ *
+ * 后端的行对象里还有 id / programId，界面上用不到（整表提交会重建这些行），
+ * 因此这里不声明，避免误用。
+ */
+export interface ProgramTool {
+  seq: number
+  toolId: number | null
+  toolNo: string
+  offsetNo: string
+  toolName: string
+  toolDia: number
+  cornerRadius: number
+  /** 刀具补偿量，单位 mm */
+  compAmount: number
+  spindleSpeed: number
+  /** 0 = G97 恒转速(r/min)，1 = G96 恒线速(m/min) */
+  speedMode: number
+  feed: number
+  /** 0 = G94 每分钟(mm/min)，1 = G95 每转(mm/r) */
+  feedMode: number
+  cutDepth: number
+  /** 0=无，1=冷却液，2=吹气，3=喷雾 */
+  coolant: number
+  machiningContent: string
+  remark: string
+}
+
+/**
+ * 刀具补偿行（提交体）。字段与 ProgramTool 相同。
+ *
+ * 界面上只编辑 seq / toolNo / offsetNo / toolDia / compAmount，
+ * 其余列（toolName、cornerRadius、spindleSpeed、speedMode、feed、feedMode、
+ * cutDepth、coolant、machiningContent、remark、toolId）
+ * 在整表提交时**必须按加载到的原值带回**，不能填死默认值，否则会丢数据。
+ */
+export interface ProgramToolInput {
+  seq: number
+  toolId: number | null
+  toolNo: string
+  offsetNo: string
+  toolName: string
+  toolDia: number
+  cornerRadius: number
+  /** 刀具补偿量，单位 mm */
+  compAmount: number
+  spindleSpeed: number
+  speedMode: number
+  feed: number
+  feedMode: number
+  cutDepth: number
+  coolant: number
+  machiningContent: string
+  remark: string
+}
+
+/* ------------------------------------------------------------------ 版本 */
+
+export interface Version {
+  id: number
+  programId: number
+  versionNo: number
+  fileId: number
+  fileName: string
+  fileSize: number
+  sha256: string
+  changeNote: string
+  createdBy: string
+  createdAt: string
+  isCurrent: boolean
+}
+
+/**
+ * 某个版本的程序文本（GET /api/versions/{id}/content）。
+ *
+ * content 已由后端按源文件编码解码成 UTF-8，界面直接显示即可。
+ */
+export interface VersionContent {
+  versionId: number
+  programId: number
+  versionNo: number
+  fileName: string
+  /** 'utf-8' 或 'gbk' */
+  encoding: string
+  /** 已经解码成 UTF-8 的完整文本 */
+  content: string
+  lineCount: number
+  sizeBytes: number
+  isCurrent: boolean
+}
+
+/**
+ * 保存程序文本的请求体（PUT 覆盖当前版本 / POST 另存为新版本）。
+ *
+ * encoding 必须把读到的 VersionContent.encoding **原样带回**：
+ * 写死 'utf-8' 会把现场的 GBK 程序毁掉，机床可能直接不认。
+ */
+export interface ContentInput {
+  content: string
+  encoding: string
+  changeNote: string
+}
+
+/* ------------------------------------------------------------------ 对比 */
+
+export interface DiffLine {
+  type: 'same' | 'add' | 'del' | 'change'
+  leftNo: number | null
+  rightNo: number | null
+  leftText: string
+  rightText: string
+}
+
+export interface DiffResult {
+  leftVersionNo: number
+  rightVersionNo: number
+  identical: boolean
+  lines: DiffLine[]
+}
+
+/* ------------------------------------------------------------------ 机台 */
+
+/** 机台字典。界面上刻意不展示机台选择，仅在提交工序时原样带回 machineId。 */
+export interface Machine {
+  id: number
+  code: string
+  name: string
+  controller: string
+  remark: string
+}
+
+/* ------------------------------------------------- 图纸详情（整页一次拉全） */
+
+/** 图纸详情里的程序节点，直接带上它的刀具补偿表 */
+export interface DetailProgram {
+  id: number
+  programNo: string
+  programName: string
+  controller: string
+  currentVersionId: number | null
+  currentVersionNo: number | null
+  versionCount: number
+  remark: string
+  tools: ProgramTool[]
+}
+
+/** 图纸详情里的工序节点 */
+export interface DetailOperation {
+  id: number
+  opNo: number
+  opName: string
+  machineId: number | null
+  machineName: string
+  fixture: string
+  zHeight: number
+  remark: string
+  programs: DetailProgram[]
+}
+
+/** 一整张图纸：图纸 → 工序 → 程序 → 刀具补偿表 */
+export interface DrawingDetail {
+  drawing: Drawing
+  operations: DetailOperation[]
+}

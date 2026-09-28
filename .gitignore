@@ -1,0 +1,43 @@
+# 依赖与构建产物
+backend/cnccool-server.exe
+backend/cnccool-server
+frontend/node_modules/
+frontend/dist/
+.tools/
+
+# 运行期数据：数据库与 NC 文件库，绝不入库
+backend/data/
+data/
+
+# 临时排查产物（无头浏览器截图、DOM dump、临时 profile 等）
+.tmp/
+
+# 编辑器与系统
+.vscode/
+.idea/
+*.swp
+Thumbs.db
+desktop.ini
+
+# 日志
+*.log
+
+# 本地开发工具，不入库
+#
+# 这些脚本只存在于开发机上，跟项目本身无关：
+#   - 测试脚本（接口回归、浏览器渲染、编码往返检查）
+#   - GitHub 推送与令牌排障工具
+# 文件仍然在本地，只是不纳入版本控制。
+scripts/_common.ps1
+scripts/smoke-test.*
+scripts/encoding-test.*
+scripts/ui-check.*
+scripts/ui-editor-check.*
+scripts/ui-save-check.*
+scripts/check-github-token.*
+scripts/push-to-github.*
+scripts/git-push.*
+scripts/sample/
+
+# 本地笔记与开发记录（不进仓库）
+.local/
