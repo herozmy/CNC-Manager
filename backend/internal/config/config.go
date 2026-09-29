@@ -23,6 +23,12 @@ type Config struct {
 	CORSOrigins []string // 允许跨域访问的前端来源，开发时是 Vite 的 5173
 	LogLevel    string   // debug / info / warn / error
 
+	// LogFile 是日志文件路径。留空则写到 <dataDir>/logs/server.log。
+	//
+	// 日志一律落文件：现场那个黑窗口一关，屏幕上说过什么就全没了，
+	// 「服务忽然连不上」这种事就永远是悬案。
+	LogFile string
+
 	// UpdateRepo 是查新版本用的 GitHub 仓库，形如 owner/name。
 	// 留空表示不检查更新——离线车间可以这么关掉，服务就完全不去连外网。
 	UpdateRepo string
@@ -50,6 +56,7 @@ func Load() (*Config, error) {
 	c.DataDir = absData
 	c.DBPath = getEnv("CNC_DB_PATH", filepath.Join(absData, "cnccool.db"))
 	c.NCDir = getEnv("CNC_NC_DIR", filepath.Join(absData, "nc"))
+	c.LogFile = getEnv("CNC_LOG_FILE", filepath.Join(absData, "logs", "server.log"))
 
 	// 可选：设了就顺带在同一端口托管前端静态文件。
 	//

@@ -216,6 +216,7 @@ scripts\seed-demo.cmd
 | `CNC_UPDATE_REPO` | `herozmy/CNC-Manager` | 查新版本用的 GitHub 仓库 `owner/name`。**留空则不检查更新**，服务完全不去连外网 |
 | `CNC_UPDATE_API` | GitHub 官方地址 | 仓库 API 地址。内网自建 GitHub 或测试时改它 |
 | `CNC_LOG_LEVEL` | `info` | `debug` / `info` / `warn` / `error` |
+| `CNC_LOG_FILE` | `<data>/logs/server.log` | 日志文件路径。超过 4MB 滚动成 `.1`，只留一代 |
 
 > `CNC_ADDR` 改成 `0.0.0.0:8080` 之后局域网上的机器就能访问了。但要注意
 > `POST /api/update/install` 能把 exe 换掉，等于一个"随意执行代码"的口子，
@@ -408,6 +409,23 @@ go run ./cmd/dbcheck -backup "D:\backup\cnccool-20260928.db"
 底层用 SQLite 的 `VACUUM INTO`，由数据库保证一致性。
 
 > 两种方式都记得把 `backend\data\nc\` 一并拷走——那是 NC 程序文件本体。
+
+### 日志
+
+服务同时往**控制台**和**文件**写日志，两边内容一样。文件默认在
+`data\logs\server.log`（超过 4MB 滚动成 `server.log.1`，只留一代）。
+
+文件这一份是给事后查的。这个程序是双击 `start.cmd` 起的，用户面对的是一个黑窗口——
+**窗口一关，屏幕上说过什么就全没了**，「服务忽然连不上」这种事就永远是悬案。
+日志里能查到：
+
+- 每次启动的**版本、地址、数据目录**
+- **每一个请求**的方法、路径、状态码、耗时——服务如果中途没了，最后一行就是它当时在干什么
+- 端口被占用之类的**启动失败**原因
+- **未捕获的 panic**：内容加完整堆栈（这个没有日志文件的话，现场是留不下来的）
+
+排查「突然连不上」的步骤：先看日志最后一行的时间。如果时间停在你说的时间点之前
+且没有异常记录，多半是那个黑窗口被关掉、或者进程被别的东西（杀毒软件等）结束了。
 
 ### 版本升级
 

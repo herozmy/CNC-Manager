@@ -9,15 +9,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
 	"os"
 	"os/signal"
+	"runtime/debug"
 	"strconv"
 	"syscall"
 	"time"
 
+	"cnccool/internal/applog"
 	"cnccool/internal/config"
 	"cnccool/internal/httpapi"
 	"cnccool/internal/ncstore"
@@ -55,8 +58,24 @@ func run() error {
 		return err
 	}
 
-	logger := newLogger(cfg.LogLevel)
+	// 日志同时写控制台和文件。
+	//
+	// 文件这一份是给事后查的：车间里那个黑窗口一关，屏幕上说过什么就全没了，
+	// 「服务忽然连不上」就永远是悬案。写不了文件不拦启动——那是辅助功能。
+	var logFile *applog.RotatingFile
+	logFile, err = applog.Open(cfg.LogFile, applog.DefaultMaxBytes)
+	if err != nil {
+		logFile = nil
+	}
+
+	logger := newLogger(cfg.LogLevel, logFile)
 	slog.SetDefault(logger)
+	if logFile == nil {
+		logger.Warn("日志文件写不了，只输出到控制台", "path", cfg.LogFile, "err", err)
+	}
+
+	// 崩了也要留下痕迹：panic 的现场只有控制台的话，用户一关窗口就没了。
+	defer recoverTo(logger)
 
 	ctx := context.Background()
 
@@ -137,7 +156,13 @@ func run() error {
 		"版本", version,
 		"数据目录", cfg.DataDir,
 		"数据库", cfg.DBPath,
-		"NC文件库", cfg.NCDir)
+		"NC文件库", cfg.NCDir,
+		"日志文件", cfg.LogFile)
+
+	if logFile != nil {
+		// 退出前把文件关掉，保证最后几行落盘
+		defer func() { _ = logFile.Close() }()
+	}
 
 	errCh := make(chan error, 1)
 	go func() {
@@ -159,7 +184,11 @@ func run() error {
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	return srv.Shutdown(shutdownCtx)
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		return err
+	}
+	logger.Info("服务已停止")
+	return nil
 }
 
 // listenFailed 把「端口绑不上」翻译成一句能照着做的话。
@@ -194,7 +223,24 @@ func listenFailed(addr string, err error) error {
 			"  系统原始错误：%v", port, alt, alt, err)
 }
 
-func newLogger(level string) *slog.Logger {
+// recoverTo 把 panic 记进日志，然后原样抛出去。
+//
+// 记是为了留下现场（日志文件里能看到 panic 内容与完整堆栈）；
+// 原样抛是为了不改变程序的行为——吞掉 panic 假装没事，比崩掉更糟糕。
+func recoverTo(logger *slog.Logger) {
+	rec := recover()
+	if rec == nil {
+		return
+	}
+	logger.Error("服务发生未捕获的 panic，即将退出",
+		"panic", fmt.Sprint(rec), "堆栈", string(debug.Stack()))
+	panic(rec)
+}
+
+// newLogger 构造日志器：同时写控制台和文件（file 为 nil 时只写控制台）。
+//
+// 控制台那份是给人当场看的，文件那份是给事后查的。两份内容完全一样。
+func newLogger(level string, file io.Writer) *slog.Logger {
 	var lv slog.Level
 	switch level {
 	case "debug":
@@ -206,5 +252,10 @@ func newLogger(level string) *slog.Logger {
 	default:
 		lv = slog.LevelInfo
 	}
-	return slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: lv}))
+
+	out := io.Writer(os.Stdout)
+	if file != nil {
+		out = io.MultiWriter(os.Stdout, file)
+	}
+	return slog.New(slog.NewTextHandler(out, &slog.HandlerOptions{Level: lv}))
 }
