@@ -1,6 +1,6 @@
 # CNC 加工程序管理系统
 
-**v0.06**
+**v0.07**
 
 数控加工程序的结构化管理工具：以**图纸号**为主线，挂**工序**（一序、二序…），
 工序下挂**程序**，每个程序带 **NC 文件版本历史**、**刀具补偿表**和**备注**。
@@ -108,7 +108,7 @@ backend\data\
 ### 方式一：免安装包（现场推荐）
 
 从 [Releases](https://github.com/herozmy/CNC-Manager/releases) 下载
-`cnccool-v0.06-windows-amd64.zip`，解压到任意目录，双击 `start.cmd`。
+`cnccool-v0.07-windows-amd64.zip`，解压到任意目录，双击 `start.cmd`。
 浏览器会自动打开 <http://127.0.0.1:8080>。
 
 换端口：`start.cmd 8090`。
