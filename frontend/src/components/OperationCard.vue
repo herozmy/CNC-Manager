@@ -169,6 +169,14 @@ interface ProgramForm {
   programNo: string
   /** 已落库的程序名，用于判断是否有未保存改动 */
   baselineNo: string
+  /**
+   * 程序备注，界面上可以直接改。
+   *
+   * 以前它只作为「隐藏字段原样回传」，用户根本看不到也填不了——
+   * 现场想给程序写一句说明（比如"这版是新刀具试切"）没有任何地方可写。
+   */
+  remark: string
+  baselineRemark: string
   saving: boolean
 }
 
@@ -179,6 +187,8 @@ function resetPrograms(): void {
     source: program,
     programNo: program.programNo,
     baselineNo: program.programNo,
+    remark: program.remark,
+    baselineRemark: program.remark,
     saving: false
   }))
 }
@@ -186,9 +196,10 @@ function resetPrograms(): void {
 watch(() => props.operation.programs, resetPrograms, { immediate: true })
 
 function isProgramDirty(item: ProgramForm): boolean {
-  return item.programNo.trim() !== item.baselineNo
+  return item.programNo.trim() !== item.baselineNo || item.remark !== item.baselineRemark
 }
 
+/** 程序名和备注共用一个保存动作：任一改动都整体提交一次 */
 async function saveProgram(item: ProgramForm): Promise<void> {
   const programNo = item.programNo.trim()
   if (!programNo) {
@@ -196,22 +207,24 @@ async function saveProgram(item: ProgramForm): Promise<void> {
     item.programNo = item.baselineNo
     return
   }
-  if (programNo === item.baselineNo || item.saving) return
+  if (!isProgramDirty(item) || item.saving) return
 
   item.saving = true
   try {
     await updateProgram(item.source.id, {
       programNo,
-      // 隐藏字段按原值带回，避免整体替换把后端数据清空
+      // 界面上仍然没有的字段按原值带回，避免整体替换把后端数据清空
       programName: item.source.programName,
       controller: item.source.controller,
-      remark: item.source.remark
+      remark: item.remark
     })
     item.programNo = programNo
     item.baselineNo = programNo
+    item.baselineRemark = item.remark
   } catch (error) {
     ElMessage.error(errorMessage(error))
     item.programNo = item.baselineNo
+    item.remark = item.baselineRemark
   } finally {
     item.saving = false
   }
@@ -240,10 +253,12 @@ async function confirmDeleteProgram(item: ProgramForm): Promise<void> {
 
 const createVisible = ref(false)
 const newProgramNo = ref('')
+const newProgramRemark = ref('')
 const creating = ref(false)
 
 function openCreateProgram(): void {
   newProgramNo.value = ''
+  newProgramRemark.value = ''
   createVisible.value = true
 }
 
@@ -255,12 +270,12 @@ async function confirmCreateProgram(): Promise<void> {
   }
   creating.value = true
   try {
-    // 新建程序的隐藏字段没有原值可取，按契约给空值
+    // 界面上没有的字段（程序名称 / 数控系统）没有原值可取，按契约给空值
     await createProgram(props.operation.id, {
       programNo,
       programName: '',
       controller: '',
-      remark: ''
+      remark: newProgramRemark.value.trim()
     })
     createVisible.value = false
     ElMessage.success('程序已添加')
@@ -440,6 +455,13 @@ function onToolsAdded(): void {
             placeholder="如 O1234"
             @change="saveProgram(item)"
           />
+          <span class="field-label">备注</span>
+          <el-input
+            v-model="item.remark"
+            class="program-remark"
+            placeholder="选填"
+            @change="saveProgram(item)"
+          />
           <span v-if="item.saving" class="state state-saving">保存中…</span>
           <span v-else-if="isProgramDirty(item)" class="state state-dirty">未保存</span>
           <el-button link type="danger" @click="confirmDeleteProgram(item)">删除</el-button>
@@ -497,10 +519,18 @@ function onToolsAdded(): void {
 
     <input ref="fileInputRef" type="file" class="hidden-file" @change="onFileChange" />
 
-    <el-dialog v-model="createVisible" title="添加程序" width="420px">
+    <el-dialog v-model="createVisible" title="添加程序" width="460px">
       <label class="field dialog-field">
         <span class="field-label">程序名</span>
         <el-input v-model="newProgramNo" placeholder="如 O1234" @keyup.enter="confirmCreateProgram" />
+      </label>
+      <label class="field dialog-field">
+        <span class="field-label">备注</span>
+        <el-input
+          v-model="newProgramRemark"
+          placeholder="选填，如 新刀具试切"
+          @keyup.enter="confirmCreateProgram"
+        />
       </label>
       <template #footer>
         <el-button @click="createVisible = false">取消</el-button>
@@ -634,6 +664,11 @@ function onToolsAdded(): void {
 .program-input {
   width: 200px;
   flex: 0 0 auto;
+}
+
+.program-remark {
+  flex: 1;
+  min-width: 120px;
 }
 
 .program-bar {

@@ -20,6 +20,7 @@ import type { ParseResult, ProgramToolInput } from '../api/types'
 import { getProgramTools, saveProgramTools } from '../api'
 import { errorMessage } from '../api/client'
 import { normalizeToolNo } from '../utils/nc'
+import { toNumber } from '../utils/format'
 
 const props = defineProps<{
   /** 识别结果；后端读取程序正文失败时为 null */
@@ -57,6 +58,15 @@ interface ToolRow {
   uid: number
   toolNo: string
   offsetNo: string
+  /**
+   * 直径与补偿量，mm。
+   *
+   * 这两个识别不出来——程序正文里没有它们——所以要用户自己填。
+   * 放在这里而不是等加入之后再去刀具表补，是因为现场本来就是
+   * 「看着程序把刀号、直径、刀补一次填齐」，来回切两处最容易漏。
+   */
+  toolDia: number
+  compAmount: number
 }
 
 let uidSeed = 0
@@ -64,7 +74,7 @@ const rows = ref<ToolRow[]>([])
 
 function newRow(toolNo = '', offsetNo = ''): ToolRow {
   uidSeed += 1
-  return { uid: uidSeed, toolNo, offsetNo }
+  return { uid: uidSeed, toolNo, offsetNo, toolDia: 0, compAmount: 0 }
 }
 
 /** 后端有识别结果就照抄一份成可编辑的行；没有就从空开始 */
@@ -141,9 +151,9 @@ async function addTools(): Promise<void> {
         toolNo,
         offsetNo: row.offsetNo.trim(),
         toolName: '',
-        toolDia: 0,
+        toolDia: toNumber(row.toolDia),
         cornerRadius: 0,
-        compAmount: 0,
+        compAmount: toNumber(row.compAmount),
         spindleSpeed: 0,
         speedMode: 0,
         feed: 0,
@@ -218,12 +228,14 @@ async function addTools(): Promise<void> {
         }}
       </p>
 
-      <table v-else class="tool-table">
+      <table v-else class="parse-tool-table">
         <thead>
           <tr>
             <th class="col-seq">#</th>
-            <th>刀具号</th>
-            <th>刀补号</th>
+            <th class="col-no">刀具号</th>
+            <th class="col-no">刀补号</th>
+            <th class="col-num">直径 (mm)</th>
+            <th class="col-num">补偿量 (mm)</th>
             <th class="col-op"></th>
           </tr>
         </thead>
@@ -240,6 +252,29 @@ async function addTools(): Promise<void> {
             </td>
             <td>
               <el-input v-model="row.offsetNo" size="small" placeholder="D01（可留空）" />
+            </td>
+            <td>
+              <el-input-number
+                v-model="row.toolDia"
+                size="small"
+                :min="0"
+                :max="10000"
+                :precision="3"
+                :controls="false"
+                :value-on-clear="0"
+              />
+            </td>
+            <td>
+              <!-- 补偿量允许负数：磨损修下去、半径补偿取反都会是负的 -->
+              <el-input-number
+                v-model="row.compAmount"
+                size="small"
+                :min="-10000"
+                :max="10000"
+                :precision="3"
+                :controls="false"
+                :value-on-clear="0"
+              />
             </td>
             <td class="col-op">
               <el-button link type="danger" size="small" @click="removeRow(index)">删除</el-button>
@@ -372,21 +407,21 @@ async function addTools(): Promise<void> {
   font-size: 13px;
 }
 
-.tool-table {
+.parse-tool-table {
   width: 100%;
-  max-width: 480px;
+  max-width: 720px;
   border-collapse: collapse;
   table-layout: fixed;
 }
 
-.tool-table th,
-.tool-table td {
+.parse-tool-table th,
+.parse-tool-table td {
   padding: 4px 6px;
   text-align: left;
   vertical-align: middle;
 }
 
-.tool-table th {
+.parse-tool-table th {
   color: var(--el-text-color-regular);
   font-size: 12px;
   font-weight: 500;
@@ -399,13 +434,25 @@ async function addTools(): Promise<void> {
   font-size: 12px;
 }
 
+.col-no {
+  width: 120px;
+}
+
+.col-num {
+  width: 130px;
+}
+
 .col-op {
   width: 52px;
   text-align: right;
 }
 
+.parse-tool-table :deep(.el-input-number) {
+  width: 100%;
+}
+
 /* 刀具号空着时给个红边，别等点了加入才报错 */
-.tool-table :deep(.is-empty .el-input__wrapper) {
+.parse-tool-table :deep(.is-empty .el-input__wrapper) {
   box-shadow: 0 0 0 1px var(--el-color-danger) inset;
 }
 
