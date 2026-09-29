@@ -5,6 +5,7 @@ rem  Requires the backend to be running in another window:
 rem      scripts\run-backend.cmd
 rem ---------------------------------------------------------------
 setlocal
+call "%~dp0_run-ps51.cmd"
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0seed-demo.ps1" %*
 set "RC=%ERRORLEVEL%"
 endlocal & exit /b %RC%

@@ -208,7 +208,7 @@ func (s *Server) handleReplaceProgramTools(w http.ResponseWriter, r *http.Reques
 
 // validateProgramTools 校验刀具表。
 //
-// 这里挡住的是现场最容易犯的几类错：行号重复、填了负数、
+// 这里挡住的是现场最容易犯的几类错：行号重复、把负数填到不该为负的字段上、
 // 把 G96 的线速度当成转速填进去（模式值超范围）。
 func validateProgramTools(items []domain.ProgramToolInput) error {
 	seen := make(map[int]bool, len(items))
@@ -222,14 +222,19 @@ func validateProgramTools(items []domain.ProgramToolInput) error {
 		}
 		seen[seq] = true
 
+		// 直径 / 刀尖圆弧 / 进给 / 切深不能为负——这几个没有负数的物理意义。
+		// 补偿量不在此列，见下。
 		if it.ToolDia < 0 || it.CornerRadius < 0 || it.Feed < 0 || it.CutDepth < 0 {
 			return fmt.Errorf("%w：第 %d 行的直径 / 刀尖圆弧 / 进给 / 切深不能为负数", domain.ErrInvalid, seq)
 		}
-		if it.CompAmount < 0 {
-			return fmt.Errorf("%w：第 %d 行的刀具补偿量不能为负数", domain.ErrInvalid, seq)
-		}
-		if it.CompAmount > 10000 {
-			return fmt.Errorf("%w：第 %d 行的刀具补偿量超出合理范围（0 ~ 10000 mm）", domain.ErrInvalid, seq)
+
+		// 刀具补偿量允许负数。
+		//
+		// 刀补记的是"实际值相对理论值的偏差"：磨损了要把刀补修下去、
+		// 半径补偿取反，都会是负的。早先这里一刀切禁掉了负数，
+		// 结果现场根本填不进去。只保留一个量级上的兜底。
+		if it.CompAmount > 10000 || it.CompAmount < -10000 {
+			return fmt.Errorf("%w：第 %d 行的刀具补偿量超出合理范围（-10000 ~ 10000 mm）", domain.ErrInvalid, seq)
 		}
 		if it.ToolDia > 10000 || it.CutDepth > 10000 || it.Feed > 100000 {
 			return fmt.Errorf("%w：第 %d 行的数值超出合理范围，请检查是否填错了单位", domain.ErrInvalid, seq)

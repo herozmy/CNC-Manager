@@ -193,16 +193,23 @@ function submit(): void {
               v-model="row.toolDia"
               size="small"
               :min="0"
+              :max="10000"
               :precision="3"
               :controls="false"
               :value-on-clear="0"
             />
           </td>
           <td>
+            <!--
+              补偿量允许负数：刀补记的是「实际值相对理论值的偏差」，
+              磨损修下去、半径补偿取反都会是负的。
+              这里的 min 只做量级兜底，和后端校验保持一致。
+            -->
             <el-input-number
               v-model="row.compAmount"
               size="small"
-              :min="0"
+              :min="-10000"
+              :max="10000"
               :precision="3"
               :controls="false"
               :value-on-clear="0"
