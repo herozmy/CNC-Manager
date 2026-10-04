@@ -6,6 +6,8 @@
  */
 import { apiDelete, apiGet, apiPost, apiPut, apiUpload, buildUrl } from './client'
 import type {
+  AuthStatus,
+  AuthUser,
   DiffResult,
   Drawing,
   DrawingDetail,
@@ -27,6 +29,28 @@ import type {
   Version,
   VersionContent
 } from './types'
+
+/* ------------------------------------------------------------------ 认证 */
+
+export function getAuthStatus(): Promise<AuthStatus> {
+  return apiGet<AuthStatus>('/auth/status')
+}
+
+export function getCurrentUser(): Promise<AuthUser> {
+  return apiGet<AuthUser>('/auth/me')
+}
+
+export function login(username: string, password: string): Promise<AuthUser> {
+  return apiPost<AuthUser>('/auth/login', { username, password })
+}
+
+export function setupAdmin(username: string, displayName: string, password: string): Promise<AuthUser> {
+  return apiPost<AuthUser>('/auth/setup', { username, displayName, password })
+}
+
+export function logout(): Promise<void> {
+  return apiPost<void>('/auth/logout')
+}
 
 /* ---------------------------------------------------------------- 元信息 */
 

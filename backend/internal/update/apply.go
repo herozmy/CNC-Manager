@@ -68,7 +68,6 @@ if errorlevel 1 goto fail_move_old
 move "%STAGE%\web" "web" >nul 2>&1
 if errorlevel 1 goto fail_move_new
 
-if exist "%STAGE%\start.cmd" move /y "%STAGE%\start.cmd" "start.cmd" >nul 2>&1
 if exist "%STAGE%\README.txt" move /y "%STAGE%\README.txt" "README.txt" >nul 2>&1
 if exist "%STAGE%\VERSION" move /y "%STAGE%\VERSION" "VERSION" >nul 2>&1
 
@@ -96,11 +95,6 @@ rem CNC_ADDR is passed through so a server started on a custom port
 rem comes back on the same port.
 set "CNC_NO_BROWSER=1"
 set "CNC_ADDR=@@ADDR@@"
-if not exist "start.cmd" goto restart_exe
-start "" cmd /c start.cmd
-goto done
-
-:restart_exe
 start "" cnccool-server.exe
 
 :done

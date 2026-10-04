@@ -1,10 +1,28 @@
 <script setup lang="ts">
-/**
- * 应用根组件：只承载路由出口。
- * 布局（左树 + 右 Tab）全部在 views/MainView.vue 内实现。
- */
+import { onBeforeUnmount, onMounted } from 'vue'
+import LoginView from './views/LoginView.vue'
+import { useAuth } from './composables/useAuth'
+
+const auth = useAuth()
+const { user, ready, setupRequired } = auth
+const handleUnauthorized = (): void => auth.clearUser()
+
+onMounted(() => {
+  window.addEventListener('cnccool:unauthorized', handleUnauthorized)
+  void auth.initialize()
+})
+
+onBeforeUnmount(() => window.removeEventListener('cnccool:unauthorized', handleUnauthorized))
 </script>
 
 <template>
-  <router-view />
+  <div v-if="!ready" class="app-loading" v-loading="true" />
+  <LoginView v-else-if="!user" :setup="setupRequired" />
+  <router-view v-else />
 </template>
+
+<style scoped>
+.app-loading {
+  height: 100%;
+}
+</style>

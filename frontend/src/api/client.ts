@@ -119,7 +119,12 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     )
   }
 
-  if (!response.ok) throw await toApiError(response, path)
+  if (!response.ok) {
+    if (response.status === 401 && path !== '/auth/login') {
+      window.dispatchEvent(new CustomEvent('cnccool:unauthorized'))
+    }
+    throw await toApiError(response, path)
+  }
 
   // 204 / 空响应体
   if (response.status === 204) return undefined as unknown as T

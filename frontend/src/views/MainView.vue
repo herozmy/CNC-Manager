@@ -30,7 +30,10 @@ import { errorMessage } from '../api/client'
 import type { Drawing, DrawingDetail, DrawingInput } from '../api/types'
 import UpdateDialog from '../components/UpdateDialog.vue'
 import { useUpdate } from '../composables/useUpdate'
+import { useAuth } from '../composables/useAuth'
 import { formatOpNo, parseOpNo } from '../utils/format'
+
+const auth = useAuth()
 
 /* ------------------------------------------------------------ 图纸列表 */
 
@@ -307,6 +310,10 @@ async function confirmCreateOperation(): Promise<void> {
     />
 
     <main class="detail">
+      <div class="user-bar">
+        <span>{{ auth.user.value?.displayName || auth.user.value?.username }}</span>
+        <el-button link type="primary" @click="auth.signOut">退出登录</el-button>
+      </div>
       <div v-if="loadError" class="error-bar">
         <span class="error-text">{{ loadError }}</span>
         <el-button link type="primary" @click="retry">重试</el-button>
@@ -422,6 +429,19 @@ async function confirmCreateOperation(): Promise<void> {
   flex-direction: column;
   min-width: 0;
   min-height: 0;
+}
+
+.user-bar {
+  display: flex;
+  flex: 0 0 42px;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 0 18px;
+  border-bottom: 1px solid var(--el-border-color-light);
+  background: var(--el-bg-color);
+  color: var(--el-text-color-regular);
+  font-size: 13px;
 }
 
 .error-bar {

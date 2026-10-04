@@ -39,3 +39,6 @@
 
 # 让 GitHub 的语言统计不把生成的 JS 算进去
 frontend/dist/**   linguist-generated=true
+
+# 协作说明仅供开发工具使用，不放入 GitHub 源码归档
+AGENTS.md export-ignore

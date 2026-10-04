@@ -24,6 +24,28 @@ export interface Meta {
   canInstall: boolean
 }
 
+export interface AuthStatus {
+  setupRequired: boolean
+}
+
+export interface AuthUser {
+  id: number
+  username: string
+  displayName: string
+  enabled: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export interface LoginInput {
+  username: string
+  password: string
+}
+
+export interface SetupInput extends LoginInput {
+  displayName: string
+}
+
 /* ---------------------------------------------------------------- 版本更新 */
 
 /** GET /api/update/check 的结果 */

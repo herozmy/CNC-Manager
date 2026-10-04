@@ -43,7 +43,6 @@ func validPackage(version string) map[string]string {
 		versionRel:              version,
 		webIndexRel:             "<!doctype html><div id=app></div>",
 		"web/assets/index-a.js": "console.log(1)",
-		"start.cmd":             "@echo off",
 		"README.txt":            "readme",
 	}
 }
@@ -280,6 +279,12 @@ func TestWriteApplyScript(t *testing.T) {
 	}
 	if !strings.Contains(script, "CNC_NO_BROWSER=1") {
 		t.Errorf("重启时应当抑制自动开浏览器，否则用户会多出一个标签页")
+	}
+	if strings.Contains(script, "start.cmd") {
+		t.Errorf("发布版不再依赖 start.cmd，升级脚本应直接启动 exe")
+	}
+	if !strings.Contains(script, `start "" cnccool-server.exe`) {
+		t.Errorf("升级脚本没有直接重启服务程序")
 	}
 
 	// 行尾必须是 CRLF，否则 cmd.exe 解释批处理会出现难以预料的行为

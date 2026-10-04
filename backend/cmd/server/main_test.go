@@ -7,6 +7,15 @@ import (
 	"testing"
 )
 
+func TestBrowserAddrUsesLoopbackForAllInterfaces(t *testing.T) {
+	if got := browserAddr("0.0.0.0:8080"); got != "127.0.0.1:8080" {
+		t.Fatalf("browserAddr = %q", got)
+	}
+	if got := browserAddr("127.0.0.1:8090"); got != "127.0.0.1:8090" {
+		t.Fatalf("browserAddr = %q", got)
+	}
+}
+
 // TestRecoverToLogsPanic 验证崩溃会留下现场。
 //
 // 这是这次加日志文件的主要目的：车间里那个黑窗口一关，屏幕上说过什么就全没了，

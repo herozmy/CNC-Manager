@@ -77,12 +77,14 @@ func likePattern(keyword string) string {
 	return "%" + replacer.Replace(keyword) + "%"
 }
 
-// log 写一条操作日志。一期没有登录，actor 固定为 local；
-// 后期接入登录后只需把 actor 换成当前用户即可。
 func (r *Repo) log(ctx context.Context, q sqlx.ExtContext, action, entityType string, entityID int64, detail string) error {
+	actor := "local"
+	if user, ok := domain.UserFromContext(ctx); ok {
+		actor = user.Username
+	}
 	_, err := q.ExecContext(ctx,
 		`INSERT INTO audit_log (action, entity_type, entity_id, detail, actor, created_at)
 		 VALUES (?, ?, ?, ?, ?, ?)`,
-		action, entityType, entityID, detail, "local", domain.Now())
+		action, entityType, entityID, detail, actor, domain.Now())
 	return wrap(err)
 }

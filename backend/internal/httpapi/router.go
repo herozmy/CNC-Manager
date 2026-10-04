@@ -7,6 +7,8 @@ package httpapi
 import (
 	"log/slog"
 	"net/http"
+	"sync"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -31,18 +33,27 @@ type Server struct {
 	update *update.Client
 	// restart 是「离线包装好了，准备重启」时要执行的动作，由 main 注入。
 	restart func()
+
+	loginMu       sync.Mutex
+	loginAttempts map[string]loginAttempt
+}
+
+type loginAttempt struct {
+	failures     int
+	blockedUntil time.Time
 }
 
 // NewServer 构造 HTTP 服务。
 func NewServer(r *repo.Repo, files *ncstore.Store, cfg *config.Config, log *slog.Logger, version string) *Server {
 	return &Server{
-		repo:    r,
-		files:   files,
-		cfg:     cfg,
-		log:     log,
-		version: version,
-		layout:  update.DetectLayout(),
-		update:  update.NewClient(cfg.UpdateAPI, cfg.UpdateRepo, version),
+		repo:          r,
+		files:         files,
+		cfg:           cfg,
+		log:           log,
+		version:       version,
+		layout:        update.DetectLayout(),
+		update:        update.NewClient(cfg.UpdateAPI, cfg.UpdateRepo, version),
+		loginAttempts: make(map[string]loginAttempt),
 	}
 }
 
@@ -65,63 +76,71 @@ func (s *Server) Router() http.Handler {
 
 	r.Route("/api", func(r chi.Router) {
 		r.Get("/meta", s.handleMeta)
-		r.Get("/tree", s.handleTree)
-
-		// 图纸
-		r.Get("/drawings", s.handleListDrawings)
-		r.Post("/drawings", s.handleCreateDrawing)
-		r.Get("/drawings/{id}", s.handleGetDrawing)
-		r.Put("/drawings/{id}", s.handleUpdateDrawing)
-		r.Delete("/drawings/{id}", s.handleDeleteDrawing)
-		// 界面主视图：选中一个图纸，只发这一个请求就拿到整页数据
-		r.Get("/drawings/{id}/detail", s.handleDrawingDetail)
-		r.Get("/drawings/{id}/operations", s.handleListOperations)
-		r.Post("/drawings/{id}/operations", s.handleCreateOperation)
-
-		// 工序
-		r.Put("/operations/{id}", s.handleUpdateOperation)
-		r.Delete("/operations/{id}", s.handleDeleteOperation)
-		r.Get("/operations/{id}/programs", s.handleListPrograms)
-		r.Post("/operations/{id}/programs", s.handleCreateProgram)
-
-		// 程序
-		r.Get("/programs/{id}", s.handleGetProgram)
-		r.Put("/programs/{id}", s.handleUpdateProgram)
-		r.Delete("/programs/{id}", s.handleDeleteProgram)
-		r.Get("/programs/{id}/tools", s.handleListProgramTools)
-		r.Put("/programs/{id}/tools", s.handleReplaceProgramTools)
-		r.Get("/programs/{id}/versions", s.handleListVersions)
-		r.Post("/programs/{id}/versions", s.handleUploadVersion)
-		// 在软件里编辑程序后「另存为新版本」
-		r.Post("/programs/{id}/versions/content", s.handleSaveVersionContentAsNew)
-		r.Put("/programs/{id}/current-version", s.handleSetCurrentVersion)
-		r.Get("/programs/{id}/logs", s.handleListLogs)
-
-		// 版本
-		r.Get("/versions/{id}/download", s.handleDownloadVersion)
-		r.Get("/versions/{id}/diff", s.handleDiffVersions)
-		// 查看程序 / 直接覆盖这一版的内容
-		r.Get("/versions/{id}/content", s.handleGetVersionContent)
-		r.Put("/versions/{id}/content", s.handleOverwriteVersionContent)
-
-		// 从 NC 文本里识别程序号与刀具调用
-		r.Post("/nc/parse", s.handleParseText)
-
-		// 版本更新：查仓库上有没有新版本，以及安装离线包
+		r.Get("/auth/status", s.handleAuthStatus)
+		r.With(s.sameOrigin).Post("/auth/setup", s.handleAuthSetup)
+		r.With(s.sameOrigin).Post("/auth/login", s.handleLogin)
 		r.Get("/update/check", s.handleUpdateCheck)
-		r.Post("/update/install", s.handleUpdateInstall)
+		r.With(s.sameOrigin).Post("/update/install", s.handleUpdateInstall)
 
-		// 刀具字典
-		r.Get("/tools", s.handleListTools)
-		r.Post("/tools", s.handleCreateTool)
-		r.Put("/tools/{id}", s.handleUpdateTool)
-		r.Delete("/tools/{id}", s.handleDeleteTool)
+		r.Group(func(r chi.Router) {
+			r.Use(s.requireAuth)
+			r.Use(s.sameOrigin)
+			r.Get("/auth/me", s.handleMe)
+			r.Post("/auth/logout", s.handleLogout)
+			r.Get("/tree", s.handleTree)
 
-		// 机台字典
-		r.Get("/machines", s.handleListMachines)
-		r.Post("/machines", s.handleCreateMachine)
-		r.Put("/machines/{id}", s.handleUpdateMachine)
-		r.Delete("/machines/{id}", s.handleDeleteMachine)
+			// 图纸
+			r.Get("/drawings", s.handleListDrawings)
+			r.Post("/drawings", s.handleCreateDrawing)
+			r.Get("/drawings/{id}", s.handleGetDrawing)
+			r.Put("/drawings/{id}", s.handleUpdateDrawing)
+			r.Delete("/drawings/{id}", s.handleDeleteDrawing)
+			// 界面主视图：选中一个图纸，只发这一个请求就拿到整页数据
+			r.Get("/drawings/{id}/detail", s.handleDrawingDetail)
+			r.Get("/drawings/{id}/operations", s.handleListOperations)
+			r.Post("/drawings/{id}/operations", s.handleCreateOperation)
+
+			// 工序
+			r.Put("/operations/{id}", s.handleUpdateOperation)
+			r.Delete("/operations/{id}", s.handleDeleteOperation)
+			r.Get("/operations/{id}/programs", s.handleListPrograms)
+			r.Post("/operations/{id}/programs", s.handleCreateProgram)
+
+			// 程序
+			r.Get("/programs/{id}", s.handleGetProgram)
+			r.Put("/programs/{id}", s.handleUpdateProgram)
+			r.Delete("/programs/{id}", s.handleDeleteProgram)
+			r.Get("/programs/{id}/tools", s.handleListProgramTools)
+			r.Put("/programs/{id}/tools", s.handleReplaceProgramTools)
+			r.Get("/programs/{id}/versions", s.handleListVersions)
+			r.Post("/programs/{id}/versions", s.handleUploadVersion)
+			// 在软件里编辑程序后「另存为新版本」
+			r.Post("/programs/{id}/versions/content", s.handleSaveVersionContentAsNew)
+			r.Put("/programs/{id}/current-version", s.handleSetCurrentVersion)
+			r.Get("/programs/{id}/logs", s.handleListLogs)
+
+			// 版本
+			r.Get("/versions/{id}/download", s.handleDownloadVersion)
+			r.Get("/versions/{id}/diff", s.handleDiffVersions)
+			// 查看程序 / 直接覆盖这一版的内容
+			r.Get("/versions/{id}/content", s.handleGetVersionContent)
+			r.Put("/versions/{id}/content", s.handleOverwriteVersionContent)
+
+			// 从 NC 文本里识别程序号与刀具调用
+			r.Post("/nc/parse", s.handleParseText)
+
+			// 刀具字典
+			r.Get("/tools", s.handleListTools)
+			r.Post("/tools", s.handleCreateTool)
+			r.Put("/tools/{id}", s.handleUpdateTool)
+			r.Delete("/tools/{id}", s.handleDeleteTool)
+
+			// 机台字典
+			r.Get("/machines", s.handleListMachines)
+			r.Post("/machines", s.handleCreateMachine)
+			r.Put("/machines/{id}", s.handleUpdateMachine)
+			r.Delete("/machines/{id}", s.handleDeleteMachine)
+		})
 	})
 
 	// 可选：把前端也挂上来（仅在设置了 CNC_WEB_DIR 时生效）。

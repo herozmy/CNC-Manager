@@ -14,7 +14,9 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"runtime/debug"
 	"strconv"
 	"syscall"
@@ -26,6 +28,7 @@ import (
 	"cnccool/internal/ncstore"
 	"cnccool/internal/repo"
 	"cnccool/internal/store"
+	"cnccool/internal/tray"
 	"cnccool/internal/update"
 )
 
@@ -40,9 +43,7 @@ import (
 var version = "v1.0"
 
 // exitRestarting 是「正在为安装离线包而重启」的退出码。
-//
-// 用 99 这个不常见的值，是为了让 start.cmd 能区分「正常退出」和「升级重启」：
-// 后者不该停在 pause 上等用户按键，因为替换脚本马上会另起一个新窗口。
+// 替换脚本会等待进程退出，换完文件后直接重新启动 exe。
 const exitRestarting = 99
 
 func main() {
@@ -159,6 +160,25 @@ func run() error {
 		"NC文件库", cfg.NCDir,
 		"日志文件", cfg.LogFile)
 
+	appURL := "http://" + browserAddr(cfg.Addr)
+	trayExit := make(chan struct{})
+	var stopTray func()
+	if cfg.WebDir != "" {
+		stopTray, err = tray.Start(tray.Actions{
+			OpenApp:  func() { openBrowser(appURL, 0) },
+			OpenLogs: func() { openFolder(filepath.Dir(cfg.LogFile)) },
+			Exit:     func() { close(trayExit) },
+		})
+		if err != nil {
+			logger.Warn("系统托盘启动失败", "err", err)
+		} else {
+			defer stopTray()
+		}
+	}
+	if cfg.WebDir != "" && os.Getenv("CNC_NO_BROWSER") == "" {
+		openBrowser(appURL, 1200*time.Millisecond)
+	}
+
 	if logFile != nil {
 		// 退出前把文件关掉，保证最后几行落盘
 		defer func() { _ = logFile.Close() }()
@@ -180,6 +200,8 @@ func run() error {
 		return err
 	case sig := <-stop:
 		logger.Info("收到退出信号，正在关闭服务", "信号", sig.String())
+	case <-trayExit:
+		logger.Info("从系统托盘退出，正在关闭服务")
 	}
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -189,6 +211,33 @@ func run() error {
 	}
 	logger.Info("服务已停止")
 	return nil
+}
+
+func browserAddr(addr string) string {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return addr
+	}
+	if host == "" || host == "0.0.0.0" || host == "::" {
+		host = "127.0.0.1"
+	}
+	return net.JoinHostPort(host, port)
+}
+
+func openBrowser(url string, delay time.Duration) {
+	go func() {
+		time.Sleep(delay)
+		command := exec.Command("rundll32.exe", "url.dll,FileProtocolHandler", url)
+		if err := command.Start(); err != nil {
+			slog.Warn("无法自动打开浏览器，请手工访问", "url", url, "err", err)
+		}
+	}()
+}
+
+func openFolder(path string) {
+	if err := exec.Command("explorer.exe", path).Start(); err != nil {
+		slog.Warn("无法打开日志目录", "path", path, "err", err)
+	}
 }
 
 // listenFailed 把「端口绑不上」翻译成一句能照着做的话。

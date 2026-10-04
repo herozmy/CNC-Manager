@@ -2,8 +2,11 @@ package httpapi
 
 import (
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
+
+	"cnccool/internal/domain"
 )
 
 // cors 处理跨域。
@@ -20,6 +23,7 @@ func (s *Server) cors(next http.Handler) http.Handler {
 		if origin != "" && allowed[origin] {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 			w.Header().Add("Vary", "Origin")
+			w.Header().Set("Access-Control-Allow-Credentials", "true")
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Accept")
 			w.Header().Set("Access-Control-Max-Age", "86400")
@@ -29,6 +33,49 @@ func (s *Server) cors(next http.Handler) http.Handler {
 			return
 		}
 		next.ServeHTTP(w, r)
+	})
+}
+
+func (s *Server) requireAuth(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		cookie, err := r.Cookie(authCookieName)
+		if err != nil || cookie.Value == "" {
+			writeError(w, http.StatusUnauthorized, "请先登录")
+			return
+		}
+		user, err := s.repo.UserBySession(r.Context(), cookie.Value)
+		if err != nil {
+			http.SetCookie(w, &http.Cookie{Name: authCookieName, Value: "", Path: "/api", MaxAge: -1, HttpOnly: true, SameSite: http.SameSiteLaxMode})
+			writeError(w, http.StatusUnauthorized, "登录已失效，请重新登录")
+			return
+		}
+		next.ServeHTTP(w, r.WithContext(domain.WithUser(r.Context(), user)))
+	})
+}
+
+func (s *Server) sameOrigin(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet || r.Method == http.MethodHead || r.Method == http.MethodOptions {
+			next.ServeHTTP(w, r)
+			return
+		}
+		origin := strings.TrimRight(r.Header.Get("Origin"), "/")
+		if origin == "" {
+			next.ServeHTTP(w, r)
+			return
+		}
+		parsed, err := url.Parse(origin)
+		if err == nil && strings.EqualFold(parsed.Host, r.Host) {
+			next.ServeHTTP(w, r)
+			return
+		}
+		for _, allowed := range s.cfg.CORSOrigins {
+			if origin == strings.TrimRight(allowed, "/") {
+				next.ServeHTTP(w, r)
+				return
+			}
+		}
+		writeError(w, http.StatusForbidden, "请求来源不受信任")
 	})
 }
 

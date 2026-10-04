@@ -39,6 +39,9 @@ type Config struct {
 
 // Load 从环境变量装载配置，缺省值适用于本机开发。
 func Load() (*Config, error) {
+	executablePath, _ := os.Executable()
+	workingDir, _ := os.Getwd()
+	defaultDataDir, defaultWebDir := localLayoutDefaults(executablePath, workingDir)
 	c := &Config{
 		Addr:        getEnv("CNC_ADDR", "127.0.0.1:8080"),
 		MaxUploadMB: getEnvInt("CNC_MAX_UPLOAD_MB", 64),
@@ -49,7 +52,7 @@ func Load() (*Config, error) {
 	}
 
 	// 数据目录统一解析成绝对路径，避免因为启动目录不同而"数据找不到"。
-	absData, err := filepath.Abs(getEnv("CNC_DATA_DIR", "data"))
+	absData, err := filepath.Abs(getEnv("CNC_DATA_DIR", defaultDataDir))
 	if err != nil {
 		return nil, fmt.Errorf("解析数据目录失败: %w", err)
 	}
@@ -63,7 +66,7 @@ func Load() (*Config, error) {
 	// 开发时不设，前端由 Vite 提供，前后端保持独立、前端可以热更新；
 	// 打包发布时设上它，解压一个目录、双击 start.cmd 就能用，
 	// 不需要 Node、也不需要 nginx。
-	if webDir := getEnv("CNC_WEB_DIR", ""); webDir != "" {
+	if webDir := getEnv("CNC_WEB_DIR", defaultWebDir); webDir != "" {
 		absWeb, err := filepath.Abs(webDir)
 		if err != nil {
 			return nil, fmt.Errorf("解析前端目录失败: %w", err)
@@ -81,6 +84,25 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("CNC_MAX_UPLOAD_MB 必须为正数，当前为 %d", c.MaxUploadMB)
 	}
 	return c, nil
+}
+
+// localLayoutDefaults 支持直接双击发布目录里的 exe：如果 exe 旁边存在
+// web/index.html，就默认把同目录的 web/ 与 data/ 当作前端和数据目录。
+// 源码开发时二进制旁边没有 web/，仍保持原来的工作目录相对路径行为。
+func localLayoutDefaults(executablePath, workingDir string) (dataDir, webDir string) {
+	if workingDir == "" {
+		workingDir = "."
+	}
+	dataDir = filepath.Join(workingDir, "data")
+	if executablePath == "" {
+		return dataDir, ""
+	}
+	executableDir := filepath.Dir(executablePath)
+	candidateWeb := filepath.Join(executableDir, "web")
+	if info, err := os.Stat(filepath.Join(candidateWeb, "index.html")); err == nil && !info.IsDir() {
+		return filepath.Join(executableDir, "data"), candidateWeb
+	}
+	return dataDir, ""
 }
 
 // MaxUploadBytes 返回上传大小上限的字节数。
