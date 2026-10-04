@@ -2,15 +2,19 @@
 //
 // 核心设计：文件按内容 sha256 寻址，同一份程序无论被多少条记录引用都只存一份。
 // 三个好处：
-//   1. 同一程序在多个工序复用时不占多份空间；
-//   2. 天然"秒传"——内容已存在就直接建立引用，不重复落盘；
-//   3. 文件内容自带校验，能发现"程序被人偷偷改过"这种要命的情况。
+//  1. 同一程序在多个工序复用时不占多份空间；
+//  2. 天然"秒传"——内容已存在就直接建立引用，不重复落盘；
+//  3. 文件内容自带校验，能发现"程序被人偷偷改过"这种要命的情况。
 //
 // 另一个关键点：数据库里存的是相对路径（如 a3/f9/a3f9….nc），不是绝对路径。
 // 这样整个数据目录可以被整体拷走、备份、挂进容器，路径永远不会失效。
 package ncstore
 
 import (
+	"bytes"
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -24,7 +28,12 @@ import (
 type Store struct {
 	root     string
 	maxBytes int64
+	aead     cipher.AEAD
 }
+
+var encryptedMagic = []byte("CNCCNC01")
+
+var builtInKey = sha256.Sum256([]byte("cnccool-nc-file-storage-v1"))
 
 // Saved 描述一次保存的结果。
 type Saved struct {
@@ -55,7 +64,15 @@ func New(root string, maxBytes int64) (*Store, error) {
 			return nil, fmt.Errorf("创建 NC 库目录失败: %w", err)
 		}
 	}
-	return &Store{root: abs, maxBytes: maxBytes}, nil
+	block, err := aes.NewCipher(builtInKey[:])
+	if err != nil {
+		return nil, fmt.Errorf("初始化 NC 文件加密失败: %w", err)
+	}
+	aead, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, fmt.Errorf("初始化 NC 文件加密失败: %w", err)
+	}
+	return &Store{root: abs, maxBytes: maxBytes, aead: aead}, nil
 }
 
 // Root 返回文件库根目录。
@@ -77,17 +94,31 @@ func (s *Store) Save(r io.Reader, originalName string) (*Saved, error) {
 		_ = os.Remove(tmpPath)
 	}()
 
-	// 多读 1 字节即可判断是否超限，不用先把整个文件落盘再检查
-	h := sha256.New()
-	written, err := io.Copy(io.MultiWriter(tmp, h), io.LimitReader(r, s.maxBytes+1))
+	plain, err := io.ReadAll(io.LimitReader(r, s.maxBytes+1))
 	if err != nil {
-		return nil, fmt.Errorf("写入 NC 文件失败: %w", err)
+		return nil, fmt.Errorf("读取 NC 文件失败: %w", err)
 	}
+	written := int64(len(plain))
 	if written > s.maxBytes {
 		return nil, fmt.Errorf("%w: 文件超过 %d MB 上限", ErrTooLarge, s.maxBytes/1024/1024)
 	}
 	if written == 0 {
 		return nil, fmt.Errorf("%w: 文件内容为空", ErrEmpty)
+	}
+	h := sha256.Sum256(plain)
+	nonce := make([]byte, s.aead.NonceSize())
+	if _, err := rand.Read(nonce); err != nil {
+		return nil, fmt.Errorf("生成 NC 文件随机数失败: %w", err)
+	}
+	ciphertext := s.aead.Seal(nil, nonce, plain, nil)
+	if _, err := tmp.Write(encryptedMagic); err != nil {
+		return nil, fmt.Errorf("写入 NC 文件头失败: %w", err)
+	}
+	if _, err := tmp.Write(nonce); err != nil {
+		return nil, fmt.Errorf("写入 NC 文件随机数失败: %w", err)
+	}
+	if _, err := tmp.Write(ciphertext); err != nil {
+		return nil, fmt.Errorf("写入 NC 文件密文失败: %w", err)
 	}
 	if err := tmp.Sync(); err != nil {
 		return nil, fmt.Errorf("刷盘失败: %w", err)
@@ -96,7 +127,7 @@ func (s *Store) Save(r io.Reader, originalName string) (*Saved, error) {
 		return nil, fmt.Errorf("关闭临时文件失败: %w", err)
 	}
 
-	sum := hex.EncodeToString(h.Sum(nil))
+	sum := hex.EncodeToString(h[:])
 	base := sanitizeName(originalName)
 	rel := filepath.Join(sum[0:2], sum[2:4], sum+filepath.Ext(base))
 	abs := filepath.Join(s.root, rel)
@@ -111,8 +142,18 @@ func (s *Store) Save(r io.Reader, originalName string) (*Saved, error) {
 		// 真正的编码在读取时用完整内容检测，见 DetectEncoding / ReadAll。
 	}
 
-	// 同样内容已在库里：直接复用，临时文件由 defer 清掉
-	if _, err := os.Stat(abs); err == nil {
+	// 同样内容已在库里：密文直接复用；旧版留下的明文在再次上传时替换为密文。
+	if existing, err := os.ReadFile(abs); err == nil {
+		if bytes.HasPrefix(existing, encryptedMagic) {
+			return out, nil
+		}
+		if err := os.Remove(abs); err != nil {
+			return nil, fmt.Errorf("替换历史明文 NC 文件失败: %w", err)
+		}
+		if err := os.Rename(tmpPath, abs); err != nil {
+			return nil, fmt.Errorf("移入加密 NC 文件失败: %w", err)
+		}
+		out.IsNew = true
 		return out, nil
 	}
 	if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
@@ -126,12 +167,32 @@ func (s *Store) Save(r io.Reader, originalName string) (*Saved, error) {
 }
 
 // Open 打开文件库中的文件。
-func (s *Store) Open(relPath string) (*os.File, error) {
-	abs, err := s.Abs(relPath)
+func (s *Store) Open(relPath string) (*readSeekCloser, error) {
+	raw, err := s.ReadAll(relPath)
 	if err != nil {
 		return nil, err
 	}
-	return os.Open(abs)
+	return &readSeekCloser{Reader: bytes.NewReader(raw)}, nil
+}
+
+type readSeekCloser struct{ *bytes.Reader }
+
+func (r *readSeekCloser) Close() error { return nil }
+
+func (s *Store) decrypt(raw []byte) ([]byte, bool, error) {
+	if !bytes.HasPrefix(raw, encryptedMagic) {
+		return raw, false, nil
+	}
+	offset := len(encryptedMagic)
+	if len(raw) < offset+s.aead.NonceSize()+s.aead.Overhead() {
+		return nil, true, fmt.Errorf("NC 加密文件已损坏")
+	}
+	nonce := raw[offset : offset+s.aead.NonceSize()]
+	plain, err := s.aead.Open(nil, nonce, raw[offset+s.aead.NonceSize():], nil)
+	if err != nil {
+		return nil, true, fmt.Errorf("NC 文件解密失败，密钥错误或文件已被篡改: %w", err)
+	}
+	return plain, true, nil
 }
 
 // Abs 把相对路径解析成绝对路径，并拦截路径穿越。

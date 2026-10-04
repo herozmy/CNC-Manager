@@ -3,7 +3,7 @@ package ncstore
 import (
 	"bytes"
 	"fmt"
-	"io"
+	"os"
 	"unicode/utf8"
 
 	"golang.org/x/text/encoding"
@@ -71,10 +71,11 @@ func EncodeFromUTF8(text string, encName string) ([]byte, error) {
 // UnrepresentableRunes 找出 text 里无法用目标编码表示的字符。
 //
 // 为什么必须做这件事：
-//   GBK 里没有 Ø(U+00D8)，但中文注释里「精车外圆 Ø60」这种写法很常见
-//   （GBK 能表示的是希腊字母 φ/Φ）。用户粘贴进去一个 Ø 然后保存，
-//   如果不提示，程序里的这个字符就被静默替换掉了，肉眼看不出区别，
-//   到了机床上可能就是错的。
+//
+//	GBK 里没有 Ø(U+00D8)，但中文注释里「精车外圆 Ø60」这种写法很常见
+//	（GBK 能表示的是希腊字母 φ/Φ）。用户粘贴进去一个 Ø 然后保存，
+//	如果不提示，程序里的这个字符就被静默替换掉了，肉眼看不出区别，
+//	到了机床上可能就是错的。
 //
 // 只检查非 ASCII 字符并缓存判定结果，所以对几 MB 的文件也很快。
 func UnrepresentableRunes(text, encName string) []string {
@@ -124,19 +125,20 @@ func (s *Store) SaveText(text, encName, originalName string) (*Saved, error) {
 
 // ReadAll 读出文件全部内容（用于程序查看/编辑，文件本身有大小上限保护）。
 func (s *Store) ReadAll(relPath string) ([]byte, error) {
-	f, err := s.Open(relPath)
+	abs, err := s.Abs(relPath)
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = f.Close() }()
-
-	buf := &bytes.Buffer{}
-	// 多读 1 字节用于判断是否超限
-	if _, err := buf.ReadFrom(io.LimitReader(f, s.maxBytes+1)); err != nil {
+	raw, err := os.ReadFile(abs)
+	if err != nil {
 		return nil, fmt.Errorf("读取程序文件失败: %w", err)
 	}
-	if int64(buf.Len()) > s.maxBytes {
+	plain, _, err := s.decrypt(raw)
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(plain)) > s.maxBytes {
 		return nil, fmt.Errorf("%w: 文件超过 %d MB，无法在界面里打开", ErrTooLarge, s.maxBytes/1024/1024)
 	}
-	return buf.Bytes(), nil
+	return plain, nil
 }
