@@ -142,6 +142,10 @@ scripts\build-release.cmd
 产物在 `.local\release\`。脚本读取 `VERSION` 注入版本号，编译后端、构建前端，
 拼出免安装目录后压成 zip，结束时打印 SHA256。
 
+维护者发布到 GitHub 时运行 `scripts\publish-release.cmd`。脚本会自动构建并上传与
+`VERSION` 同名的 Release 附件，授权复用 Git Credential Manager，不需要保存额外令牌。
+只检查授权可运行 `scripts\publish-release.cmd -CheckOnly`。
+
 仅在本机测试完整编译产物时，运行 `scripts\build-dev.cmd`。产物生成在 `dev\`，
 其中的数据与日志会保留供反复测试；整个目录已被 Git 忽略，不会进入仓库或发布包。
 

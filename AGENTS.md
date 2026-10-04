@@ -42,6 +42,9 @@ Pop-Location
 # 构建 Windows 免安装发布包
 scripts\build-release.cmd
 
+# 构建并上传 GitHub Release（复用 Git Credential Manager 授权）
+scripts\publish-release.cmd
+
 # 构建仅供本机使用的测试项目（输出到被 Git 忽略的 dev/）
 scripts\build-dev.cmd
 ```
@@ -63,4 +66,5 @@ scripts\build-dev.cmd
 ## 发布注意事项
 
 - GitHub Release 使用根目录 `VERSION`、Git tag 和构建产物保持一致。
+- GitHub Release 上传使用 `scripts\publish-release.cmd`，授权从 Git Credential Manager 临时读取；不得把令牌写入脚本、仓库、日志或持久环境变量。
 - `AGENTS.md` 仅供 Codex/开发协作使用，不应进入 GitHub 源码归档或 Windows 发布包。
