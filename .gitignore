@@ -40,9 +40,11 @@ scripts/ui-save-check.*
 scripts/ui-recognize-check.*
 scripts/ui-update-check.*
 scripts/update-install-check.*
+scripts/build-dev.*
 scripts/check-github-token.*
 scripts/push-to-github.*
 scripts/git-push.*
+scripts/publish-release.*
 scripts/sample/
 
 # 本地笔记与开发记录（不进仓库）
