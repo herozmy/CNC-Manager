@@ -42,6 +42,8 @@ const props = defineProps<{
   operation: DetailOperation
 }>()
 
+const collapsed = ref(false)
+
 const emit = defineEmits<{
   /** 结构发生变化（增删工序/程序、上传 NC、切换当前版本、工序号变动），需要重新拉详情 */
   reload: []
@@ -414,38 +416,49 @@ function onToolsAdded(): void {
         <span class="card-title">工序 {{ displayOpNo }}</span>
         <span class="state" :class="`state-${state}`">{{ stateText }}</span>
       </div>
-      <el-button link type="danger" @click="confirmDeleteOperation">删除</el-button>
+      <div class="head-actions">
+        <el-button
+          link
+          type="primary"
+          :aria-expanded="!collapsed"
+          @click="collapsed = !collapsed"
+        >
+          {{ collapsed ? '展示' : '隐藏' }}
+        </el-button>
+        <el-button link type="danger" @click="confirmDeleteOperation">删除</el-button>
+      </div>
     </div>
 
-    <div class="fields">
-      <label class="field">
-        <span class="field-label">工序号</span>
-        <el-input v-model="form.opNoText" placeholder="如 10#" @change="onOpNoChange" />
-      </label>
-      <label class="field">
-        <span class="field-label">装夹方式</span>
-        <el-input v-model="form.fixture" placeholder="如 三爪卡盘" @change="save" />
-      </label>
-      <label class="field">
-        <span class="field-label">Z轴垫高</span>
-        <el-input-number
-          v-model="form.zHeight"
-          :min="0"
-          :precision="3"
-          :controls="false"
-          :value-on-clear="0"
-          @change="save"
-        />
-        <span class="unit">mm</span>
-      </label>
-    </div>
+    <div v-if="!collapsed" class="card-body">
+      <div class="fields">
+        <label class="field">
+          <span class="field-label">工序号</span>
+          <el-input v-model="form.opNoText" placeholder="如 10#" @change="onOpNoChange" />
+        </label>
+        <label class="field">
+          <span class="field-label">装夹方式</span>
+          <el-input v-model="form.fixture" placeholder="如 三爪卡盘" @change="save" />
+        </label>
+        <label class="field">
+          <span class="field-label">Z轴垫高</span>
+          <el-input-number
+            v-model="form.zHeight"
+            :min="0"
+            :precision="3"
+            :controls="false"
+            :value-on-clear="0"
+            @change="save"
+          />
+          <span class="unit">mm</span>
+        </label>
+      </div>
 
-    <label class="field field-full">
-      <span class="field-label">备注</span>
-      <el-input v-model="form.remark" placeholder="选填" @change="save" />
-    </label>
+      <label class="field field-full">
+        <span class="field-label">备注</span>
+        <el-input v-model="form.remark" placeholder="选填" @change="save" />
+      </label>
 
-    <div class="programs">
+      <div class="programs">
       <div v-for="item in programForms" :key="item.source.id" class="program">
         <div class="program-head">
           <span class="field-label">程序名</span>
@@ -515,9 +528,10 @@ function onToolsAdded(): void {
       <p v-if="programForms.length === 0" class="hint">该工序还没有程序，点击下方「+ 添加程序」。</p>
 
       <el-button class="add-program" @click="openCreateProgram">+ 添加程序</el-button>
-    </div>
+      </div>
 
-    <input ref="fileInputRef" type="file" class="hidden-file" @change="onFileChange" />
+      <input ref="fileInputRef" type="file" class="hidden-file" @change="onFileChange" />
+    </div>
 
     <el-dialog v-model="createVisible" title="添加程序" width="460px">
       <label class="field dialog-field">
@@ -570,13 +584,21 @@ function onToolsAdded(): void {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 14px;
+}
+
+.card-body {
+  margin-top: 14px;
 }
 
 .head-left {
   display: flex;
   align-items: baseline;
   gap: 10px;
+}
+
+.head-actions {
+  display: flex;
+  align-items: center;
 }
 
 .card-title {
