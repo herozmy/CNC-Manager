@@ -248,6 +248,25 @@ func validateProgramTools(items []domain.ProgramToolInput) error {
 		if it.Coolant < 0 || it.Coolant > 3 {
 			return fmt.Errorf("%w：第 %d 行的冷却方式取值必须在 0~3 之间", domain.ErrInvalid, seq)
 		}
+		if len(it.CustomParams) > 10 {
+			return fmt.Errorf("%w：第 %d 行的自定义参数不能超过 10 个", domain.ErrInvalid, seq)
+		}
+		customNames := make(map[string]bool, len(it.CustomParams))
+		for _, param := range it.CustomParams {
+			name := strings.TrimSpace(param.Name)
+			value := strings.TrimSpace(param.Value)
+			if name == "" {
+				return fmt.Errorf("%w：第 %d 行的自定义参数名称不能为空", domain.ErrInvalid, seq)
+			}
+			if len([]rune(name)) > 40 || len([]rune(value)) > 200 {
+				return fmt.Errorf("%w：第 %d 行的自定义参数名称或内容过长", domain.ErrInvalid, seq)
+			}
+			key := strings.ToLower(name)
+			if customNames[key] {
+				return fmt.Errorf("%w：第 %d 行存在重复的自定义参数 %s", domain.ErrInvalid, seq, name)
+			}
+			customNames[key] = true
+		}
 	}
 	return nil
 }

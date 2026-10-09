@@ -117,7 +117,8 @@ async function addTools(): Promise<void> {
       cutDepth: tool.cutDepth,
       coolant: tool.coolant,
       machiningContent: tool.machiningContent,
-      remark: tool.remark
+      remark: tool.remark,
+      customParams: tool.customParams
     }))
 
     // 已存在的刀具号不再重复添加（T1 与 T01 视为同一把）
@@ -152,7 +153,8 @@ async function addTools(): Promise<void> {
         cutDepth: 0,
         coolant: 0,
         machiningContent: '',
-        remark: ''
+        remark: '',
+        customParams: []
       })
     }
 

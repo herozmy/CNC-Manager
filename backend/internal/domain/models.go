@@ -106,10 +106,10 @@ type Version struct {
 	CreatedBy  string `db:"created_by" json:"createdBy"`
 	CreatedAt  string `db:"created_at" json:"createdAt"`
 
-	FileName string `db:"file_name" json:"fileName"`
-	FileSize int64  `db:"file_size" json:"fileSize"`
-	SHA256   string `db:"sha256" json:"sha256"`
-	IsCurrent bool  `db:"is_current" json:"isCurrent"`
+	FileName  string `db:"file_name" json:"fileName"`
+	FileSize  int64  `db:"file_size" json:"fileSize"`
+	SHA256    string `db:"sha256" json:"sha256"`
+	IsCurrent bool   `db:"is_current" json:"isCurrent"`
 }
 
 // ProgramTool 程序用刀 + 刀补参数。整个软件最核心、现场最容易出错的一张表。
@@ -123,20 +123,22 @@ type ProgramTool struct {
 	Seq       int    `db:"seq" json:"seq"`
 	ToolID    *int64 `db:"tool_id" json:"toolId"`
 
-	ToolNo     string `db:"tool_no" json:"toolNo"`       // T 号，如 T01
-	OffsetNo   string `db:"offset_no" json:"offsetNo"`   // 刀补号，如 D01 / H01
-	ToolName   string `db:"tool_name" json:"toolName"`
-	ToolDia    float64 `db:"-" json:"toolDia"`           // mm
-	CornerRadius float64 `db:"-" json:"cornerRadius"`    // mm
-	CompAmount   float64 `db:"-" json:"compAmount"`      // 刀具补偿量，mm
-	SpindleSpeed int   `db:"spindle_speed" json:"spindleSpeed"`
-	SpeedMode    int   `db:"speed_mode" json:"speedMode"` // 0=G97 r/min, 1=G96 m/min
-	Feed         float64 `db:"-" json:"feed"`
-	FeedMode     int   `db:"feed_mode" json:"feedMode"`   // 0=G94 mm/min, 1=G95 mm/r
-	CutDepth     float64 `db:"-" json:"cutDepth"`         // mm
-	Coolant      int   `db:"coolant" json:"coolant"`      // 0=无 1=冷却液 2=吹气 3=喷雾
-	MachiningContent string `db:"machining_content" json:"machiningContent"`
-	Remark           string `db:"remark" json:"remark"`
+	ToolNo           string            `db:"tool_no" json:"toolNo"`     // T 号，如 T01
+	OffsetNo         string            `db:"offset_no" json:"offsetNo"` // 刀补号，如 D01 / H01
+	ToolName         string            `db:"tool_name" json:"toolName"`
+	ToolDia          float64           `db:"-" json:"toolDia"`      // mm
+	CornerRadius     float64           `db:"-" json:"cornerRadius"` // mm
+	CompAmount       float64           `db:"-" json:"compAmount"`   // 刀具补偿量，mm
+	SpindleSpeed     int               `db:"spindle_speed" json:"spindleSpeed"`
+	SpeedMode        int               `db:"speed_mode" json:"speedMode"` // 0=G97 r/min, 1=G96 m/min
+	Feed             float64           `db:"-" json:"feed"`
+	FeedMode         int               `db:"feed_mode" json:"feedMode"` // 0=G94 mm/min, 1=G95 mm/r
+	CutDepth         float64           `db:"-" json:"cutDepth"`         // mm
+	Coolant          int               `db:"coolant" json:"coolant"`    // 0=无 1=冷却液 2=吹气 3=喷雾
+	MachiningContent string            `db:"machining_content" json:"machiningContent"`
+	Remark           string            `db:"remark" json:"remark"`
+	CustomParams     []ToolCustomParam `db:"-" json:"customParams"`
+	CustomParamsJSON string            `db:"custom_params_json" json:"-"`
 
 	// 落库字段（整数，值为实际值 × 1000），不直接暴露给前端
 	ToolDiaMilli      int64 `db:"tool_dia_milli" json:"-"`
@@ -146,14 +148,20 @@ type ProgramTool struct {
 	CutDepthMilli     int64 `db:"cut_depth_milli" json:"-"`
 }
 
+// ToolCustomParam 是用户为某把刀补充的自定义展示项，例如「品牌 / 山特维克」。
+type ToolCustomParam struct {
+	Name  string `json:"name"`
+	Value string `json:"value"`
+}
+
 // Tool 刀具字典，供程序用刀表下拉复用，避免各人乱填刀具名称。
 type Tool struct {
-	ID       int64  `db:"id" json:"id"`
-	ToolNo   string `db:"tool_no" json:"toolNo"`
-	Name     string `db:"name" json:"name"`
-	Spec     string `db:"spec" json:"spec"`
-	ToolType string `db:"tool_type" json:"toolType"`
-	Remark   string `db:"remark" json:"remark"`
+	ID        int64  `db:"id" json:"id"`
+	ToolNo    string `db:"tool_no" json:"toolNo"`
+	Name      string `db:"name" json:"name"`
+	Spec      string `db:"spec" json:"spec"`
+	ToolType  string `db:"tool_type" json:"toolType"`
+	Remark    string `db:"remark" json:"remark"`
 	CreatedAt string `db:"created_at" json:"createdAt"`
 	UpdatedAt string `db:"updated_at" json:"updatedAt"`
 }
@@ -331,22 +339,23 @@ type ProgramInput struct {
 
 // ProgramToolInput 是前端提交的刀具行，数值为人类单位（mm / r/min）。
 type ProgramToolInput struct {
-	Seq              int     `json:"seq"`
-	ToolID           *int64  `json:"toolId"`
-	ToolNo           string  `json:"toolNo"`
-	OffsetNo         string  `json:"offsetNo"`
-	ToolName         string  `json:"toolName"`
-	ToolDia          float64 `json:"toolDia"`
-	CornerRadius     float64 `json:"cornerRadius"`
-	CompAmount       float64 `json:"compAmount"` // 刀具补偿量，mm
-	SpindleSpeed     int     `json:"spindleSpeed"`
-	SpeedMode        int     `json:"speedMode"`
-	Feed             float64 `json:"feed"`
-	FeedMode         int     `json:"feedMode"`
-	CutDepth         float64 `json:"cutDepth"`
-	Coolant          int     `json:"coolant"`
-	MachiningContent string  `json:"machiningContent"`
-	Remark           string  `json:"remark"`
+	Seq              int               `json:"seq"`
+	ToolID           *int64            `json:"toolId"`
+	ToolNo           string            `json:"toolNo"`
+	OffsetNo         string            `json:"offsetNo"`
+	ToolName         string            `json:"toolName"`
+	ToolDia          float64           `json:"toolDia"`
+	CornerRadius     float64           `json:"cornerRadius"`
+	CompAmount       float64           `json:"compAmount"` // 刀具补偿量，mm
+	SpindleSpeed     int               `json:"spindleSpeed"`
+	SpeedMode        int               `json:"speedMode"`
+	Feed             float64           `json:"feed"`
+	FeedMode         int               `json:"feedMode"`
+	CutDepth         float64           `json:"cutDepth"`
+	Coolant          int               `json:"coolant"`
+	MachiningContent string            `json:"machiningContent"`
+	Remark           string            `json:"remark"`
+	CustomParams     []ToolCustomParam `json:"customParams"`
 }
 
 type ToolInput struct {

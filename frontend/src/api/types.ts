@@ -169,6 +169,11 @@ export interface ProgramInput {
 
 /* -------------------------------------------------------------- 刀具刀补 */
 
+export interface ToolCustomParam {
+  name: string
+  value: string
+}
+
 /**
  * 刀具补偿行（后端返回体）。
  *
@@ -196,6 +201,7 @@ export interface ProgramTool {
   coolant: number
   machiningContent: string
   remark: string
+  customParams: ToolCustomParam[]
 }
 
 /**
@@ -224,6 +230,7 @@ export interface ProgramToolInput {
   coolant: number
   machiningContent: string
   remark: string
+  customParams: ToolCustomParam[]
 }
 
 /* ------------------------------------------------------------------ 版本 */

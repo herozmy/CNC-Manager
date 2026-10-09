@@ -15,6 +15,7 @@
  *     只有「新增的行」才用这些隐藏字段的默认值。
  */
 import { computed, ref, watch } from 'vue'
+import { ElMessage } from 'element-plus'
 import type { ProgramTool, ProgramToolInput } from '../api/types'
 import { toNumber } from '../utils/format'
 
@@ -43,6 +44,7 @@ interface ToolRow {
   showToolName: boolean
   showToolDia: boolean
   showCompAmount: boolean
+  customParams: CustomParamRow[]
 
   // ---- 以下字段界面不显示，只用于原样回传，避免整表替换丢数据 ----
   toolId: number | null
@@ -57,7 +59,14 @@ interface ToolRow {
   remark: string
 }
 
+interface CustomParamRow {
+  uid: number
+  name: string
+  value: string
+}
+
 let uidSeed = 0
+let customParamUidSeed = 0
 
 const rows = ref<ToolRow[]>([])
 const savedSnapshot = ref('')
@@ -76,6 +85,7 @@ function createEmptyRow(): ToolRow {
     showToolName: false,
     showToolDia: false,
     showCompAmount: false,
+    customParams: [],
     toolId: null,
     cornerRadius: 0,
     spindleSpeed: 0,
@@ -104,6 +114,10 @@ function reset(): void {
       showToolName: tool.toolName.trim() !== '',
       showToolDia: toNumber(tool.toolDia) !== 0,
       showCompAmount: toNumber(tool.compAmount) !== 0,
+      customParams: tool.customParams.map((param) => {
+        customParamUidSeed += 1
+        return { uid: customParamUidSeed, name: param.name, value: param.value }
+      }),
       toolId: tool.toolId,
       cornerRadius: toNumber(tool.cornerRadius),
       spindleSpeed: Math.round(toNumber(tool.spindleSpeed)),
@@ -139,7 +153,11 @@ function buildItems(): ProgramToolInput[] {
     cutDepth: toNumber(row.cutDepth),
     coolant: toNumber(row.coolant),
     machiningContent: row.machiningContent,
-    remark: row.remark
+    remark: row.remark,
+    customParams: row.customParams.map((param) => ({
+      name: param.name.trim(),
+      value: param.value.trim()
+    }))
   }))
 }
 
@@ -155,9 +173,13 @@ function removeRow(index: number): void {
 
 const parameterVisible = ref(false)
 const parameterRow = ref<ToolRow | null>(null)
+const customParamName = ref('')
+const customParamValue = ref('')
 
 function openParameters(row: ToolRow): void {
   parameterRow.value = row
+  customParamName.value = ''
+  customParamValue.value = ''
   parameterVisible.value = true
 }
 
@@ -167,6 +189,23 @@ function addParameter(type: 'toolName' | 'toolDia' | 'compAmount'): void {
   if (type === 'toolDia') parameterRow.value.showToolDia = true
   if (type === 'compAmount') parameterRow.value.showCompAmount = true
   parameterVisible.value = false
+}
+
+function addCustomParameter(): void {
+  const row = parameterRow.value
+  const name = customParamName.value.trim()
+  if (!row || !name) return
+  if (row.customParams.some((param) => param.name.trim().toLowerCase() === name.toLowerCase())) {
+    ElMessage.error(`自定义参数“${name}”已经存在`)
+    return
+  }
+  customParamUidSeed += 1
+  row.customParams.push({ uid: customParamUidSeed, name, value: customParamValue.value.trim() })
+  parameterVisible.value = false
+}
+
+function removeCustomParameter(row: ToolRow, index: number): void {
+  row.customParams.splice(index, 1)
 }
 
 function submit(): void {
@@ -247,6 +286,23 @@ function submit(): void {
                   />
                   <span>mm</span>
                 </label>
+                <label
+                  v-for="(param, paramIndex) in row.customParams"
+                  :key="param.uid"
+                  class="inline-parameter custom-parameter"
+                >
+                  <span>{{ param.name }}</span>
+                  <el-input v-model="param.value" size="small" placeholder="未填写" />
+                  <el-button
+                    link
+                    type="danger"
+                    size="small"
+                    title="删除此参数"
+                    @click="removeCustomParameter(row, paramIndex)"
+                  >
+                    ×
+                  </el-button>
+                </label>
               </div>
             </td>
             <td class="col-op">
@@ -271,6 +327,14 @@ function submit(): void {
         </el-button>
         <el-button :disabled="parameterRow?.showCompAmount" @click="addParameter('compAmount')">
           {{ parameterRow?.showCompAmount ? '已添加刀具补偿' : '+ 添加刀具补偿' }}
+        </el-button>
+      </div>
+      <div class="custom-parameter-form">
+        <span class="custom-title">自定义参数</span>
+        <el-input v-model="customParamName" maxlength="40" placeholder="参数名称，如 品牌" />
+        <el-input v-model="customParamValue" maxlength="200" placeholder="内容，如 山特维克" />
+        <el-button type="primary" :disabled="!customParamName.trim()" @click="addCustomParameter">
+          添加
         </el-button>
       </div>
     </el-dialog>
@@ -393,9 +457,29 @@ function submit(): void {
   width: 140px;
 }
 
+.custom-parameter :deep(.el-input) {
+  width: 150px;
+}
+
 .parameter-options {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
+}
+
+.custom-parameter-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 10px;
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--el-border-color-lighter);
+}
+
+.custom-title {
+  grid-column: 1 / -1;
+  color: var(--el-text-color-regular);
+  font-size: 13px;
+  font-weight: 600;
 }
 </style>

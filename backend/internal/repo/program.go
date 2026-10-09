@@ -2,6 +2,7 @@ package repo
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -240,7 +241,18 @@ func getProgramTx(ctx context.Context, tx *sqlx.Tx, id int64) (*domain.Program, 
 
 const toolRowCols = `id, program_id, seq, tool_id, tool_no, offset_no, tool_name,
 	tool_dia_milli, corner_radius_milli, comp_amount_milli, spindle_speed, speed_mode,
-	feed_milli, feed_mode, cut_depth_milli, coolant, machining_content, remark`
+	feed_milli, feed_mode, cut_depth_milli, coolant, machining_content, remark, custom_params_json`
+
+func decodeToolCustomParams(item *domain.ProgramTool) error {
+	item.CustomParams = []domain.ToolCustomParam{}
+	if strings.TrimSpace(item.CustomParamsJSON) == "" {
+		return nil
+	}
+	if err := json.Unmarshal([]byte(item.CustomParamsJSON), &item.CustomParams); err != nil {
+		return fmt.Errorf("解析刀具自定义参数失败: %w", err)
+	}
+	return nil
+}
 
 // ListProgramTools 取某程序的刀具刀补表，按行号升序。
 func (r *Repo) ListProgramTools(ctx context.Context, programID int64) ([]domain.ProgramTool, error) {
@@ -251,6 +263,9 @@ func (r *Repo) ListProgramTools(ctx context.Context, programID int64) ([]domain.
 	}
 	for i := range items {
 		items[i].ApplyMilli()
+		if err := decodeToolCustomParams(&items[i]); err != nil {
+			return nil, err
+		}
 	}
 	return items, nil
 }
@@ -281,6 +296,16 @@ func (r *Repo) ReplaceProgramTools(ctx context.Context, programID int64, items [
 		if seq <= 0 {
 			seq = i + 1
 		}
+		customParams := make([]domain.ToolCustomParam, 0, len(in.CustomParams))
+		for _, param := range in.CustomParams {
+			customParams = append(customParams, domain.ToolCustomParam{
+				Name: strings.TrimSpace(param.Name), Value: strings.TrimSpace(param.Value),
+			})
+		}
+		customJSON, err := json.Marshal(customParams)
+		if err != nil {
+			return nil, fmt.Errorf("序列化刀具自定义参数失败: %w", err)
+		}
 		t := domain.ProgramTool{
 			ToolID: in.ToolID, ToolNo: strings.TrimSpace(in.ToolNo), OffsetNo: strings.TrimSpace(in.OffsetNo),
 			ToolName: in.ToolName, SpindleSpeed: in.SpindleSpeed, SpeedMode: in.SpeedMode,
@@ -288,18 +313,19 @@ func (r *Repo) ReplaceProgramTools(ctx context.Context, programID int64, items [
 			MachiningContent: in.MachiningContent, Remark: in.Remark,
 			ToolDia: in.ToolDia, CornerRadius: in.CornerRadius,
 			CompAmount: in.CompAmount, Feed: in.Feed, CutDepth: in.CutDepth,
+			CustomParams: customParams, CustomParamsJSON: string(customJSON),
 		}
 		t.FillMilli()
 
 		if _, err := tx.ExecContext(ctx,
 			`INSERT INTO program_tool (program_id, seq, tool_id, tool_no, offset_no, tool_name,
 			 tool_dia_milli, corner_radius_milli, comp_amount_milli, spindle_speed, speed_mode,
-			 feed_milli, feed_mode, cut_depth_milli, coolant, machining_content, remark)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			 feed_milli, feed_mode, cut_depth_milli, coolant, machining_content, remark, custom_params_json)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			programID, seq, t.ToolID, t.ToolNo, t.OffsetNo, t.ToolName,
 			t.ToolDiaMilli, t.CornerRadiusMilli, t.CompAmountMilli, t.SpindleSpeed, t.SpeedMode,
 			t.FeedMilli, t.FeedMode, t.CutDepthMilli, t.Coolant,
-			t.MachiningContent, t.Remark); err != nil {
+			t.MachiningContent, t.Remark, t.CustomParamsJSON); err != nil {
 			return nil, wrap(err)
 		}
 	}

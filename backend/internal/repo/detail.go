@@ -62,6 +62,9 @@ func (r *Repo) DrawingDetail(ctx context.Context, drawingID int64) (*domain.Draw
 		}
 		for i := range allTools {
 			allTools[i].ApplyMilli()
+			if err := decodeToolCustomParams(&allTools[i]); err != nil {
+				return nil, err
+			}
 			toolsByProgram[allTools[i].ProgramID] = append(toolsByProgram[allTools[i].ProgramID], allTools[i])
 		}
 	}

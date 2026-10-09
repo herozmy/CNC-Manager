@@ -120,3 +120,25 @@ func TestValidateToolsAcceptsEmptyTable(t *testing.T) {
 		t.Errorf("空刀具表应当被接受（等于清空），实际：%v", err)
 	}
 }
+
+func TestValidateToolsCustomParams(t *testing.T) {
+	items := []domain.ProgramToolInput{tool(1, func(it *domain.ProgramToolInput) {
+		it.CustomParams = []domain.ToolCustomParam{
+			{Name: "品牌", Value: "山特维克"},
+			{Name: "用途", Value: "精加工"},
+		}
+	})}
+	if err := validateProgramTools(items); err != nil {
+		t.Fatalf("合法自定义参数应当被接受：%v", err)
+	}
+
+	items[0].CustomParams = append(items[0].CustomParams, domain.ToolCustomParam{Name: " 品牌 ", Value: "重复"})
+	if err := validateProgramTools(items); err == nil || !strings.Contains(err.Error(), "重复") {
+		t.Fatalf("重复参数名称应当被拒绝，实际：%v", err)
+	}
+
+	items[0].CustomParams = []domain.ToolCustomParam{{Name: "", Value: "缺少名称"}}
+	if err := validateProgramTools(items); err == nil || !strings.Contains(err.Error(), "名称不能为空") {
+		t.Fatalf("空参数名称应当被拒绝，实际：%v", err)
+	}
+}
