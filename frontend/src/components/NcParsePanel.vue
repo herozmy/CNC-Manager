@@ -20,7 +20,6 @@ import type { ParseResult, ProgramToolInput } from '../api/types'
 import { getProgramTools, saveProgramTools } from '../api'
 import { errorMessage } from '../api/client'
 import { normalizeToolNo } from '../utils/nc'
-import { toNumber } from '../utils/format'
 
 const props = defineProps<{
   /** 识别结果；后端读取程序正文失败时为 null */
@@ -58,38 +57,19 @@ interface ToolRow {
   uid: number
   toolNo: string
   offsetNo: string
-  /**
-   * 直径与补偿量，mm。
-   *
-   * 这两个识别不出来——程序正文里没有它们——所以要用户自己填。
-   * 放在这里而不是等加入之后再去刀具表补，是因为现场本来就是
-   * 「看着程序把刀号、直径、刀补一次填齐」，来回切两处最容易漏。
-   */
-  toolDia: number
-  compAmount: number
 }
 
 let uidSeed = 0
 const rows = ref<ToolRow[]>([])
 
-/**
- * 是否把「直径 / 补偿量」两列显示出来。
- *
- * 默认不显示：这两样识别不出来，是用户按实际情况补的，
- * 没打算填的时候不该占着默认视野。
- */
-const showDims = ref(false)
-
 function newRow(toolNo = '', offsetNo = ''): ToolRow {
   uidSeed += 1
-  return { uid: uidSeed, toolNo, offsetNo, toolDia: 0, compAmount: 0 }
+  return { uid: uidSeed, toolNo, offsetNo }
 }
 
 /** 后端有识别结果就照抄一份成可编辑的行；没有就从空开始 */
 function reset(): void {
   rows.value = (props.parse?.tools ?? []).map((tool) => newRow(tool.toolNo, tool.offsetNo))
-  // 换一次识别结果就回到默认视图，免得上一份的展开状态莫名其妙地留着
-  showDims.value = false
 }
 
 watch(() => props.parse, reset, { immediate: true })
@@ -161,9 +141,10 @@ async function addTools(): Promise<void> {
         toolNo,
         offsetNo: row.offsetNo.trim(),
         toolName: '',
-        toolDia: toNumber(row.toolDia),
+        // NC 正文无法识别直径和补偿量，保持未填写状态，由用户在刀具信息中补充。
+        toolDia: 0,
         cornerRadius: 0,
-        compAmount: toNumber(row.compAmount),
+        compAmount: 0,
         spindleSpeed: 0,
         speedMode: 0,
         feed: 0,
@@ -228,14 +209,6 @@ async function addTools(): Promise<void> {
           <span v-if="rows.length" class="tool-count">{{ rows.length }} 把</span>
         </span>
         <div class="tool-head-actions">
-          <!--
-            直径与补偿量默认不显示。
-            识别只读得出刀号和刀补号，这两样得人按实际情况提供，
-            所以不占默认视野；要用的时候点一下把两列加出来。
-          -->
-          <el-button v-if="rows.length" size="small" @click="showDims = !showDims">
-            {{ showDims ? '收起直径/补偿' : '+ 直径/补偿' }}
-          </el-button>
           <el-button size="small" @click="addRow">+ 添加一行</el-button>
         </div>
       </div>
@@ -254,8 +227,6 @@ async function addTools(): Promise<void> {
             <th class="col-seq">#</th>
             <th class="col-no">刀具号</th>
             <th class="col-no">刀补号</th>
-            <th v-if="showDims" class="col-num">直径 (mm)</th>
-            <th v-if="showDims" class="col-num">补偿量 (mm)</th>
             <th class="col-op"></th>
           </tr>
         </thead>
@@ -272,29 +243,6 @@ async function addTools(): Promise<void> {
             </td>
             <td>
               <el-input v-model="row.offsetNo" size="small" placeholder="D01（可留空）" />
-            </td>
-            <td v-if="showDims">
-              <el-input-number
-                v-model="row.toolDia"
-                size="small"
-                :min="0"
-                :max="10000"
-                :precision="3"
-                :controls="false"
-                :value-on-clear="0"
-              />
-            </td>
-            <td v-if="showDims">
-              <!-- 补偿量允许负数：磨损修下去、半径补偿取反都会是负的 -->
-              <el-input-number
-                v-model="row.compAmount"
-                size="small"
-                :min="-10000"
-                :max="10000"
-                :precision="3"
-                :controls="false"
-                :value-on-clear="0"
-              />
             </td>
             <td class="col-op">
               <el-button link type="danger" size="small" @click="removeRow(index)">删除</el-button>

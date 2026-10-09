@@ -2,13 +2,13 @@
 /**
  * 刀具补偿表（每个程序一张）。
  *
- * 只显示 5 列：序号 / 刀具号 / 刀补号 / 直径 / 补偿量。
- * 转速与进给按现场反馈去掉，界面上不再出现。
+ * 主表默认只显示序号 / 刀具号 / 刀补号 / 参数按钮。
+ * 参数按刀具行独立添加；刀具名称固定排在直径、补偿量之前。
  *
  * 两个关键点：
  *  1) 整表提交（PUT /api/programs/{id}/tools），有「未保存」提示。
  *  2) PUT 是**整体替换**语义，所以界面上不显示的列
- *     （toolName / cornerRadius / spindleSpeed / speedMode / feed / feedMode /
+ *     （cornerRadius / spindleSpeed / speedMode / feed / feedMode /
  *      cutDepth / coolant / machiningContent / remark / toolId）
  *     必须从加载到的原始行**原样回传**，不能填死默认值，
  *     否则整表替换会把后端已有数据清空。
@@ -37,12 +37,15 @@ interface ToolRow {
   uid: number
   toolNo: string
   offsetNo: string
-  toolDia: number
-  compAmount: number
+  toolName: string
+  toolDia: number | null
+  compAmount: number | null
+  showToolName: boolean
+  showToolDia: boolean
+  showCompAmount: boolean
 
   // ---- 以下字段界面不显示，只用于原样回传，避免整表替换丢数据 ----
   toolId: number | null
-  toolName: string
   cornerRadius: number
   spindleSpeed: number
   speedMode: number
@@ -67,10 +70,13 @@ function createEmptyRow(): ToolRow {
     uid: uidSeed,
     toolNo: `T${String(index).padStart(2, '0')}`,
     offsetNo: `D${String(index).padStart(2, '0')}`,
-    toolDia: 0,
-    compAmount: 0,
-    toolId: null,
     toolName: '',
+    toolDia: null,
+    compAmount: null,
+    showToolName: false,
+    showToolDia: false,
+    showCompAmount: false,
+    toolId: null,
     cornerRadius: 0,
     spindleSpeed: 0,
     speedMode: 0,
@@ -91,10 +97,14 @@ function reset(): void {
       uid: uidSeed,
       toolNo: tool.toolNo,
       offsetNo: tool.offsetNo,
-      toolDia: toNumber(tool.toolDia),
-      compAmount: toNumber(tool.compAmount),
-      toolId: tool.toolId,
       toolName: tool.toolName,
+      // 后端用 0 表示未填写；界面显示为空白，用户需要时再自行录入。
+      toolDia: toNumber(tool.toolDia) === 0 ? null : toNumber(tool.toolDia),
+      compAmount: toNumber(tool.compAmount) === 0 ? null : toNumber(tool.compAmount),
+      showToolName: tool.toolName.trim() !== '',
+      showToolDia: toNumber(tool.toolDia) !== 0,
+      showCompAmount: toNumber(tool.compAmount) !== 0,
+      toolId: tool.toolId,
       cornerRadius: toNumber(tool.cornerRadius),
       spindleSpeed: Math.round(toNumber(tool.spindleSpeed)),
       speedMode: toNumber(tool.speedMode),
@@ -143,6 +153,22 @@ function removeRow(index: number): void {
   rows.value.splice(index, 1)
 }
 
+const parameterVisible = ref(false)
+const parameterRow = ref<ToolRow | null>(null)
+
+function openParameters(row: ToolRow): void {
+  parameterRow.value = row
+  parameterVisible.value = true
+}
+
+function addParameter(type: 'toolName' | 'toolDia' | 'compAmount'): void {
+  if (!parameterRow.value) return
+  if (type === 'toolName') parameterRow.value.showToolName = true
+  if (type === 'toolDia') parameterRow.value.showToolDia = true
+  if (type === 'compAmount') parameterRow.value.showCompAmount = true
+  parameterVisible.value = false
+}
+
 function submit(): void {
   if (!dirty.value) return
   emit('save', buildItems())
@@ -172,55 +198,82 @@ function submit(): void {
       还没有刀具数据，点击「+ 添加刀具」新增一行。
     </p>
 
-    <table v-else class="tool-table">
-      <thead>
-        <tr>
-          <th class="col-seq">序号</th>
-          <th class="col-no">刀具号</th>
-          <th class="col-no">刀补号</th>
-          <th class="col-num">直径 (mm)</th>
-          <th class="col-num">补偿量 (mm)</th>
-          <th class="col-op"></th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="(row, index) in rows" :key="row.uid">
-          <td class="col-seq">{{ index + 1 }}</td>
-          <td><el-input v-model="row.toolNo" size="small" placeholder="T01" /></td>
-          <td><el-input v-model="row.offsetNo" size="small" placeholder="D01" /></td>
-          <td>
-            <el-input-number
-              v-model="row.toolDia"
-              size="small"
-              :min="0"
-              :max="10000"
-              :precision="3"
-              :controls="false"
-              :value-on-clear="0"
-            />
-          </td>
-          <td>
-            <!--
-              补偿量允许负数：刀补记的是「实际值相对理论值的偏差」，
-              磨损修下去、半径补偿取反都会是负的。
-              这里的 min 只做量级兜底，和后端校验保持一致。
-            -->
-            <el-input-number
-              v-model="row.compAmount"
-              size="small"
-              :min="-10000"
-              :max="10000"
-              :precision="3"
-              :controls="false"
-              :value-on-clear="0"
-            />
-          </td>
-          <td class="col-op">
-            <el-button link type="danger" size="small" @click="removeRow(index)">删除</el-button>
-          </td>
-        </tr>
-      </tbody>
-    </table>
+    <div v-else class="tool-table-scroll">
+      <table class="tool-table">
+        <thead>
+          <tr>
+            <th class="col-seq">序号</th>
+            <th class="col-no">刀具号</th>
+            <th class="col-no">刀补号</th>
+            <th class="col-parameters">刀具参数</th>
+            <th class="col-op"></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="(row, index) in rows" :key="row.uid">
+            <td class="col-seq">{{ index + 1 }}</td>
+            <td><el-input v-model="row.toolNo" size="small" placeholder="T01" /></td>
+            <td><el-input v-model="row.offsetNo" size="small" placeholder="D01" /></td>
+            <td class="col-parameters">
+              <div class="row-parameters">
+                <el-button size="small" @click="openParameters(row)">参数</el-button>
+                <label v-if="row.showToolName" class="inline-parameter tool-name-parameter">
+                  <span>名称</span>
+                  <el-input v-model="row.toolName" size="small" placeholder="未填写" />
+                </label>
+                <label v-if="row.showToolDia" class="inline-parameter">
+                  <span>直径</span>
+                  <el-input-number
+                    v-model="row.toolDia"
+                    size="small"
+                    :min="0"
+                    :max="10000"
+                    :precision="3"
+                    :controls="false"
+                    placeholder="未填写"
+                  />
+                  <span>mm</span>
+                </label>
+                <label v-if="row.showCompAmount" class="inline-parameter">
+                  <span>补偿</span>
+                  <el-input-number
+                    v-model="row.compAmount"
+                    size="small"
+                    :min="-10000"
+                    :max="10000"
+                    :precision="3"
+                    :controls="false"
+                    placeholder="未填写"
+                  />
+                  <span>mm</span>
+                </label>
+              </div>
+            </td>
+            <td class="col-op">
+              <el-button link type="danger" size="small" @click="removeRow(index)">删除</el-button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <el-dialog
+      v-model="parameterVisible"
+      :title="`添加参数 - ${parameterRow?.toolNo || '未命名刀具'}`"
+      width="420px"
+    >
+      <div class="parameter-options">
+        <el-button :disabled="parameterRow?.showToolName" @click="addParameter('toolName')">
+          {{ parameterRow?.showToolName ? '已添加刀具名称' : '+ 添加刀具名称' }}
+        </el-button>
+        <el-button :disabled="parameterRow?.showToolDia" @click="addParameter('toolDia')">
+          {{ parameterRow?.showToolDia ? '已添加刀具直径' : '+ 添加刀具直径' }}
+        </el-button>
+        <el-button :disabled="parameterRow?.showCompAmount" @click="addParameter('compAmount')">
+          {{ parameterRow?.showCompAmount ? '已添加刀具补偿' : '+ 添加刀具补偿' }}
+        </el-button>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
@@ -269,10 +322,14 @@ function submit(): void {
 }
 
 .tool-table {
-  width: 100%;
-  max-width: 780px;
+  width: max-content;
+  min-width: 100%;
   border-collapse: collapse;
   table-layout: fixed;
+}
+
+.tool-table-scroll {
+  overflow-x: auto;
 }
 
 .tool-table th,
@@ -303,8 +360,8 @@ function submit(): void {
   width: 130px;
 }
 
-.col-num {
-  width: 150px;
+.col-parameters {
+  width: 520px;
 }
 
 .col-op {
@@ -313,6 +370,32 @@ function submit(): void {
 }
 
 .tool-table :deep(.el-input-number) {
-  width: 100%;
+  width: 110px;
+}
+
+.row-parameters {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 8px 12px;
+  white-space: nowrap;
+}
+
+.inline-parameter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
+
+.tool-name-parameter :deep(.el-input) {
+  width: 140px;
+}
+
+.parameter-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
 }
 </style>

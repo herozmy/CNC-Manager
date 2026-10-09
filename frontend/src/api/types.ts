@@ -202,7 +202,7 @@ export interface ProgramTool {
  * 刀具补偿行（提交体）。字段与 ProgramTool 相同。
  *
  * 界面上只编辑 seq / toolNo / offsetNo / toolDia / compAmount，
- * 其余列（toolName、cornerRadius、spindleSpeed、speedMode、feed、feedMode、
+ * 其余列（cornerRadius、spindleSpeed、speedMode、feed、feedMode、
  * cutDepth、coolant、machiningContent、remark、toolId）
  * 在整表提交时**必须按加载到的原值带回**，不能填死默认值，否则会丢数据。
  */
