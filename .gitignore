@@ -49,3 +49,5 @@ scripts/sample/
 
 # 本地笔记与开发记录（不进仓库）
 .local/
+AGENTS.md
+DEVELOPMENT_PLAN.md
