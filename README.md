@@ -1,6 +1,6 @@
 # CNC 加工程序管理系统
 
-**v1.2**
+**v1.2.6**
 
 数控加工程序的结构化管理工具：以**图纸号**为主线，挂**工序**（一序、二序…），
 工序下挂**程序**，每个程序带 **NC 文件版本历史**、**刀具补偿表**和**备注**。
@@ -17,13 +17,13 @@
 | 能力 | 说明 |
 |---|---|
 | 图纸管理 | 图纸号（唯一）、名称、材料、备注 |
-| 工序管理 | 工序号用 10# / 20# / 30# 留插入余量；装夹方式、Z 轴高度垫高、备注 |
-| 程序管理 | 程序号（如 O1234）、备注；一道工序可挂多个程序 |
+| 工序管理 | 工序默认以紧凑列表显示，点击展开详情；支持拖动持久排序；工序号用 10# / 20# / 30# 留插入余量，并记录装夹方式、Z 轴高度垫高和备注 |
+| 程序管理 | 程序默认以紧凑列表显示，点击展开详情；支持程序名自然排序和拖动持久排序；一道工序可挂多个程序 |
 | NC 文件托管 | 上传时 AES-256-GCM 加密落盘，查看和下载时自动解密；按明文 sha256 寻址去重，相同内容秒传；自动识别 GBK / UTF-8 |
-| **刀具自动识别** | 上传时自动读程序正文，识别出刀具调用（T 号与刀补号）。识别结果**可以先手工改**（改号、改直径与补偿量、删行、补行）再加入刀具补偿表；上传时没加，之后在「查看程序 → 识别程序」里也能补 |
-| 版本管理 | 每次上传产生新版本，可回滚、可两版逐行对比、可下载 |
-| 程序查看与编辑 | 在软件里直接打开 NC 程序查看；可在线修改，保存时可选「另存为新版本」（留历史）或「覆盖当前版本」（不留历史） |
-| 刀具补偿表 | 序号 / 刀具号 / 刀补号 / 直径 / 补偿量。**补偿量允许负数**——刀补记的是实际值相对理论值的偏差，磨损修下去、半径补偿取反都会是负的 |
+| **刀具自动识别** | 上传时自动读程序正文并识别 T 号与刀补号；识别结果可先修改再加入，加入成功后主界面自动刷新 |
+| 版本管理 | 每次上传产生新版本，可回滚、逐行对比和逐版本下载；切换当前版本时主界面程序与刀具同步切换 |
+| 程序查看与编辑 | 直接查看和编辑 NC 程序；可另存新版本或覆盖当前版本；查看历史版本时可直接切换为主界面当前版本 |
+| 刀具补偿表 | 刀具补偿按程序版本独立保存；显示当前生效版本对应的刀具。包含序号、刀具号、刀补号、直径、补偿量及自定义参数 |
 | 搜索 | 图纸号、名称、客户、材料；也支持用程序号反查图纸 |
 | **版本检查** | 启动时问一次 GitHub 有没有新版本，有就在左下角版本号旁标出「有新版本 vX.Y.Z」 |
 | **离线安装** | 在界面里选中下载好的离线包即可升级：校验 → 换 exe 和前端 → 自动重启。数据不动 |
@@ -36,21 +36,23 @@
 
 ### 界面结构
 
-单页线性表单，没有左树、没有页签，从上到下就是现场的工艺顺序：
+单页界面，没有左树、没有页签。图纸详情中的工序与程序默认以列表展示，点击对应行再展开详细信息：
 
 ```
 左侧：图纸平铺列表（搜索 + 点选）
 右侧：
   图纸        图纸号 / 名称 / 材料 / 备注
-    └ 工序        工序号 10# 起，装夹方式 / Z 轴高度垫高 / 备注
-        └ 程序        程序号（如 O1234），一道工序可挂多个
-            └ 刀具补偿    序号 / 刀具号 / 刀补号 / 直径 / 补偿量
+    └ 工序列表    拖动排序；点击展开装夹方式 / Z 轴高度垫高 / 备注
+        └ 程序列表    名称排序或拖动排序；点击展开程序操作
+            └ 刀具补偿    跟随当前程序版本显示
 ```
 
 - 装夹方式、Z 轴垫高、备注挂在**工序**上——它们描述「这道工序怎么装夹」，
   同一装夹下的多个程序共享
 - 工序号显示成 `10#`，输入时带不带 `#` 都接受
-- NC 上传、查看程序、版本历史都收在弹窗里，不占主页面
+- 工序和程序的拖动顺序会保存到数据库，刷新或重启后保持不变
+- 工序和程序信息修改后点击保存才生效，可在保存前撤销修改
+- NC 上传后可下载当前版本；版本历史中每个版本也可单独下载
 
 ---
 
@@ -109,7 +111,7 @@ backend\data\
 ### 方式一：免安装包（现场推荐）
 
 从 [Releases](https://github.com/herozmy/CNC-Manager/releases) 下载
-`cnccool-v1.2-windows-amd64.zip`，解压到任意目录，双击 `cnccool-server.exe`。
+`cnccool-v1.2.6-windows-amd64.zip`，解压到任意目录，双击 `cnccool-server.exe`。
 浏览器会自动打开 <http://127.0.0.1:8080>。
 
 也可以直接双击 `cnccool-server.exe`：程序不会弹出命令行窗口，会自动识别旁边的
@@ -255,17 +257,17 @@ scripts\seed-demo.cmd
 
 ```
 drawing 图纸          drawing_no(唯一) name customer material drawing_version remark
-  └ operation 工序    drawing_id op_no(10/20/30) op_name machine_id fixture
+  └ operation 工序    drawing_id op_no(10/20/30) sort_order op_name machine_id fixture
                       z_height_milli(Z轴垫高) remark    UNIQUE(drawing_id, op_no)
-      └ nc_program 程序   operation_id program_no program_name controller
+      └ nc_program 程序   operation_id program_no sort_order program_name controller
                           current_version_id remark
           ├ nc_version 版本   program_id version_no file_id file_name change_note created_by
-          └ program_tool 刀具补偿
-                              program_id seq tool_no(T) offset_no(D/H) tool_name
+          └ program_tool 刀具补偿（按版本）
+                              program_id version_id seq tool_no(T) offset_no(D/H) tool_name
                               tool_dia_milli corner_radius_milli comp_amount_milli
                               spindle_speed speed_mode feed_milli feed_mode
                               cut_depth_milli coolant machining_content remark
-                              UNIQUE(program_id, seq)
+                              UNIQUE(version_id, seq)
 
 nc_file 文件库        sha256(唯一) size_bytes original_name rel_path file_encoding
 tool 刀具字典          tool_no name spec tool_type
@@ -296,17 +298,21 @@ DELETE /api/drawings/{id}                     级联删除下级
 GET    /api/drawings/{id}/detail              界面主视图：一次拿到 图纸→工序→程序→刀具补偿表
 GET    /api/drawings/{id}/operations
 POST   /api/drawings/{id}/operations
+PUT    /api/drawings/{id}/operations/order    保存工序拖动顺序
 
 PUT    /api/operations/{id}
 DELETE /api/operations/{id}
 GET    /api/operations/{id}/programs
 POST   /api/operations/{id}/programs
+PUT    /api/operations/{id}/programs/order    保存程序拖动顺序
 
 GET    /api/programs/{id}                     详情：基本信息 + 图纸 + 工序 + 刀具表 + 版本列表
 PUT    /api/programs/{id}
 DELETE /api/programs/{id}
 GET    /api/programs/{id}/tools
 PUT    /api/programs/{id}/tools               整表替换
+GET    /api/programs/{id}/versions/{versionId}/tools
+PUT    /api/programs/{id}/versions/{versionId}/tools  指定版本的刀具补偿表
 GET    /api/programs/{id}/versions
 POST   /api/programs/{id}/versions            multipart：file + changeNote
                                               响应里附带 parse：识别到的刀具调用
