@@ -23,7 +23,8 @@ import {
   listVersions,
   overwriteVersionContent,
   parseNcText,
-  saveVersionContentAsNew
+  saveVersionContentAsNew,
+  setCurrentVersion
 } from '../api'
 import { errorMessage } from '../api/client'
 import { formatBytes } from '../utils/format'
@@ -58,6 +59,10 @@ const listLoading = ref(false)
 
 const selectedVersion = computed(
   () => versions.value.find((item) => item.id === selectedVersionId.value) ?? null
+)
+const switchingCurrent = ref(false)
+const canSwitchCurrent = computed(
+  () => selectedVersion.value !== null && !selectedVersion.value.isCurrent && !editing.value
 )
 
 /* ------------------------------------------------------------ 程序文本 */
@@ -228,6 +233,33 @@ async function onVersionChange(): Promise<void> {
   await loadContent()
 }
 
+/** 把查看中的历史版本设为主界面当前版本，并让主界面立即刷新程序和刀具。 */
+async function switchToSelectedVersion(): Promise<void> {
+  const version = selectedVersion.value
+  if (!version || version.isCurrent || switchingCurrent.value) return
+  try {
+    await ElMessageBox.confirm(
+      `把 ${props.programNo} 切换到第 ${version.versionNo} 版？主界面的程序和刀具补偿将显示这一版。`,
+      '切换当前版本',
+      { confirmButtonText: '切换版本', cancelButtonText: '取消', type: 'warning' }
+    )
+  } catch {
+    return
+  }
+
+  switchingCurrent.value = true
+  try {
+    await setCurrentVersion(props.programId, version.id)
+    await loadVersions()
+    ElMessage.success(`已切换到第 ${version.versionNo} 版`)
+    emit('saved')
+  } catch (error) {
+    ElMessage.error(errorMessage(error))
+  } finally {
+    switchingCurrent.value = false
+  }
+}
+
 /* ------------------------------------------------------------ 编辑模式 */
 
 function startEdit(): void {
@@ -358,6 +390,19 @@ async function overwriteCurrent(): Promise<void> {
         />
       </el-select>
 
+      <el-button
+        v-if="selectedVersion && !selectedVersion.isCurrent"
+        size="small"
+        type="success"
+        plain
+        :disabled="!canSwitchCurrent || busy"
+        :loading="switchingCurrent"
+        @click="switchToSelectedVersion"
+      >
+        切换为当前版本
+      </el-button>
+      <el-tag v-else-if="selectedVersion?.isCurrent" type="success" size="small">当前版本</el-tag>
+
       <template v-if="current">
         <span class="info-text">{{ current.fileName }}</span>
         <span class="info-sep">·</span>
@@ -404,6 +449,7 @@ async function overwriteCurrent(): Promise<void> {
       v-if="parseVisible && !editing && current"
       :parse="parsed"
       :program-id="programId"
+      :version-id="current.versionId"
       @tools-added="emit('toolsAdded')"
     />
 

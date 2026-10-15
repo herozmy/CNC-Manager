@@ -239,9 +239,16 @@ func getProgramTx(ctx context.Context, tx *sqlx.Tx, id int64) (*domain.Program, 
 // 程序用刀 + 刀补表
 // ---------------------------------------------------------------------------
 
-const toolRowCols = `id, program_id, seq, tool_id, tool_no, offset_no, tool_name,
+const toolRowCols = `id, program_id, version_id, seq, tool_id, tool_no, offset_no, tool_name,
 	tool_dia_milli, corner_radius_milli, comp_amount_milli, spindle_speed, speed_mode,
 	feed_milli, feed_mode, cut_depth_milli, coolant, machining_content, remark, custom_params_json`
+
+// toolRowColsWithAlias 用于 program_tool 与其他表 JOIN 的查询。
+// 每列都带 pt 前缀，避免 id / program_id 等同名列触发 SQLite ambiguous column。
+const toolRowColsWithAlias = `pt.id, pt.program_id, pt.version_id, pt.seq, pt.tool_id,
+	pt.tool_no, pt.offset_no, pt.tool_name, pt.tool_dia_milli, pt.corner_radius_milli,
+	pt.comp_amount_milli, pt.spindle_speed, pt.speed_mode, pt.feed_milli, pt.feed_mode,
+	pt.cut_depth_milli, pt.coolant, pt.machining_content, pt.remark, pt.custom_params_json`
 
 func decodeToolCustomParams(item *domain.ProgramTool) error {
 	item.CustomParams = []domain.ToolCustomParam{}
@@ -256,9 +263,28 @@ func decodeToolCustomParams(item *domain.ProgramTool) error {
 
 // ListProgramTools 取某程序的刀具刀补表，按行号升序。
 func (r *Repo) ListProgramTools(ctx context.Context, programID int64) ([]domain.ProgramTool, error) {
+	p, err := r.GetProgram(ctx, programID)
+	if err != nil {
+		return nil, err
+	}
+	if p.CurrentVersionID == nil {
+		return []domain.ProgramTool{}, nil
+	}
+	return r.ListVersionTools(ctx, programID, *p.CurrentVersionID)
+}
+
+// ListVersionTools 读取指定程序版本自己的刀具补偿表。
+func (r *Repo) ListVersionTools(ctx context.Context, programID, versionID int64) ([]domain.ProgramTool, error) {
+	v, err := r.GetVersion(ctx, versionID)
+	if err != nil {
+		return nil, err
+	}
+	if v.ProgramID != programID {
+		return nil, fmt.Errorf("%w: 该版本不属于这个程序", domain.ErrInvalid)
+	}
 	items := []domain.ProgramTool{}
-	q := `SELECT ` + toolRowCols + ` FROM program_tool WHERE program_id = ? ORDER BY seq`
-	if err := r.db.SelectContext(ctx, &items, q, programID); err != nil {
+	q := `SELECT ` + toolRowCols + ` FROM program_tool WHERE program_id = ? AND version_id = ? ORDER BY seq`
+	if err := r.db.SelectContext(ctx, &items, q, programID, versionID); err != nil {
 		return nil, wrap(err)
 	}
 	for i := range items {
@@ -277,8 +303,24 @@ func (r *Repo) ListProgramTools(ctx context.Context, programID int64) ([]domain.
 // 不会出现"删了第 2 行之后第 3 行变成第 2 行"这类行号错乱的问题。
 // 整表替换放在一个事务里，也不存在改到一半失败留下半张表的风险。
 func (r *Repo) ReplaceProgramTools(ctx context.Context, programID int64, items []domain.ProgramToolInput) ([]domain.ProgramTool, error) {
-	if _, err := r.GetProgram(ctx, programID); err != nil {
+	p, err := r.GetProgram(ctx, programID)
+	if err != nil {
 		return nil, err
+	}
+	if p.CurrentVersionID == nil {
+		return nil, fmt.Errorf("%w: 程序还没有可保存刀具补偿的版本", domain.ErrInvalid)
+	}
+	return r.ReplaceVersionTools(ctx, programID, *p.CurrentVersionID, items)
+}
+
+// ReplaceVersionTools 整表替换指定版本的刀具补偿表。
+func (r *Repo) ReplaceVersionTools(ctx context.Context, programID, versionID int64, items []domain.ProgramToolInput) ([]domain.ProgramTool, error) {
+	v, err := r.GetVersion(ctx, versionID)
+	if err != nil {
+		return nil, err
+	}
+	if v.ProgramID != programID {
+		return nil, fmt.Errorf("%w: 该版本不属于这个程序", domain.ErrInvalid)
 	}
 
 	tx, err := r.db.BeginTxx(ctx, nil)
@@ -287,7 +329,7 @@ func (r *Repo) ReplaceProgramTools(ctx context.Context, programID int64, items [
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	if _, err := tx.ExecContext(ctx, `DELETE FROM program_tool WHERE program_id = ?`, programID); err != nil {
+	if _, err := tx.ExecContext(ctx, `DELETE FROM program_tool WHERE version_id = ?`, versionID); err != nil {
 		return nil, wrap(err)
 	}
 
@@ -318,11 +360,11 @@ func (r *Repo) ReplaceProgramTools(ctx context.Context, programID int64, items [
 		t.FillMilli()
 
 		if _, err := tx.ExecContext(ctx,
-			`INSERT INTO program_tool (program_id, seq, tool_id, tool_no, offset_no, tool_name,
+			`INSERT INTO program_tool (program_id, version_id, seq, tool_id, tool_no, offset_no, tool_name,
 			 tool_dia_milli, corner_radius_milli, comp_amount_milli, spindle_speed, speed_mode,
 			 feed_milli, feed_mode, cut_depth_milli, coolant, machining_content, remark, custom_params_json)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			programID, seq, t.ToolID, t.ToolNo, t.OffsetNo, t.ToolName,
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			programID, versionID, seq, t.ToolID, t.ToolNo, t.OffsetNo, t.ToolName,
 			t.ToolDiaMilli, t.CornerRadiusMilli, t.CompAmountMilli, t.SpindleSpeed, t.SpeedMode,
 			t.FeedMilli, t.FeedMode, t.CutDepthMilli, t.Coolant,
 			t.MachiningContent, t.Remark, t.CustomParamsJSON); err != nil {
@@ -337,7 +379,7 @@ func (r *Repo) ReplaceProgramTools(ctx context.Context, programID int64, items [
 	if err := tx.Commit(); err != nil {
 		return nil, wrap(err)
 	}
-	return r.ListProgramTools(ctx, programID)
+	return r.ListVersionTools(ctx, programID, versionID)
 }
 
 // ---------------------------------------------------------------------------

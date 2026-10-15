@@ -120,6 +120,7 @@ type Version struct {
 type ProgramTool struct {
 	ID        int64  `db:"id" json:"id"`
 	ProgramID int64  `db:"program_id" json:"programId"`
+	VersionID int64  `db:"version_id" json:"versionId"`
 	Seq       int    `db:"seq" json:"seq"`
 	ToolID    *int64 `db:"tool_id" json:"toolId"`
 

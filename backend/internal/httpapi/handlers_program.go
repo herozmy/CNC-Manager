@@ -206,6 +206,53 @@ func (s *Server) handleReplaceProgramTools(w http.ResponseWriter, r *http.Reques
 	writeJSON(w, http.StatusOK, items)
 }
 
+func (s *Server) handleListVersionTools(w http.ResponseWriter, r *http.Request) {
+	programID, ok := pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	versionID, ok := pathID(w, r, "versionId")
+	if !ok {
+		return
+	}
+	items, err := s.repo.ListVersionTools(r.Context(), programID, versionID)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, items)
+}
+
+func (s *Server) handleReplaceVersionTools(w http.ResponseWriter, r *http.Request) {
+	programID, ok := pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	versionID, ok := pathID(w, r, "versionId")
+	if !ok {
+		return
+	}
+	var body struct {
+		Items []domain.ProgramToolInput `json:"items"`
+	}
+	if !decodeJSON(w, r, &body) {
+		return
+	}
+	if body.Items == nil {
+		body.Items = []domain.ProgramToolInput{}
+	}
+	if err := validateProgramTools(body.Items); err != nil {
+		s.fail(w, err)
+		return
+	}
+	items, err := s.repo.ReplaceVersionTools(r.Context(), programID, versionID, body.Items)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, items)
+}
+
 // validateProgramTools 校验刀具表。
 //
 // 这里挡住的是现场最容易犯的几类错：行号重复、把负数填到不该为负的字段上、

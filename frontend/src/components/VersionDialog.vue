@@ -214,6 +214,7 @@ function onToolsAdded(): void {
       v-if="uploadResult"
       :parse="uploadResult.parse ?? null"
       :program-id="programId"
+      :version-id="uploadResult.id"
       :title="`第 ${uploadResult.versionNo} 版上传成功`"
       closable
       @tools-added="onToolsAdded"

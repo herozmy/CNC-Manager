@@ -17,7 +17,7 @@
 import { computed, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { ParseResult, ProgramToolInput } from '../api/types'
-import { getProgramTools, saveProgramTools } from '../api'
+import { getVersionTools, saveVersionTools } from '../api'
 import { errorMessage } from '../api/client'
 import { normalizeToolNo } from '../utils/nc'
 
@@ -26,6 +26,8 @@ const props = defineProps<{
   parse: ParseResult | null
   /** 用于「加入刀具补偿表」 */
   programId: number
+  /** 识别结果所属版本；刀具补偿按版本隔离保存 */
+  versionId: number
   /** 面板标题，例如「第 2 版上传成功」 */
   title?: string
   /** 是否显示「收起」 */
@@ -98,7 +100,7 @@ async function addTools(): Promise<void> {
 
   adding.value = true
   try {
-    const existing = await getProgramTools(props.programId)
+    const existing = await getVersionTools(props.programId, props.versionId)
 
     // PUT 是整体替换语义：现有行所有字段按加载到的原值带回，绝不填默认值
     const items: ProgramToolInput[] = existing.map((tool) => ({
@@ -163,7 +165,7 @@ async function addTools(): Promise<void> {
       return
     }
 
-    await saveProgramTools(props.programId, [...items, ...added])
+    await saveVersionTools(props.programId, props.versionId, [...items, ...added])
     if (skipped > 0) {
       ElMessage.success(`已加入 ${added.length} 把刀，另有 ${skipped} 把表里已有，已跳过`)
     } else {

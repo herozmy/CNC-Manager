@@ -124,6 +124,10 @@ export function getProgramTools(programId: number): Promise<ProgramTool[]> {
   return apiGet<ProgramTool[]>(`/programs/${programId}/tools`)
 }
 
+export function getVersionTools(programId: number, versionId: number): Promise<ProgramTool[]> {
+  return apiGet<ProgramTool[]>(`/programs/${programId}/versions/${versionId}/tools`)
+}
+
 /**
  * 整表提交刀具补偿。
  * 未显示的列必须按加载到的原值带回（见 ProgramToolInput 的注释）。
@@ -133,6 +137,14 @@ export function saveProgramTools(
   items: ProgramToolInput[]
 ): Promise<ProgramTool[]> {
   return apiPut<ProgramTool[]>(`/programs/${programId}/tools`, { items })
+}
+
+export function saveVersionTools(
+  programId: number,
+  versionId: number,
+  items: ProgramToolInput[]
+): Promise<ProgramTool[]> {
+  return apiPut<ProgramTool[]>(`/programs/${programId}/versions/${versionId}/tools`, { items })
 }
 
 /* ------------------------------------------------------------------ 版本 */

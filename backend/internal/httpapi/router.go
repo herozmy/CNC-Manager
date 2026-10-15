@@ -112,6 +112,8 @@ func (s *Server) Router() http.Handler {
 			r.Delete("/programs/{id}", s.handleDeleteProgram)
 			r.Get("/programs/{id}/tools", s.handleListProgramTools)
 			r.Put("/programs/{id}/tools", s.handleReplaceProgramTools)
+			r.Get("/programs/{id}/versions/{versionId}/tools", s.handleListVersionTools)
+			r.Put("/programs/{id}/versions/{versionId}/tools", s.handleReplaceVersionTools)
 			r.Get("/programs/{id}/versions", s.handleListVersions)
 			r.Post("/programs/{id}/versions", s.handleUploadVersion)
 			// 在软件里编辑程序后「另存为新版本」

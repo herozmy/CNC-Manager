@@ -52,8 +52,10 @@ func (r *Repo) DrawingDetail(ctx context.Context, drawingID int64) (*domain.Draw
 			progIDs = append(progIDs, p.ID)
 		}
 		allTools := []domain.ProgramTool{}
-		tq, targs, err := sqlx.In(`SELECT `+toolRowCols+` FROM program_tool
-			WHERE program_id IN (?) ORDER BY program_id, seq`, progIDs)
+		tq, targs, err := sqlx.In(`SELECT `+toolRowColsWithAlias+` FROM program_tool pt
+			JOIN nc_program p ON p.id = pt.program_id
+			WHERE pt.program_id IN (?) AND pt.version_id = p.current_version_id
+			ORDER BY pt.program_id, pt.seq`, progIDs)
 		if err != nil {
 			return nil, wrap(err)
 		}

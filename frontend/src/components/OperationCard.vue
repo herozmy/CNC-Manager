@@ -23,6 +23,7 @@ import {
   createProgram,
   deleteOperation,
   deleteProgram,
+  getProgramTools,
   saveProgramTools,
   updateOperation,
   updateProgram,
@@ -410,12 +411,21 @@ async function onFileChange(event: Event): Promise<void> {
 }
 
 /**
- * 识别结果里的刀具已确认加入，刷新详情让刀具补偿表显示出来。
+ * 识别结果里的刀具已确认加入后，立即重新读取该程序的刀具补偿表。
  *
- * 提示由识别面板自己弹：只有它知道加进去几把、跳过几把。
+ * 直接更新当前卡片可以让用户不关上传/版本弹窗就看到新刀具；随后再通知
+ * 主页面刷新整张图纸，保证其他入口持有的数据也同步。
  */
-function onToolsAdded(): void {
-  emit('reload')
+async function onToolsAdded(programId: number): Promise<void> {
+  try {
+    const tools = await getProgramTools(programId)
+    const target = programForms.value.find((item) => item.source.id === programId)
+    if (target) target.source = { ...target.source, tools }
+  } catch (error) {
+    ElMessage.error(`刀具已加入，但自动刷新失败：${errorMessage(error)}`)
+  } finally {
+    emit('reload')
+  }
 }
 </script>
 
@@ -569,9 +579,10 @@ function onToolsAdded(): void {
           v-if="uploadResultOf(item.source.id)"
           :parse="uploadResultOf(item.source.id)?.parse ?? null"
           :program-id="item.source.id"
+          :version-id="uploadResultOf(item.source.id)?.id ?? 0"
           :title="`第 ${uploadResultOf(item.source.id)?.versionNo ?? ''} 版上传成功`"
           closable
-          @tools-added="onToolsAdded"
+          @tools-added="onToolsAdded(item.source.id)"
           @close="dismissUploadResult(item.source.id)"
         />
       </div>
@@ -618,7 +629,7 @@ function onToolsAdded(): void {
       :program-no="editorProgram.programNo"
       :current-version-id="editorProgram.currentVersionId"
       @saved="emit('reload')"
-      @tools-added="onToolsAdded"
+      @tools-added="onToolsAdded(editorProgram.id)"
     />
   </section>
 </template>
