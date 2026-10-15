@@ -2,9 +2,9 @@
 /**
  * 工序卡片：一道工序一张卡，卡里再纵向排它的多个程序，每个程序下面跟自己的刀具补偿表。
  *
- * 保存策略（「失焦即保存」+ 明确的保存状态提示）：
- *   - 工序的 4 个字段改动后失焦即 PUT /api/operations/{id}
- *   - 程序名改动后失焦即 PUT /api/programs/{id}
+ * 保存策略（明确保存后生效 + 可撤销未保存改动）：
+ *   - 工序字段统一点击「保存修改」后 PUT /api/operations/{id}
+ *   - 程序名和备注统一点击对应行的「保存」后 PUT /api/programs/{id}
  *   - 卡头右上角的状态文字始终显示「已保存 / 未保存 / 保存中… / 保存失败」，
  *     不会出现「改了但不知道存没存上」的情况
  *   - 新增 / 删除工序与程序、上传 NC、切换当前版本这些会改变结构的操作，
@@ -25,7 +25,8 @@ import {
   deleteProgram,
   saveProgramTools,
   updateOperation,
-  updateProgram
+  updateProgram,
+  versionDownloadUrl
 } from '../api'
 import { errorMessage } from '../api/client'
 import type {
@@ -111,12 +112,14 @@ async function save(): Promise<void> {
   }
   const payload = buildPayload()
   if (JSON.stringify(payload) === savedSnapshot.value) return
+  const orderChanged = payload.opNo !== props.operation.opNo
 
   saving.value = true
   failed.value = false
   try {
     await updateOperation(props.operation.id, payload)
     savedSnapshot.value = JSON.stringify(payload)
+    if (orderChanged) emit('reload')
   } catch (error) {
     failed.value = true
     ElMessage.error(errorMessage(error))
@@ -129,8 +132,13 @@ async function save(): Promise<void> {
   }
 }
 
-/** 工序号允许填 10# 或 10；解析失败就回滚，解析成功统一显示成 10# */
-async function onOpNoChange(): Promise<void> {
+/** 放弃尚未提交的工序改动，恢复成后端最近一次加载/保存成功的值。 */
+function revertOperation(): void {
+  resetOperation()
+}
+
+/** 工序号允许填 10# 或 10；这里只校验并规范显示，点击保存后才生效。 */
+function onOpNoChange(): void {
   const parsed = parseOpNo(form.opNoText)
   if (parsed === null) {
     ElMessage.error('工序号必须是 1~9999 之间的整数，例如 10# 或 10')
@@ -138,10 +146,6 @@ async function onOpNoChange(): Promise<void> {
     return
   }
   form.opNoText = formatOpNo(parsed)
-  const orderChanged = parsed !== props.operation.opNo
-  await save()
-  // 工序号变了会影响排序，重新拉一次让卡片挪到正确位置
-  if (orderChanged) emit('reload')
 }
 
 async function confirmDeleteOperation(): Promise<void> {
@@ -230,6 +234,12 @@ async function saveProgram(item: ProgramForm): Promise<void> {
   } finally {
     item.saving = false
   }
+}
+
+/** 放弃这一行尚未提交的程序改动。 */
+function revertProgram(item: ProgramForm): void {
+  item.programNo = item.baselineNo
+  item.remark = item.baselineRemark
 }
 
 async function confirmDeleteProgram(item: ProgramForm): Promise<void> {
@@ -418,6 +428,23 @@ function onToolsAdded(): void {
       </div>
       <div class="head-actions">
         <el-button
+          v-if="dirty"
+          size="small"
+          :disabled="saving"
+          @click="revertOperation"
+        >
+          撤销修改
+        </el-button>
+        <el-button
+          v-if="dirty"
+          size="small"
+          type="primary"
+          :loading="saving"
+          @click="save"
+        >
+          保存修改
+        </el-button>
+        <el-button
           link
           type="primary"
           :aria-expanded="!collapsed"
@@ -437,7 +464,7 @@ function onToolsAdded(): void {
         </label>
         <label class="field">
           <span class="field-label">装夹方式</span>
-          <el-input v-model="form.fixture" placeholder="如 三爪卡盘" @change="save" />
+          <el-input v-model="form.fixture" placeholder="如 三爪卡盘" />
         </label>
         <label class="field">
           <span class="field-label">Z轴垫高</span>
@@ -447,7 +474,6 @@ function onToolsAdded(): void {
             :precision="3"
             :controls="false"
             :value-on-clear="0"
-            @change="save"
           />
           <span class="unit">mm</span>
         </label>
@@ -455,7 +481,7 @@ function onToolsAdded(): void {
 
       <label class="field field-full">
         <span class="field-label">备注</span>
-        <el-input v-model="form.remark" placeholder="选填" @change="save" />
+        <el-input v-model="form.remark" placeholder="选填" />
       </label>
 
       <div class="programs">
@@ -466,17 +492,32 @@ function onToolsAdded(): void {
             v-model="item.programNo"
             class="program-input"
             placeholder="如 O1234"
-            @change="saveProgram(item)"
           />
           <span class="field-label">备注</span>
           <el-input
             v-model="item.remark"
             class="program-remark"
             placeholder="选填"
-            @change="saveProgram(item)"
           />
           <span v-if="item.saving" class="state state-saving">保存中…</span>
           <span v-else-if="isProgramDirty(item)" class="state state-dirty">未保存</span>
+          <el-button
+            v-if="isProgramDirty(item)"
+            link
+            :disabled="item.saving"
+            @click="revertProgram(item)"
+          >
+            撤销
+          </el-button>
+          <el-button
+            v-if="isProgramDirty(item)"
+            link
+            type="primary"
+            :loading="item.saving"
+            @click="saveProgram(item)"
+          >
+            保存
+          </el-button>
           <el-button link type="danger" @click="confirmDeleteProgram(item)">删除</el-button>
         </div>
 
@@ -509,6 +550,16 @@ function onToolsAdded(): void {
           >
             查看程序
           </el-button>
+          <span class="bar-sep">|</span>
+          <el-link
+            v-if="item.source.currentVersionId !== null"
+            type="primary"
+            :href="versionDownloadUrl(item.source.currentVersionId)"
+            download
+          >
+            下载程序
+          </el-link>
+          <span v-else class="bar-text muted-action" title="还没有上传程序">下载程序</span>
           <span class="bar-sep">|</span>
           <el-button link type="primary" @click="openVersions(item)">版本历史</el-button>
         </div>
@@ -708,6 +759,10 @@ function onToolsAdded(): void {
 
 .bar-text {
   color: var(--el-text-color-regular);
+}
+
+.muted-action {
+  color: var(--el-text-color-placeholder);
 }
 
 .hint {

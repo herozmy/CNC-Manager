@@ -8,7 +8,7 @@
  *
  * 程序号由人工输入记录，这里不识别也不对比；programNo 只用于标题文案。
  */
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { DiffResult, UploadVersionResult, Version } from '../api/types'
 import { diffVersions, listVersions, setCurrentVersion, versionDownloadUrl } from '../api'
@@ -42,9 +42,6 @@ const newId = ref<number | null>(null)
 const diff = ref<DiffResult | null>(null)
 const diffLoading = ref(false)
 const switchingId = ref<number | null>(null)
-
-// 注意：本组件由父组件的 v-if 控制挂载，首次渲染时 modelValue 已经是 true，
-// 所以不能用 watch(visible) 来加载（首帧不会触发），必须挂 el-dialog 的 open 事件。
 
 async function load(): Promise<void> {
   loading.value = true
@@ -137,6 +134,21 @@ async function onOpen(): Promise<void> {
   await load()
 }
 
+// 父组件点击「版本历史」时会先设置目标程序，再通过 v-if 首次挂载本组件。
+// 此时 modelValue 首帧已经是 true，Element Plus 的 open 事件可能在监听器
+// 挂好前已经发出，造成第一次打开列表为空。immediate watcher 能覆盖首次挂载，
+// 也能在弹窗复用后切换程序时重新加载。
+watch(
+  () => [props.modelValue, props.programId] as const,
+  ([isOpen], previous) => {
+    const [wasOpen, oldProgramId] = previous ?? [false, 0]
+    if (isOpen && (!wasOpen || oldProgramId !== props.programId)) {
+      void onOpen()
+    }
+  },
+  { immediate: true }
+)
+
 async function onFileChange(event: Event): Promise<void> {
   const input = event.target as HTMLInputElement
   const file = input.files?.[0]
@@ -177,7 +189,6 @@ function onToolsAdded(): void {
     :title="`版本历史 · ${programNo}`"
     width="920px"
     top="6vh"
-    @open="onOpen"
   >
     <el-alert
       v-if="loadError"
@@ -234,8 +245,8 @@ function onToolsAdded(): void {
             <td class="cell-note">{{ item.changeNote || '—' }}</td>
             <td class="col-time">{{ formatDateTime(item.createdAt) }}</td>
             <td class="col-act">
-              <el-link type="primary" :href="versionDownloadUrl(item.id)" target="_blank">
-                下载
+              <el-link type="primary" :href="versionDownloadUrl(item.id)" download>
+                下载此版本
               </el-link>
               <el-button
                 v-if="!item.isCurrent"
