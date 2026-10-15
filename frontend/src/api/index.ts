@@ -95,6 +95,10 @@ export function createOperation(drawingId: number, input: OperationInput): Promi
   return apiPost<Operation>(`/drawings/${drawingId}/operations`, input)
 }
 
+export function reorderOperations(drawingId: number, ids: number[]): Promise<void> {
+  return apiPut<void>(`/drawings/${drawingId}/operations/order`, { ids })
+}
+
 export function updateOperation(id: number, input: OperationInput): Promise<Operation> {
   return apiPut<Operation>(`/operations/${id}`, input)
 }
@@ -107,6 +111,10 @@ export function deleteOperation(id: number): Promise<void> {
 
 export function createProgram(operationId: number, input: ProgramInput): Promise<Program> {
   return apiPost<Program>(`/operations/${operationId}/programs`, input)
+}
+
+export function reorderPrograms(operationId: number, ids: number[]): Promise<void> {
+  return apiPut<void>(`/operations/${operationId}/programs/order`, { ids })
 }
 
 export function updateProgram(id: number, input: ProgramInput): Promise<Program> {

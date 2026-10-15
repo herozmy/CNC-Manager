@@ -53,6 +53,7 @@ type Operation struct {
 	DrawingID   int64   `db:"drawing_id" json:"drawingId"`
 	OpNo        int     `db:"op_no" json:"opNo"`
 	OpName      string  `db:"op_name" json:"opName"`
+	SortOrder   int     `db:"sort_order" json:"sortOrder"`
 	MachineID   *int64  `db:"machine_id" json:"machineId"`
 	MachineName string  `db:"machine_name" json:"machineName"`
 	Fixture     string  `db:"fixture" json:"fixture"`
@@ -74,6 +75,7 @@ type Program struct {
 	ProgramNo        string `db:"program_no" json:"programNo"`
 	ProgramName      string `db:"program_name" json:"programName"`
 	Controller       string `db:"controller" json:"controller"`
+	SortOrder        int    `db:"sort_order" json:"sortOrder"`
 	CurrentVersionID *int64 `db:"current_version_id" json:"currentVersionId"`
 	Remark           string `db:"remark" json:"remark"`
 	CreatedAt        string `db:"created_at" json:"createdAt"`
@@ -246,6 +248,7 @@ type DetailProgram struct {
 	ProgramNo        string        `json:"programNo"`
 	ProgramName      string        `json:"programName"`
 	Controller       string        `json:"controller"`
+	SortOrder        int           `json:"sortOrder"`
 	CurrentVersionID *int64        `json:"currentVersionId"`
 	CurrentVersionNo *int          `json:"currentVersionNo"`
 	VersionCount     int           `json:"versionCount"`
@@ -258,6 +261,7 @@ type DetailOperation struct {
 	ID          int64           `json:"id"`
 	OpNo        int             `json:"opNo"`
 	OpName      string          `json:"opName"`
+	SortOrder   int             `json:"sortOrder"`
 	MachineID   *int64          `json:"machineId"`
 	MachineName string          `json:"machineName"`
 	Fixture     string          `json:"fixture"`

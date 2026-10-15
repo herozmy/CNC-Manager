@@ -99,12 +99,14 @@ func (s *Server) Router() http.Handler {
 			r.Get("/drawings/{id}/detail", s.handleDrawingDetail)
 			r.Get("/drawings/{id}/operations", s.handleListOperations)
 			r.Post("/drawings/{id}/operations", s.handleCreateOperation)
+			r.Put("/drawings/{id}/operations/order", s.handleReorderOperations)
 
 			// 工序
 			r.Put("/operations/{id}", s.handleUpdateOperation)
 			r.Delete("/operations/{id}", s.handleDeleteOperation)
 			r.Get("/operations/{id}/programs", s.handleListPrograms)
 			r.Post("/operations/{id}/programs", s.handleCreateProgram)
+			r.Put("/operations/{id}/programs/order", s.handleReorderPrograms)
 
 			// 程序
 			r.Get("/programs/{id}", s.handleGetProgram)

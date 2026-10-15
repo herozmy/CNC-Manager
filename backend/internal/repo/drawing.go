@@ -2,6 +2,7 @@ package repo
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"cnccool/internal/domain"
@@ -120,7 +121,7 @@ func (r *Repo) DeleteDrawing(ctx context.Context, id int64) error {
 // ---------------------------------------------------------------------------
 
 const operationCols = `o.id, o.drawing_id, o.op_no, o.op_name, o.machine_id,
-	COALESCE(m.name, '') AS machine_name, o.fixture, o.z_height_milli, o.remark,
+	o.sort_order, COALESCE(m.name, '') AS machine_name, o.fixture, o.z_height_milli, o.remark,
 	o.created_at, o.updated_at,
 	(SELECT COUNT(*) FROM nc_program p WHERE p.operation_id = o.id) AS program_count`
 
@@ -129,7 +130,7 @@ func (r *Repo) ListOperations(ctx context.Context, drawingID int64) ([]domain.Op
 	items := []domain.Operation{}
 	q := `SELECT ` + operationCols + ` FROM operation o
 	      LEFT JOIN machine m ON m.id = o.machine_id
-	      WHERE o.drawing_id = ? ORDER BY o.op_no`
+	      WHERE o.drawing_id = ? ORDER BY o.sort_order, o.id`
 	if err := r.db.SelectContext(ctx, &items, q, drawingID); err != nil {
 		return nil, wrap(err)
 	}
@@ -160,10 +161,15 @@ func (r *Repo) CreateOperation(ctx context.Context, drawingID int64, in domain.O
 	op.FillMilli()
 
 	now := domain.Now()
+	var nextOrder int
+	if err := r.db.GetContext(ctx, &nextOrder,
+		`SELECT COALESCE(MAX(sort_order), 0) + 1 FROM operation WHERE drawing_id = ?`, drawingID); err != nil {
+		return nil, wrap(err)
+	}
 	res, err := r.db.ExecContext(ctx,
-		`INSERT INTO operation (drawing_id, op_no, op_name, machine_id, fixture, z_height_milli, remark, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		drawingID, op.OpNo, op.OpName, op.MachineID, op.Fixture, op.ZHeightMilli, op.Remark, now, now)
+		`INSERT INTO operation (drawing_id, op_no, op_name, machine_id, sort_order, fixture, z_height_milli, remark, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		drawingID, op.OpNo, op.OpName, op.MachineID, nextOrder, op.Fixture, op.ZHeightMilli, op.Remark, now, now)
 	if err != nil {
 		return nil, wrap(err)
 	}
@@ -175,6 +181,42 @@ func (r *Repo) CreateOperation(ctx context.Context, drawingID int64, in domain.O
 		return nil, err
 	}
 	return r.GetOperation(ctx, id)
+}
+
+// ReorderOperations 按完整 ID 顺序重排一张图纸里的工序。
+func (r *Repo) ReorderOperations(ctx context.Context, drawingID int64, ids []int64) error {
+	existing, err := r.ListOperations(ctx, drawingID)
+	if err != nil {
+		return err
+	}
+	if len(existing) != len(ids) {
+		return fmt.Errorf("%w: 排序列表必须包含该图纸的全部工序", domain.ErrInvalid)
+	}
+	allowed := make(map[int64]bool, len(existing))
+	for _, op := range existing {
+		allowed[op.ID] = true
+	}
+	seen := make(map[int64]bool, len(ids))
+	for _, id := range ids {
+		if !allowed[id] || seen[id] {
+			return fmt.Errorf("%w: 排序列表包含无效或重复的工序", domain.ErrInvalid)
+		}
+		seen[id] = true
+	}
+	tx, err := r.db.BeginTxx(ctx, nil)
+	if err != nil {
+		return wrap(err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	for index, id := range ids {
+		if _, err := tx.ExecContext(ctx, `UPDATE operation SET sort_order = ?, updated_at = ? WHERE id = ? AND drawing_id = ?`, index+1, domain.Now(), id, drawingID); err != nil {
+			return wrap(err)
+		}
+	}
+	if err := r.log(ctx, tx, "reorder", "drawing", drawingID, "调整工序显示顺序"); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // UpdateOperation 修改工序。装夹方式、Z 轴垫高、备注都在这里更新。

@@ -36,7 +36,7 @@ func (r *Repo) DrawingDetail(ctx context.Context, drawingID int64) (*domain.Draw
 	}
 	progs := []domain.Program{}
 	pq, pargs, err := sqlx.In(`SELECT `+programCols+` FROM nc_program p
-		WHERE p.operation_id IN (?) ORDER BY p.operation_id, p.program_no`, opIDs)
+		WHERE p.operation_id IN (?) ORDER BY p.operation_id, p.sort_order, p.id`, opIDs)
 	if err != nil {
 		return nil, wrap(err)
 	}
@@ -80,7 +80,7 @@ func (r *Repo) DrawingDetail(ctx context.Context, drawingID int64) (*domain.Draw
 		}
 		progsByOp[p.OperationID] = append(progsByOp[p.OperationID], domain.DetailProgram{
 			ID: p.ID, ProgramNo: p.ProgramNo, ProgramName: p.ProgramName,
-			Controller: p.Controller, CurrentVersionID: p.CurrentVersionID,
+			Controller: p.Controller, SortOrder: p.SortOrder, CurrentVersionID: p.CurrentVersionID,
 			CurrentVersionNo: p.CurrentVersionNo, VersionCount: p.VersionCount,
 			Remark: p.Remark, Tools: tools,
 		})
@@ -93,6 +93,7 @@ func (r *Repo) DrawingDetail(ctx context.Context, drawingID int64) (*domain.Draw
 		}
 		out.Operations = append(out.Operations, domain.DetailOperation{
 			ID: o.ID, OpNo: o.OpNo, OpName: o.OpName,
+			SortOrder: o.SortOrder,
 			MachineID: o.MachineID, MachineName: o.MachineName,
 			Fixture: o.Fixture, ZHeight: o.ZHeight, Remark: o.Remark,
 			Programs: list,

@@ -24,6 +24,7 @@ import {
   deleteOperation,
   deleteProgram,
   getProgramTools,
+  reorderPrograms,
   saveProgramTools,
   updateOperation,
   updateProgram,
@@ -188,6 +189,59 @@ interface ProgramForm {
 }
 
 const programForms = ref<ProgramForm[]>([])
+type ProgramSort = 'manual' | 'asc' | 'desc'
+const programSort = ref<ProgramSort>('manual')
+/** 程序默认只显示列表；一次只展开一个程序的完整信息。 */
+const selectedProgramId = ref<number | null>(null)
+const draggingProgramId = ref<number | null>(null)
+const reordering = ref(false)
+const programNameCollator = new Intl.Collator('zh-CN', { numeric: true, sensitivity: 'base' })
+
+/** 程序按名称自然排序：O2 排在 O10 前；切换排序只影响显示，不改数据库。 */
+const sortedProgramForms = computed(() => {
+  if (programSort.value === 'manual') return programForms.value
+  const direction = programSort.value === 'asc' ? 1 : -1
+  return [...programForms.value].sort((a, b) => {
+    const byName = programNameCollator.compare(a.programNo.trim(), b.programNo.trim())
+    return (byName || a.source.id - b.source.id) * direction
+  })
+})
+
+function onProgramDragStart(item: ProgramForm, event: DragEvent): void {
+  if (programSort.value !== 'manual' || reordering.value) {
+    event.preventDefault()
+    return
+  }
+  draggingProgramId.value = item.source.id
+  event.dataTransfer?.setData('text/plain', String(item.source.id))
+  if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move'
+}
+
+async function onProgramDrop(target: ProgramForm, event: DragEvent): Promise<void> {
+  event.preventDefault()
+  const sourceId = draggingProgramId.value
+  draggingProgramId.value = null
+  if (sourceId === null || sourceId === target.source.id || reordering.value) return
+  const from = programForms.value.findIndex((item) => item.source.id === sourceId)
+  const to = programForms.value.findIndex((item) => item.source.id === target.source.id)
+  if (from < 0 || to < 0) return
+  const previous = [...programForms.value]
+  const next = [...programForms.value]
+  const [moved] = next.splice(from, 1)
+  next.splice(to, 0, moved)
+  programForms.value = next
+  reordering.value = true
+  try {
+    await reorderPrograms(props.operation.id, next.map((item) => item.source.id))
+    ElMessage.success('程序顺序已保存')
+    emit('reload')
+  } catch (error) {
+    programForms.value = previous
+    ElMessage.error(errorMessage(error))
+  } finally {
+    reordering.value = false
+  }
+}
 
 function resetPrograms(): void {
   programForms.value = props.operation.programs.map((program) => ({
@@ -198,6 +252,9 @@ function resetPrograms(): void {
     baselineRemark: program.remark,
     saving: false
   }))
+  if (!programForms.value.some((item) => item.source.id === selectedProgramId.value)) {
+    selectedProgramId.value = null
+  }
 }
 
 watch(() => props.operation.programs, resetPrograms, { immediate: true })
@@ -495,19 +552,63 @@ async function onToolsAdded(programId: number): Promise<void> {
       </label>
 
       <div class="programs">
-      <div v-for="item in programForms" :key="item.source.id" class="program">
-        <div class="program-head">
+      <div class="programs-head">
+        <span class="programs-title">程序列表</span>
+        <el-select v-model="programSort" size="small" class="program-sort" aria-label="程序名排序">
+          <el-option label="手动排序" value="manual" />
+          <el-option label="程序名升序" value="asc" />
+          <el-option label="程序名降序" value="desc" />
+        </el-select>
+      </div>
+
+      <div
+        v-for="item in sortedProgramForms"
+        :key="item.source.id"
+        class="program"
+        :class="{ 'program-dragging': draggingProgramId === item.source.id }"
+        @dragover.prevent
+        @drop="onProgramDrop(item, $event)"
+      >
+        <div
+          class="program-head"
+          :class="{ 'program-head-active': selectedProgramId === item.source.id }"
+          role="button"
+          tabindex="0"
+          :aria-expanded="selectedProgramId === item.source.id"
+          @click="selectedProgramId = selectedProgramId === item.source.id ? null : item.source.id"
+          @keyup.enter="selectedProgramId = selectedProgramId === item.source.id ? null : item.source.id"
+        >
+          <span
+            class="program-drag-handle"
+            :class="{ disabled: programSort !== 'manual' || reordering }"
+            :draggable="programSort === 'manual' && !reordering"
+            title="拖动调整程序顺序"
+            @click.stop
+            @dragstart="onProgramDragStart(item, $event)"
+            @dragend="draggingProgramId = null"
+          >⠿</span>
+          <span class="program-arrow">{{ selectedProgramId === item.source.id ? '▼' : '▶' }}</span>
+          <span class="program-list-name">{{ item.baselineNo }}</span>
+          <span class="program-list-version">当前第 {{ item.source.currentVersionNo ?? '—' }} 版</span>
+          <span v-if="item.baselineRemark" class="program-list-remark">{{ item.baselineRemark }}</span>
+          <span class="program-list-count">{{ item.source.tools.length }} 把刀</span>
+        </div>
+
+        <div v-if="selectedProgramId === item.source.id" class="program-detail">
+        <div class="program-edit-row">
           <span class="field-label">程序名</span>
           <el-input
             v-model="item.programNo"
             class="program-input"
             placeholder="如 O1234"
+            @click.stop
           />
           <span class="field-label">备注</span>
           <el-input
             v-model="item.remark"
             class="program-remark"
             placeholder="选填"
+            @click.stop
           />
           <span v-if="item.saving" class="state state-saving">保存中…</span>
           <span v-else-if="isProgramDirty(item)" class="state state-dirty">未保存</span>
@@ -515,7 +616,7 @@ async function onToolsAdded(programId: number): Promise<void> {
             v-if="isProgramDirty(item)"
             link
             :disabled="item.saving"
-            @click="revertProgram(item)"
+            @click.stop="revertProgram(item)"
           >
             撤销
           </el-button>
@@ -524,20 +625,20 @@ async function onToolsAdded(programId: number): Promise<void> {
             link
             type="primary"
             :loading="item.saving"
-            @click="saveProgram(item)"
+            @click.stop="saveProgram(item)"
           >
             保存
           </el-button>
-          <el-button link type="danger" @click="confirmDeleteProgram(item)">删除</el-button>
+          <el-button link type="danger" @click.stop="confirmDeleteProgram(item)">删除</el-button>
         </div>
 
-        <ToolTable
-          :tools="item.source.tools"
-          :saving="savingToolsId === item.source.id"
-          @save="onSaveTools(item, $event)"
-        />
+          <ToolTable
+            :tools="item.source.tools"
+            :saving="savingToolsId === item.source.id"
+            @save="onSaveTools(item, $event)"
+          />
 
-        <div class="program-bar">
+          <div class="program-bar">
           <el-button
             link
             type="primary"
@@ -572,19 +673,20 @@ async function onToolsAdded(programId: number): Promise<void> {
           <span v-else class="bar-text muted-action" title="还没有上传程序">下载程序</span>
           <span class="bar-sep">|</span>
           <el-button link type="primary" @click="openVersions(item)">版本历史</el-button>
-        </div>
+          </div>
 
-        <!-- 上传成功后就在上传区下面给出识别结果，可以在那里改完再加入 -->
-        <NcParsePanel
-          v-if="uploadResultOf(item.source.id)"
-          :parse="uploadResultOf(item.source.id)?.parse ?? null"
-          :program-id="item.source.id"
-          :version-id="uploadResultOf(item.source.id)?.id ?? 0"
-          :title="`第 ${uploadResultOf(item.source.id)?.versionNo ?? ''} 版上传成功`"
-          closable
-          @tools-added="onToolsAdded(item.source.id)"
-          @close="dismissUploadResult(item.source.id)"
-        />
+          <!-- 上传成功后就在上传区下面给出识别结果，可以在那里改完再加入 -->
+          <NcParsePanel
+            v-if="uploadResultOf(item.source.id)"
+            :parse="uploadResultOf(item.source.id)?.parse ?? null"
+            :program-id="item.source.id"
+            :version-id="uploadResultOf(item.source.id)?.id ?? 0"
+            :title="`第 ${uploadResultOf(item.source.id)?.versionNo ?? ''} 版上传成功`"
+            closable
+            @tools-added="onToolsAdded(item.source.id)"
+            @close="dismissUploadResult(item.source.id)"
+          />
+        </div>
       </div>
 
       <p v-if="programForms.length === 0" class="hint">该工序还没有程序，点击下方「+ 添加程序」。</p>
@@ -728,6 +830,24 @@ async function onToolsAdded(programId: number): Promise<void> {
   border-top: 1px solid var(--el-border-color-lighter);
 }
 
+.programs-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.programs-title {
+  color: var(--el-text-color-regular);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.program-sort {
+  width: 132px;
+}
+
 .program {
   padding: 10px 12px 12px;
   border: 1px solid var(--el-border-color-lighter);
@@ -739,7 +859,85 @@ async function onToolsAdded(programId: number): Promise<void> {
   margin-top: 12px;
 }
 
+.program-dragging {
+  opacity: 0.55;
+}
+
 .program-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 34px;
+  padding: 2px 4px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.program-head:hover,
+.program-head-active {
+  background: var(--el-fill-color-light);
+}
+
+.program-head:focus-visible {
+  outline: 2px solid var(--el-color-primary-light-5);
+}
+
+.program-arrow {
+  width: 14px;
+  color: var(--el-text-color-secondary);
+  font-size: 11px;
+}
+
+.program-drag-handle {
+  color: var(--el-text-color-secondary);
+  font-size: 18px;
+  line-height: 1;
+  cursor: grab;
+  user-select: none;
+}
+
+.program-drag-handle:active {
+  cursor: grabbing;
+}
+
+.program-drag-handle.disabled {
+  color: var(--el-text-color-placeholder);
+  cursor: not-allowed;
+}
+
+.program-list-name {
+  min-width: 150px;
+  color: var(--el-text-color-primary);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.program-list-version,
+.program-list-count,
+.program-list-remark {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
+
+.program-list-remark {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.program-list-count {
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.program-detail {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--el-border-color-lighter);
+}
+
+.program-edit-row {
   display: flex;
   align-items: center;
   gap: 10px;

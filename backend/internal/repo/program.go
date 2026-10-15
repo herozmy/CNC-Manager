@@ -13,7 +13,7 @@ import (
 
 // programCols 是查询程序时固定使用的列，附带当前版本号和版本总数。
 const programCols = `p.id, p.operation_id, p.program_no, p.program_name, p.controller,
-	p.current_version_id, p.remark, p.created_at, p.updated_at,
+	p.sort_order, p.current_version_id, p.remark, p.created_at, p.updated_at,
 	(SELECT v.version_no FROM nc_version v WHERE v.id = p.current_version_id) AS current_version_no,
 	(SELECT COUNT(*) FROM nc_version v WHERE v.program_id = p.id) AS version_count`
 
@@ -24,7 +24,7 @@ const programCols = `p.id, p.operation_id, p.program_no, p.program_name, p.contr
 // ListPrograms 取某工序下的全部程序。
 func (r *Repo) ListPrograms(ctx context.Context, operationID int64) ([]domain.Program, error) {
 	items := []domain.Program{}
-	q := `SELECT ` + programCols + ` FROM nc_program p WHERE p.operation_id = ? ORDER BY p.program_no`
+	q := `SELECT ` + programCols + ` FROM nc_program p WHERE p.operation_id = ? ORDER BY p.sort_order, p.id`
 	if err := r.db.SelectContext(ctx, &items, q, operationID); err != nil {
 		return nil, wrap(err)
 	}
@@ -44,10 +44,15 @@ func (r *Repo) GetProgram(ctx context.Context, id int64) (*domain.Program, error
 // CreateProgram 在某工序下新增程序。
 func (r *Repo) CreateProgram(ctx context.Context, operationID int64, in domain.ProgramInput) (*domain.Program, error) {
 	now := domain.Now()
+	var nextOrder int
+	if err := r.db.GetContext(ctx, &nextOrder,
+		`SELECT COALESCE(MAX(sort_order), 0) + 1 FROM nc_program WHERE operation_id = ?`, operationID); err != nil {
+		return nil, wrap(err)
+	}
 	res, err := r.db.ExecContext(ctx,
-		`INSERT INTO nc_program (operation_id, program_no, program_name, controller, remark, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		operationID, strings.TrimSpace(in.ProgramNo), in.ProgramName, in.Controller, in.Remark, now, now)
+		`INSERT INTO nc_program (operation_id, program_no, program_name, controller, sort_order, remark, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		operationID, strings.TrimSpace(in.ProgramNo), in.ProgramName, in.Controller, nextOrder, in.Remark, now, now)
 	if err != nil {
 		return nil, wrap(err)
 	}
@@ -59,6 +64,42 @@ func (r *Repo) CreateProgram(ctx context.Context, operationID int64, in domain.P
 		return nil, err
 	}
 	return r.GetProgram(ctx, id)
+}
+
+// ReorderPrograms 按前端拖动后的完整 ID 顺序重排一道工序里的程序。
+func (r *Repo) ReorderPrograms(ctx context.Context, operationID int64, ids []int64) error {
+	existing, err := r.ListPrograms(ctx, operationID)
+	if err != nil {
+		return err
+	}
+	if len(existing) != len(ids) {
+		return fmt.Errorf("%w: 排序列表必须包含该工序的全部程序", domain.ErrInvalid)
+	}
+	allowed := make(map[int64]bool, len(existing))
+	for _, p := range existing {
+		allowed[p.ID] = true
+	}
+	seen := make(map[int64]bool, len(ids))
+	for _, id := range ids {
+		if !allowed[id] || seen[id] {
+			return fmt.Errorf("%w: 排序列表包含无效或重复的程序", domain.ErrInvalid)
+		}
+		seen[id] = true
+	}
+	tx, err := r.db.BeginTxx(ctx, nil)
+	if err != nil {
+		return wrap(err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	for index, id := range ids {
+		if _, err := tx.ExecContext(ctx, `UPDATE nc_program SET sort_order = ?, updated_at = ? WHERE id = ? AND operation_id = ?`, index+1, domain.Now(), id, operationID); err != nil {
+			return wrap(err)
+		}
+	}
+	if err := r.log(ctx, tx, "reorder", "operation", operationID, "调整程序显示顺序"); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // UpdateProgram 修改程序基本信息。注意：改这里不会影响已有版本文件。

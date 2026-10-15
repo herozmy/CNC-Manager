@@ -109,6 +109,24 @@ func (s *Server) handleCreateProgram(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, p)
 }
 
+func (s *Server) handleReorderPrograms(w http.ResponseWriter, r *http.Request) {
+	operationID, ok := pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	var body struct {
+		IDs []int64 `json:"ids"`
+	}
+	if !decodeJSON(w, r, &body) {
+		return
+	}
+	if err := s.repo.ReorderPrograms(r.Context(), operationID, body.IDs); err != nil {
+		s.fail(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (s *Server) handleUpdateProgram(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathID(w, r, "id")
 	if !ok {

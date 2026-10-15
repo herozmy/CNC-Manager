@@ -122,6 +122,7 @@ export interface Operation {
   drawingId: number
   opNo: number
   opName: string
+  sortOrder: number
   machineId: number | null
   machineName: string
   fixture: string
@@ -151,6 +152,7 @@ export interface Program {
   programNo: string
   programName: string
   controller: string
+  sortOrder: number
   currentVersionId: number | null
   currentVersionNo: number | null
   versionCount: number
@@ -356,6 +358,7 @@ export interface DetailProgram {
   programNo: string
   programName: string
   controller: string
+  sortOrder: number
   currentVersionId: number | null
   currentVersionNo: number | null
   versionCount: number
@@ -368,6 +371,7 @@ export interface DetailOperation {
   id: number
   opNo: number
   opName: string
+  sortOrder: number
   machineId: number | null
   machineName: string
   fixture: string

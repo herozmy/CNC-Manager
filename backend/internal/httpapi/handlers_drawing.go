@@ -219,6 +219,24 @@ func (s *Server) handleCreateOperation(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, op)
 }
 
+func (s *Server) handleReorderOperations(w http.ResponseWriter, r *http.Request) {
+	drawingID, ok := pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	var body struct {
+		IDs []int64 `json:"ids"`
+	}
+	if !decodeJSON(w, r, &body) {
+		return
+	}
+	if err := s.repo.ReorderOperations(r.Context(), drawingID, body.IDs); err != nil {
+		s.fail(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (s *Server) handleUpdateOperation(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathID(w, r, "id")
 	if !ok {

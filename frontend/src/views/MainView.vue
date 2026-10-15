@@ -24,6 +24,7 @@ import {
   deleteDrawing,
   getDrawingDetail,
   listDrawings,
+  reorderOperations,
   updateDrawing
 } from '../api'
 import { errorMessage } from '../api/client'
@@ -79,9 +80,37 @@ const detail = ref<DrawingDetail | null>(null)
 const detailLoading = ref(false)
 const savingDrawing = ref(false)
 
-const operations = computed(() =>
-  [...(detail.value?.operations ?? [])].sort((a, b) => a.opNo - b.opNo)
-)
+const operations = computed(() => detail.value?.operations ?? [])
+const selectedOperationId = ref<number | null>(null)
+const draggingOperationId = ref<number | null>(null)
+const reorderingOperations = ref(false)
+
+async function onOperationDrop(targetId: number, event: DragEvent): Promise<void> {
+  event.preventDefault()
+  const sourceId = draggingOperationId.value
+  draggingOperationId.value = null
+  const drawingId = selectedId.value
+  if (sourceId === null || sourceId === targetId || drawingId === null || reorderingOperations.value) return
+  const from = operations.value.findIndex((item) => item.id === sourceId)
+  const to = operations.value.findIndex((item) => item.id === targetId)
+  if (from < 0 || to < 0 || !detail.value) return
+  const previous = [...detail.value.operations]
+  const next = [...detail.value.operations]
+  const [moved] = next.splice(from, 1)
+  next.splice(to, 0, moved)
+  detail.value = { ...detail.value, operations: next }
+  reorderingOperations.value = true
+  try {
+    await reorderOperations(drawingId, next.map((item) => item.id))
+    ElMessage.success('工序顺序已保存')
+    await loadDetail()
+  } catch (error) {
+    detail.value = { ...detail.value, operations: previous }
+    ElMessage.error(errorMessage(error))
+  } finally {
+    reorderingOperations.value = false
+  }
+}
 
 async function loadDetail(): Promise<void> {
   const id = selectedId.value
@@ -333,12 +362,41 @@ async function confirmCreateOperation(): Promise<void> {
             <span class="section-count">{{ operations.length }} 道</span>
           </div>
 
-          <OperationCard
+          <div
             v-for="item in operations"
             :key="item.id"
-            :operation="item"
-            @reload="loadDetail"
-          />
+            class="operation-list-item"
+            :class="{ 'operation-dragging': draggingOperationId === item.id }"
+            @dragover.prevent
+            @drop="onOperationDrop(item.id, $event)"
+          >
+            <div
+              class="operation-list-row"
+              role="button"
+              tabindex="0"
+              :aria-expanded="selectedOperationId === item.id"
+              @click="selectedOperationId = selectedOperationId === item.id ? null : item.id"
+              @keyup.enter="selectedOperationId = selectedOperationId === item.id ? null : item.id"
+            >
+              <span
+                class="operation-drag-handle"
+                :draggable="!reorderingOperations"
+                title="拖动调整工序顺序"
+                @click.stop
+                @dragstart="draggingOperationId = item.id"
+                @dragend="draggingOperationId = null"
+              >⠿</span>
+              <span>{{ selectedOperationId === item.id ? '▼' : '▶' }}</span>
+              <strong>工序 {{ formatOpNo(item.opNo) }}</strong>
+              <span class="operation-summary">{{ item.fixture || '未填写装夹方式' }}</span>
+              <span class="operation-summary">{{ item.programs.length }} 个程序</span>
+            </div>
+            <OperationCard
+              v-if="selectedOperationId === item.id"
+              :operation="item"
+              @reload="loadDetail"
+            />
+          </div>
 
           <p v-if="operations.length === 0" class="empty-block">
             这张图纸还没有工序，点击下方「+ 添加工序号」新增一道。
@@ -483,6 +541,49 @@ async function confirmCreateOperation(): Promise<void> {
 .section-count {
   color: var(--el-text-color-secondary);
   font-size: 12px;
+}
+
+.operation-list-item + .operation-list-item {
+  margin-top: 8px;
+}
+
+.operation-list-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 6px;
+  background: var(--el-bg-color);
+  cursor: pointer;
+}
+
+.operation-list-row:hover {
+  background: var(--el-fill-color-light);
+}
+
+.operation-drag-handle {
+  color: var(--el-text-color-secondary);
+  font-size: 18px;
+  cursor: grab;
+  user-select: none;
+}
+
+.operation-summary {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
+
+.operation-summary:last-child {
+  margin-left: auto;
+}
+
+.operation-dragging {
+  opacity: 0.55;
+}
+
+.operation-list-item :deep(.card) {
+  margin-top: 6px;
 }
 
 .empty-block {
