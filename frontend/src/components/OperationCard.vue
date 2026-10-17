@@ -533,17 +533,6 @@ async function onToolsAdded(programId: number): Promise<void> {
           <span class="field-label">装夹方式</span>
           <el-input v-model="form.fixture" placeholder="如 三爪卡盘" />
         </label>
-        <label class="field">
-          <span class="field-label">Z轴垫高</span>
-          <el-input-number
-            v-model="form.zHeight"
-            :min="0"
-            :precision="3"
-            :controls="false"
-            :value-on-clear="0"
-          />
-          <span class="unit">mm</span>
-        </label>
       </div>
 
       <label class="field field-full">
@@ -792,7 +781,7 @@ async function onToolsAdded(programId: number): Promise<void> {
 
 .fields {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px 24px;
 }
 
@@ -813,15 +802,8 @@ async function onToolsAdded(programId: number): Promise<void> {
   text-align: right;
 }
 
-.field :deep(.el-input),
-.field :deep(.el-input-number) {
+.field :deep(.el-input) {
   flex: 1;
-}
-
-.unit {
-  flex: 0 0 auto;
-  color: var(--el-text-color-secondary);
-  font-size: 12px;
 }
 
 .programs {

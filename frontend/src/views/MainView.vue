@@ -340,7 +340,7 @@ async function confirmCreateOperation(): Promise<void> {
 
     <main class="detail">
       <div class="user-bar">
-        <span>{{ auth.user.value?.displayName || auth.user.value?.username }}</span>
+        <span>{{ auth.user.value?.username }}</span>
         <el-button link type="primary" @click="auth.signOut">退出登录</el-button>
       </div>
       <div v-if="loadError" class="error-bar">

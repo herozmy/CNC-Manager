@@ -41,7 +41,7 @@ rem first retry succeeds. Doing it first means that if we never get the file
 rem back, nothing at all has been touched.
 set /a WAITED=0
 :retry_exe
-move /y "%STAGE%\cnccool-server.exe" "cnccool-server.exe" >nul 2>&1
+move /y "%STAGE%\CNC-Manager.exe" "CNC-Manager.exe" >nul 2>&1
 if not errorlevel 1 goto swap_web
 set /a WAITED+=1
 if %WAITED% GEQ 120 goto timeout
@@ -95,7 +95,7 @@ rem CNC_ADDR is passed through so a server started on a custom port
 rem comes back on the same port.
 set "CNC_NO_BROWSER=1"
 set "CNC_ADDR=@@ADDR@@"
-start "" cnccool-server.exe
+start "" CNC-Manager.exe
 
 :done
 endlocal
@@ -104,7 +104,7 @@ endlocal
 // ApplyRequest 是生成替换脚本需要的全部信息。
 type ApplyRequest struct {
 	Layout Layout
-	// PID 是当前服务的进程号。脚本会等这个进程退出，而不是等「叫 cnccool-server.exe
+	// PID 是当前服务的进程号。脚本会等这个进程退出，而不是等「叫 CNC-Manager.exe
 	// 的进程」——同一台机器上完全可能装着两份，按名字等会等错人。
 	PID int
 	// Addr 是服务当前监听的地址，重启时要沿用，否则换了端口用户就找不到了。

@@ -47,9 +47,9 @@ Write-Host "按 Ctrl+C 停止`n" -ForegroundColor DarkGray
 Push-Location $backend
 try {
     if ($Rebuild) {
-        & $goExe build -ldflags $ldflags -o 'cnccool-server.exe' '.\cmd\server'
+        & $goExe build -ldflags $ldflags -o 'CNC-Manager.exe' '.\cmd\server'
         if ($LASTEXITCODE -ne 0) { throw '编译失败' }
-        & '.\cnccool-server.exe'
+        & '.\CNC-Manager.exe'
     } else {
         & $goExe run -ldflags $ldflags '.\cmd\server'
     }

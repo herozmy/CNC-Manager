@@ -283,7 +283,7 @@ func TestWriteApplyScript(t *testing.T) {
 	if strings.Contains(script, "start.cmd") {
 		t.Errorf("发布版不再依赖 start.cmd，升级脚本应直接启动 exe")
 	}
-	if !strings.Contains(script, `start "" cnccool-server.exe`) {
+	if !strings.Contains(script, `start "" CNC-Manager.exe`) {
 		t.Errorf("升级脚本没有直接重启服务程序")
 	}
 

@@ -4,7 +4,7 @@
   产出：.local\release\cnccool-<版本>-windows-amd64.zip
   解压后的目录结构：
 
-      cnccool-server.exe   后端服务（接口和界面都由它提供）
+      CNC-Manager.exe      后端服务（接口和界面都由它提供）
       web\                 前端构建产物
       README.txt           使用说明
 
@@ -68,7 +68,8 @@ $env:CGO_ENABLED = '0'
 # -trimpath 去掉二进制里本机的绝对路径；-s -w 去掉调试信息，体积能小三分之一；
 # 版本号用 ldflags 注入，保证界面显示的版本和 VERSION 文件一致。
 $ldflags = "-H windowsgui -s -w -X main.version=$version"
-$exePath = Join-Path $stage 'cnccool-server.exe'
+$exeName = 'CNC-Manager.exe'
+$exePath = Join-Path $stage $exeName
 Push-Location $backend
 try {
     & $goExe build -trimpath -ldflags $ldflags -o $exePath '.\cmd\server'
@@ -77,7 +78,7 @@ try {
     Pop-Location
 }
 $exeMB = [math]::Round((Get-Item $exePath).Length / 1MB, 1)
-Write-Host "      cnccool-server.exe  $exeMB MB"
+Write-Host "      $exeName  $exeMB MB"
 
 # ---- 2. 前端 ------------------------------------------------------------
 if ($SkipFrontend) {
@@ -124,7 +125,7 @@ CNC 加工程序管理系统 $version
 怎么用
 ------------------------------------------------------------
 1. 把整个文件夹解压到任意位置，路径里尽量不要有特殊符号。
-2. 双击 cnccool-server.exe。
+2. 双击 CNC-Manager.exe。
 3. 浏览器会自动打开 http://127.0.0.1:8080，没自动打开就手动输这个地址。
 4. 想停止服务：右键系统托盘里的 CNC 图标，选择“退出”。
 
@@ -159,9 +160,9 @@ data\ 目录，就在 exe 旁边：
 方式二：手工替换
     1. 从系统托盘退出服务。
     2. 先备份 data\ 目录。
-    3. 用新版本的 cnccool-server.exe 和 web\ 覆盖旧的，
+    3. 用新版本的 CNC-Manager.exe 和 web\ 覆盖旧的，
        data\ 目录保持不动。
-    4. 重新双击 cnccool-server.exe。数据库结构升级在启动时自动完成。
+    4. 重新双击 CNC-Manager.exe。数据库结构升级在启动时自动完成。
 
 
 装完之后没反应 / 没装上
@@ -175,7 +176,7 @@ data\ 目录，就在 exe 旁边：
 服务突然连不上 / 页面报「无法连接后端服务」
     先看 data\logs\server.log 的最后几行，那里记着每一次请求。
     如果日志停在某个时间点之后就没动静了，说明服务中途停了
-    （进程被结束或被杀毒软件拦截了），重新双击 cnccool-server.exe 即可。
+    （进程被结束或被杀毒软件拦截了），重新双击 CNC-Manager.exe 即可。
     日志超过 4MB 会自动滚动成 server.log.1，只留一代。
 
 浏览器打不开页面

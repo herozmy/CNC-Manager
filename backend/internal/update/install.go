@@ -13,7 +13,7 @@ import (
 
 const (
 	// exeName 是包内可执行文件的名字，也是「这确实是个免安装包」的主要依据。
-	exeName = "cnccool-server.exe"
+	exeName = "CNC-Manager.exe"
 	// webIndexRel 和 versionRel 是包里另外两个必需文件。
 	webIndexRel = "web/index.html"
 	versionRel  = "VERSION"
@@ -186,7 +186,7 @@ func safeJoin(destDir, name string) (string, error) {
 	return target, nil
 }
 
-// FindPackageRoot 找到包里 cnccool-server.exe 所在的目录。
+// FindPackageRoot 找到包里 CNC-Manager.exe 所在的目录。
 //
 // 大多数人拿到的是我们发布的那个 zip，exe 就在根目录；但也有人会先解压、
 // 再自己压回去，于是多套了一层文件夹。这里把这种情况也认下来，
