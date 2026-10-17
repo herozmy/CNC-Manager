@@ -23,18 +23,76 @@ import {
   createOperation,
   deleteDrawing,
   getDrawingDetail,
+  listBackups,
   listDrawings,
   reorderOperations,
+  restoreBackup,
+  restoreStoredBackup,
   updateDrawing
 } from '../api'
 import { errorMessage } from '../api/client'
-import type { Drawing, DrawingDetail, DrawingInput } from '../api/types'
+import type { BackupItem, Drawing, DrawingDetail, DrawingInput } from '../api/types'
 import UpdateDialog from '../components/UpdateDialog.vue'
 import { useUpdate } from '../composables/useUpdate'
 import { useAuth } from '../composables/useAuth'
 import { formatOpNo, parseOpNo } from '../utils/format'
 
 const auth = useAuth()
+const restoreInput = ref<HTMLInputElement | null>(null)
+const backupVisible = ref(false)
+const backupLoading = ref(false)
+const backups = ref<BackupItem[]>([])
+
+async function openBackupManager(): Promise<void> {
+  backupVisible.value = true
+  backupLoading.value = true
+  try { backups.value = await listBackups() } catch (error) { ElMessage.error(errorMessage(error)) } finally { backupLoading.value = false }
+}
+
+async function downloadDatabaseBackup(): Promise<void> {
+  try {
+    await ElMessageBox.confirm(
+      '将生成完整迁移包，其中包含一致性数据库快照和全部 NC 原文件。文件较多时请耐心等待。',
+      '备份数据',
+      { confirmButtonText: '下载备份', cancelButtonText: '取消', type: 'info' }
+    )
+  } catch {
+    return
+  }
+  const link = document.createElement('a')
+  link.href = '/api/backup/database'
+  link.download = ''
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  window.setTimeout(() => { void openBackupManager() }, 800)
+}
+
+async function restoreHistory(item: BackupItem): Promise<void> {
+  try {
+    await ElMessageBox.confirm(`确定恢复到 ${item.id} 号备份吗？当前数据会被覆盖，其他历史备份不会删除。`, `恢复 ${item.id} 号备份`, { confirmButtonText: '确认恢复并重启', cancelButtonText: '取消', type: 'warning' })
+    await restoreStoredBackup(item.id)
+    ElMessage.success('备份已校验，正在恢复并重启服务…')
+  } catch (error) { if (error !== 'cancel' && error !== 'close') ElMessage.error(errorMessage(error)) }
+}
+
+async function importBackup(event: Event): Promise<void> {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file) return
+  try {
+    await ElMessageBox.confirm(
+      `导入“${file.name}”会完全覆盖当前数据库和 NC 文件，当前数据将无法在界面中恢复。确认继续吗？`,
+      '危险：导入备份',
+      { confirmButtonText: '确认覆盖并重启', cancelButtonText: '取消', type: 'warning' }
+    )
+    await restoreBackup(file)
+    ElMessage.success('备份已校验，正在恢复并重启服务…')
+  } catch (error) {
+    if (error !== 'cancel' && error !== 'close') ElMessage.error(errorMessage(error))
+  }
+}
 
 /* ------------------------------------------------------------ 图纸列表 */
 
@@ -340,6 +398,9 @@ async function confirmCreateOperation(): Promise<void> {
 
     <main class="detail">
       <div class="user-bar">
+        <input ref="restoreInput" class="restore-input" type="file" accept=".zip,application/zip" @change="importBackup" />
+        <el-button link type="primary" @click="openBackupManager">备份管理</el-button>
+        <el-button link type="warning" @click="restoreInput?.click()">导入备份</el-button>
         <span>{{ auth.user.value?.username }}</span>
         <el-button link type="primary" @click="auth.signOut">退出登录</el-button>
       </div>
@@ -415,6 +476,19 @@ async function confirmCreateOperation(): Promise<void> {
         </div>
       </div>
     </main>
+
+    <el-dialog v-model="backupVisible" title="备份管理" width="620px">
+      <div class="backup-actions">
+        <el-button type="primary" @click="downloadDatabaseBackup">创建并下载新备份</el-button>
+        <span>备份保存在 data\backups，可选择任意编号恢复。</span>
+      </div>
+      <el-table v-loading="backupLoading" :data="backups" empty-text="还没有备份">
+        <el-table-column prop="id" label="编号" width="80"><template #default="scope">{{ scope.row.id }} 号</template></el-table-column>
+        <el-table-column prop="createdAt" label="创建时间" min-width="190" />
+        <el-table-column prop="version" label="版本" width="90" />
+        <el-table-column label="操作" width="150"><template #default="scope"><el-link :href="`/api/backups/${scope.row.id}/download`" type="primary">下载</el-link><el-button link type="warning" @click="restoreHistory(scope.row)">恢复</el-button></template></el-table-column>
+      </el-table>
+    </el-dialog>
 
     <el-dialog v-model="createDrawingVisible" title="新建图纸" width="460px">
       <label class="form-field">
@@ -501,6 +575,12 @@ async function confirmCreateOperation(): Promise<void> {
   color: var(--el-text-color-regular);
   font-size: 13px;
 }
+
+.restore-input {
+  display: none;
+}
+
+.backup-actions { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; color: var(--el-text-color-secondary); font-size: 13px; }
 
 .error-bar {
   display: flex;

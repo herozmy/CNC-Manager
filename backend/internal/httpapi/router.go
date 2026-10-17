@@ -33,6 +33,7 @@ type Server struct {
 	update *update.Client
 	// restart 是「离线包装好了，准备重启」时要执行的动作，由 main 注入。
 	restart func()
+	backupMu sync.Mutex
 
 	loginMu       sync.Mutex
 	loginAttempts map[string]loginAttempt
@@ -88,6 +89,11 @@ func (s *Server) Router() http.Handler {
 			r.Get("/auth/me", s.handleMe)
 			r.Post("/auth/logout", s.handleLogout)
 			r.Get("/tree", s.handleTree)
+			r.Get("/backup/database", s.handleDatabaseBackup)
+			r.Get("/backups", s.handleListBackups)
+			r.Get("/backups/{id}/download", s.handleDownloadBackup)
+			r.Post("/backups/{id}/restore", s.handleStoredBackupRestore)
+			r.Post("/backup/restore", s.handleDatabaseRestore)
 
 			// 图纸
 			r.Get("/drawings", s.handleListDrawings)

@@ -8,6 +8,7 @@ import { apiDelete, apiGet, apiPost, apiPut, apiUpload, buildUrl } from './clien
 import type {
   AuthStatus,
   AuthUser,
+  BackupItem,
   DiffResult,
   Drawing,
   DrawingDetail,
@@ -263,4 +264,19 @@ export function installUpdate(file: File): Promise<InstallResult> {
   const form = new FormData()
   form.append('file', file)
   return apiUpload<InstallResult>('/update/install', form)
+}
+
+/** 上传完整迁移备份；服务受理后会替换数据库和 NC 文件库并自动重启。 */
+export function restoreBackup(file: File): Promise<{ restarting: boolean }> {
+  const form = new FormData()
+  form.append('file', file)
+  return apiUpload<{ restarting: boolean }>('/backup/restore', form)
+}
+
+export function listBackups(): Promise<BackupItem[]> {
+  return apiGet<BackupItem[]>('/backups')
+}
+
+export function restoreStoredBackup(id: number): Promise<{ restarting: boolean }> {
+  return apiPost<{ restarting: boolean }>(`/backups/${id}/restore`)
 }

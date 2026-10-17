@@ -46,6 +46,13 @@ export interface SetupInput extends LoginInput {
   displayName: string
 }
 
+export interface BackupItem {
+  id: number
+  createdAt: string
+  version: string
+  sizeBytes: number
+}
+
 /* ---------------------------------------------------------------- 版本更新 */
 
 /** GET /api/update/check 的结果 */
