@@ -27,12 +27,13 @@ const cacheTTL = 30 * time.Minute
 
 // Release 是查到的一条发布信息。
 type Release struct {
-	Version     string // 标签名，如 v0.04
-	ReleaseURL  string // 发布页地址，供用户手工下载
-	PublishedAt string
-	AssetName   string // 离线安装包的附件名
-	AssetURL    string
-	AssetSize   int64
+	Version      string // 标签名，如 v0.04
+	ReleaseURL   string // 发布页地址，供用户手工下载
+	ReleaseNotes string // GitHub Release 正文，供用户判断是否值得升级
+	PublishedAt  string
+	AssetName    string // 离线安装包的附件名
+	AssetURL     string
+	AssetSize    int64
 }
 
 // Client 查询 GitHub 上的最新正式发布。
@@ -69,6 +70,7 @@ func (c *Client) Enabled() bool { return c != nil && c.repo != "" }
 type ghRelease struct {
 	TagName     string `json:"tag_name"`
 	HTMLURL     string `json:"html_url"`
+	Body        string `json:"body"`
 	PublishedAt string `json:"published_at"`
 	Draft       bool   `json:"draft"`
 	Prerelease  bool   `json:"prerelease"`
@@ -151,9 +153,10 @@ func (c *Client) fetch(ctx context.Context) (*Release, error) {
 	}
 
 	rel := &Release{
-		Version:     strings.TrimSpace(gh.TagName),
-		ReleaseURL:  gh.HTMLURL,
-		PublishedAt: gh.PublishedAt,
+		Version:      strings.TrimSpace(gh.TagName),
+		ReleaseURL:   gh.HTMLURL,
+		ReleaseNotes: strings.TrimSpace(gh.Body),
+		PublishedAt:  gh.PublishedAt,
 	}
 	rel.AssetName, rel.AssetURL, rel.AssetSize = pickAsset(gh.Assets)
 	return rel, nil
@@ -188,15 +191,16 @@ func pickAsset(assets []struct {
 
 // Status 是给界面看的「有没有新版本」。
 type Status struct {
-	Current     string `json:"current"`
-	Latest      string `json:"latest,omitempty"`
-	HasUpdate   bool   `json:"hasUpdate"`
-	ReleaseURL  string `json:"releaseUrl,omitempty"`
-	PublishedAt string `json:"publishedAt,omitempty"`
-	AssetName   string `json:"assetName,omitempty"`
-	AssetURL    string `json:"assetUrl,omitempty"`
-	AssetSize   int64  `json:"assetSize,omitempty"`
-	CheckedAt   string `json:"checkedAt"`
+	Current      string `json:"current"`
+	Latest       string `json:"latest,omitempty"`
+	HasUpdate    bool   `json:"hasUpdate"`
+	ReleaseURL   string `json:"releaseUrl,omitempty"`
+	ReleaseNotes string `json:"releaseNotes,omitempty"`
+	PublishedAt  string `json:"publishedAt,omitempty"`
+	AssetName    string `json:"assetName,omitempty"`
+	AssetURL     string `json:"assetUrl,omitempty"`
+	AssetSize    int64  `json:"assetSize,omitempty"`
+	CheckedAt    string `json:"checkedAt"`
 	// 检查失败时的原因。界面可以选择不显示——没网是常态，不该报成错误。
 	Error string `json:"error,omitempty"`
 }
@@ -224,6 +228,7 @@ func (c *Client) Check(ctx context.Context, current string, fresh bool) Status {
 
 	st.Latest = rel.Version
 	st.ReleaseURL = rel.ReleaseURL
+	st.ReleaseNotes = rel.ReleaseNotes
 	st.PublishedAt = rel.PublishedAt
 	st.AssetName = rel.AssetName
 	st.AssetURL = rel.AssetURL

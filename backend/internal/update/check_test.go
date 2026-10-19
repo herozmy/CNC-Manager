@@ -36,6 +36,7 @@ func fakeGitHub(t *testing.T, status int, body string, hits *int32) *httptest.Se
 const releaseJSON = `{
   "tag_name": "v0.04",
   "html_url": "https://github.com/herozmy/CNC-Manager/releases/tag/v0.04",
+  "body": "## 更新内容\n\n- 新增机床刀库\n- 优化更新检查",
   "published_at": "2026-10-01T00:00:00Z",
   "draft": false,
   "prerelease": false,
@@ -66,6 +67,9 @@ func TestCheckFindsNewVersion(t *testing.T) {
 	}
 	if st.ReleaseURL == "" || st.AssetURL == "" {
 		t.Errorf("发布页地址和附件地址都应该带出来")
+	}
+	if !strings.Contains(st.ReleaseNotes, "新增机床刀库") {
+		t.Errorf("应返回发布更新日志，实际 %q", st.ReleaseNotes)
 	}
 }
 

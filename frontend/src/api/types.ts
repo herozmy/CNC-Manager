@@ -63,6 +63,8 @@ export interface UpdateStatus {
   latest: string
   hasUpdate: boolean
   releaseUrl: string
+  /** GitHub Release 正文，用于在升级前查看更新内容 */
+  releaseNotes: string
   publishedAt: string
   assetName: string
   assetUrl: string

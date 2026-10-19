@@ -225,12 +225,24 @@ const {
   deployment,
   status: updateStatus,
   checking: updateChecking,
+  check: checkForUpdate,
   install: installPackage
 } = useUpdate()
 
 const updateVisible = ref(false)
 const installing = ref(false)
 const installMessage = ref('')
+
+async function handleManualUpdateCheck(): Promise<void> {
+  await checkForUpdate(true)
+  if (updateStatus.value?.error) {
+    ElMessage.warning(`检查更新失败：${updateStatus.value.error}`)
+  } else if (updateStatus.value?.hasUpdate) {
+    ElMessage.success(`发现新版本 ${updateStatus.value.latest}，请查看更新日志`)
+  } else {
+    ElMessage.success('当前已经是最新版本')
+  }
+}
 
 /**
  * 装上用户选的离线包。
@@ -549,6 +561,7 @@ async function confirmCreateOperation(): Promise<void> {
       :checking="updateChecking"
       :installing="installing"
       :install-message="installMessage"
+      @check="handleManualUpdateCheck"
       @install="handleInstall"
     />
   </div>

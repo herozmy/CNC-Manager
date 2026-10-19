@@ -136,8 +136,8 @@ async function confirmInstall(): Promise<void> {
     <p v-else-if="checkedAtText" class="hint muted">上次检查：{{ checkedAtText }}</p>
 
     <div class="actions">
-      <el-button size="small" :loading="checking" @click="emit('check', true)">
-        重新检查
+      <el-button type="primary" plain size="small" :loading="checking" @click="emit('check', true)">
+        手动检查更新
       </el-button>
       <el-link
         v-if="status?.releaseUrl"
@@ -149,6 +149,14 @@ async function confirmInstall(): Promise<void> {
         打开发布页
       </el-link>
     </div>
+
+    <template v-if="status?.releaseNotes">
+      <div class="release-head">
+        <span class="section-title">{{ hasUpdate ? `${status.latest} 更新日志` : '当前版本更新日志' }}</span>
+        <span v-if="hasUpdate" class="decision-tip">请阅读后再决定是否更新</span>
+      </div>
+      <div class="release-notes">{{ status.releaseNotes }}</div>
+    </template>
 
     <el-divider />
 
@@ -272,6 +280,34 @@ docker compose up -d --no-deps cnc-manager</pre>
   margin-bottom: 4px;
   font-size: 14px;
   font-weight: 600;
+}
+
+.release-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 16px;
+}
+
+.decision-tip {
+  color: var(--el-color-warning);
+  font-size: 12px;
+}
+
+.release-notes {
+  max-height: 230px;
+  margin-top: 8px;
+  padding: 12px 14px;
+  overflow-y: auto;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 6px;
+  background: var(--el-fill-color-lighter);
+  color: var(--el-text-color-regular);
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 code {
