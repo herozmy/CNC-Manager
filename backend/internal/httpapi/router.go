@@ -150,6 +150,8 @@ func (s *Server) Router() http.Handler {
 			r.Post("/machines", s.handleCreateMachine)
 			r.Put("/machines/{id}", s.handleUpdateMachine)
 			r.Delete("/machines/{id}", s.handleDeleteMachine)
+			r.Get("/machines/{id}/tools", s.handleListMachineTools)
+			r.Put("/machines/{id}/tools", s.handleReplaceMachineTools)
 		})
 	})
 

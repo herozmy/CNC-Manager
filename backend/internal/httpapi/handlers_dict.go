@@ -141,3 +141,47 @@ func (s *Server) handleDeleteMachine(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
+
+func (s *Server) handleListMachineTools(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	items, err := s.repo.ListMachineTools(r.Context(), id)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, items)
+}
+
+func (s *Server) handleReplaceMachineTools(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	var body struct {
+		Items []domain.MachineToolInput `json:"items"`
+	}
+	if !decodeJSON(w, r, &body) {
+		return
+	}
+	seen := map[int]bool{}
+	for _, item := range body.Items {
+		if item.PocketNo <= 0 || item.PocketNo > 999 {
+			s.fail(w, domain.ErrInvalid)
+			return
+		}
+		if seen[item.PocketNo] {
+			s.fail(w, domain.ErrConflict)
+			return
+		}
+		seen[item.PocketNo] = true
+	}
+	items, err := s.repo.ReplaceMachineTools(r.Context(), id, body.Items)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, items)
+}

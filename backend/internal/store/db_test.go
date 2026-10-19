@@ -57,3 +57,27 @@ func TestMigrateScopesProgramToolsByVersion(t *testing.T) {
 		t.Fatalf("版本内刀具行号唯一索引数量 = %d，期望 1", uniqueIndex)
 	}
 }
+
+func TestMigrateCreatesMachineToolMagazine(t *testing.T) {
+	db, err := Open(filepath.Join(t.TempDir(), "machine-tools.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if err := Migrate(context.Background(), db); err != nil {
+		t.Fatal(err)
+	}
+	var count int
+	if err := db.Get(&count, `SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'machine_tool'`); err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Fatalf("machine_tool 表数量 = %d，期望 1", count)
+	}
+	if err := db.Get(&count, `SELECT COUNT(*) FROM pragma_index_list('machine_tool') WHERE name = 'ux_machine_tool_pocket' AND "unique" = 1`); err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Fatalf("机床刀位唯一索引数量 = %d，期望 1", count)
+	}
+}

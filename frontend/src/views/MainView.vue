@@ -18,6 +18,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import DrawingList from '../components/DrawingList.vue'
 import DrawingCard from '../components/DrawingCard.vue'
 import OperationCard from '../components/OperationCard.vue'
+import MachineToolLibraryDialog from '../components/MachineToolLibraryDialog.vue'
 import {
   createDrawing,
   createOperation,
@@ -40,6 +41,7 @@ import { formatOpNo, parseOpNo } from '../utils/format'
 const auth = useAuth()
 const restoreInput = ref<HTMLInputElement | null>(null)
 const backupVisible = ref(false)
+const machineToolsVisible = ref(false)
 const backupLoading = ref(false)
 const backups = ref<BackupItem[]>([])
 
@@ -401,6 +403,7 @@ async function confirmCreateOperation(): Promise<void> {
       <div class="user-bar">
         <input ref="restoreInput" class="restore-input" type="file" accept=".zip,application/zip" @change="importBackup" />
         <el-button link type="primary" @click="openBackupManager">备份管理</el-button>
+        <el-button link type="primary" @click="machineToolsVisible = true">机床刀库</el-button>
         <el-button link type="warning" @click="restoreInput?.click()">导入备份</el-button>
         <span>{{ auth.user.value?.username }}</span>
         <el-button link type="primary" @click="auth.signOut">退出登录</el-button>
@@ -490,6 +493,8 @@ async function confirmCreateOperation(): Promise<void> {
         <el-table-column label="操作" width="150"><template #default="scope"><el-link :href="`/api/backups/${scope.row.id}/download`" type="primary">下载</el-link><el-button link type="warning" @click="restoreHistory(scope.row)">恢复</el-button></template></el-table-column>
       </el-table>
     </el-dialog>
+
+    <MachineToolLibraryDialog v-model="machineToolsVisible" />
 
     <el-dialog v-model="createDrawingVisible" title="新建图纸" width="460px">
       <label class="form-field">

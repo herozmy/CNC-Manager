@@ -141,3 +141,44 @@ func (r *Repo) getMachine(ctx context.Context, id int64) (*domain.Machine, error
 	}
 	return &m, nil
 }
+
+// ListMachineTools 返回指定机床的当前刀库，按刀位排序。
+func (r *Repo) ListMachineTools(ctx context.Context, machineID int64) ([]domain.MachineTool, error) {
+	if _, err := r.getMachine(ctx, machineID); err != nil {
+		return nil, err
+	}
+	items := []domain.MachineTool{}
+	err := r.db.SelectContext(ctx, &items, `SELECT id, machine_id, pocket_no, tool_no, tool_name, spec, remark, updated_at
+		FROM machine_tool WHERE machine_id = ? ORDER BY pocket_no`, machineID)
+	return items, wrap(err)
+}
+
+// ReplaceMachineTools 整表保存机床刀库，避免删除、移动刀位时留下旧数据。
+func (r *Repo) ReplaceMachineTools(ctx context.Context, machineID int64, items []domain.MachineToolInput) ([]domain.MachineTool, error) {
+	if _, err := r.getMachine(ctx, machineID); err != nil {
+		return nil, err
+	}
+	tx, err := r.db.BeginTxx(ctx, nil)
+	if err != nil {
+		return nil, wrap(err)
+	}
+	defer tx.Rollback()
+	if _, err = tx.ExecContext(ctx, `DELETE FROM machine_tool WHERE machine_id = ?`, machineID); err != nil {
+		return nil, wrap(err)
+	}
+	now := domain.Now()
+	for _, item := range items {
+		_, err = tx.ExecContext(ctx, `INSERT INTO machine_tool (machine_id, pocket_no, tool_no, tool_name, spec, remark, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?)`, machineID, item.PocketNo, strings.TrimSpace(item.ToolNo), strings.TrimSpace(item.ToolName), strings.TrimSpace(item.Spec), strings.TrimSpace(item.Remark), now)
+		if err != nil {
+			return nil, wrap(err)
+		}
+	}
+	if err = r.log(ctx, tx, "update", "machine_tool", machineID, "更新机床刀库"); err != nil {
+		return nil, err
+	}
+	if err = tx.Commit(); err != nil {
+		return nil, wrap(err)
+	}
+	return r.ListMachineTools(ctx, machineID)
+}

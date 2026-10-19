@@ -180,6 +180,18 @@ type Machine struct {
 	UpdatedAt  string `db:"updated_at" json:"updatedAt"`
 }
 
+// MachineTool 是机床当前刀库中的一个刀位。
+type MachineTool struct {
+	ID        int64  `db:"id" json:"id"`
+	MachineID int64  `db:"machine_id" json:"machineId"`
+	PocketNo  int    `db:"pocket_no" json:"pocketNo"`
+	ToolNo    string `db:"tool_no" json:"toolNo"`
+	ToolName  string `db:"tool_name" json:"toolName"`
+	Spec      string `db:"spec" json:"spec"`
+	Remark    string `db:"remark" json:"remark"`
+	UpdatedAt string `db:"updated_at" json:"updatedAt"`
+}
+
 // AuditLog 操作日志。一期没有登录，Actor 固定为 local；
 // 后期加登录后直接用同一张表记录"谁改了哪一版"。
 type AuditLog struct {
@@ -376,6 +388,14 @@ type MachineInput struct {
 	Name       string `json:"name"`
 	Controller string `json:"controller"`
 	Remark     string `json:"remark"`
+}
+
+type MachineToolInput struct {
+	PocketNo int    `json:"pocketNo"`
+	ToolNo   string `json:"toolNo"`
+	ToolName string `json:"toolName"`
+	Spec     string `json:"spec"`
+	Remark   string `json:"remark"`
 }
 
 // Page 统一分页响应。

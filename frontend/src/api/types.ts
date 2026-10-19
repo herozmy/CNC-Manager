@@ -359,6 +359,26 @@ export interface Machine {
   remark: string
 }
 
+export interface MachineInput {
+  code: string
+  name: string
+  controller: string
+  remark: string
+}
+
+export interface MachineTool {
+  id: number
+  machineId: number
+  pocketNo: number
+  toolNo: string
+  toolName: string
+  spec: string
+  remark: string
+  updatedAt: string
+}
+
+export type MachineToolInput = Omit<MachineTool, 'id' | 'machineId' | 'updatedAt'>
+
 /* ------------------------------------------------- 图纸详情（整页一次拉全） */
 
 /** 图纸详情里的程序节点，直接带上它的刀具补偿表 */

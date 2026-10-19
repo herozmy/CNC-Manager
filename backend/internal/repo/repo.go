@@ -57,6 +57,8 @@ func humanizeConstraint(msg string) string {
 		return "该机台编号已存在"
 	case strings.Contains(msg, "tool.tool_no"):
 		return "该刀具号已存在"
+	case strings.Contains(msg, "machine_tool.machine_id"):
+		return "同一机床不能有重复刀位"
 	case strings.Contains(msg, "program_tool.program_id"):
 		return "刀具表存在重复行号"
 	case strings.Contains(msg, "nc_version.program_id"):

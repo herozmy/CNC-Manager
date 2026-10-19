@@ -16,6 +16,9 @@ import type {
   ContentInput,
   InstallResult,
   Machine,
+  MachineInput,
+  MachineTool,
+  MachineToolInput,
   Meta,
   Operation,
   OperationInput,
@@ -237,6 +240,26 @@ export function parseNcText(content: string): Promise<ParseResult> {
 /** 机台字典。界面上不展示机台选择，保留该函数仅为契约完整性。 */
 export function listMachines(): Promise<Machine[]> {
   return apiGet<Machine[]>('/machines')
+}
+
+export function createMachine(input: MachineInput): Promise<Machine> {
+  return apiPost<Machine>('/machines', input)
+}
+
+export function updateMachine(id: number, input: MachineInput): Promise<Machine> {
+  return apiPut<Machine>(`/machines/${id}`, input)
+}
+
+export function deleteMachine(id: number): Promise<void> {
+  return apiDelete(`/machines/${id}`)
+}
+
+export function listMachineTools(machineId: number): Promise<MachineTool[]> {
+  return apiGet<MachineTool[]>(`/machines/${machineId}/tools`)
+}
+
+export function saveMachineTools(machineId: number, items: MachineToolInput[]): Promise<MachineTool[]> {
+  return apiPut<MachineTool[]>(`/machines/${machineId}/tools`, { items })
 }
 
 /* ---------------------------------------------------------------- 版本更新 */
