@@ -62,7 +62,7 @@ func TestInstallRejectedWhenNotPortable(t *testing.T) {
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("非免安装布局下的状态码 = %d，期望 400", rec.Code)
 	}
-	if !strings.Contains(rec.Body.String(), "免安装") {
+	if !strings.Contains(rec.Body.String(), "不支持") {
 		t.Errorf("错误信息应当点明不是免安装布局：%q", rec.Body.String())
 	}
 }

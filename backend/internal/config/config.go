@@ -47,7 +47,9 @@ func Load() (*Config, error) {
 		MaxUploadMB: getEnvInt("CNC_MAX_UPLOAD_MB", 64),
 		LogLevel:    getEnv("CNC_LOG_LEVEL", "info"),
 
-		UpdateRepo: getEnv("CNC_UPDATE_REPO", "herozmy/CNC-Manager"),
+		// CNC_UPDATE_REPO 允许显式设为空，以便离线环境和 Docker 镜像关闭联网查新。
+		// 这里不能使用 getEnv：它会把空字符串当作未配置并回退到默认仓库。
+		UpdateRepo: getEnvAllowEmpty("CNC_UPDATE_REPO", "herozmy/CNC-Manager"),
 		UpdateAPI:  getEnv("CNC_UPDATE_API", ""),
 	}
 
@@ -113,6 +115,16 @@ func getEnv(key, def string) string {
 		return v
 	}
 	return def
+}
+
+// getEnvAllowEmpty 区分「没有设置」和「明确设置为空」。
+// 目前只用于 CNC_UPDATE_REPO：空值是关闭更新检查的有效配置。
+func getEnvAllowEmpty(key, def string) string {
+	v, ok := os.LookupEnv(key)
+	if !ok {
+		return def
+	}
+	return strings.TrimSpace(v)
 }
 
 func getEnvInt(key string, def int64) int64 {

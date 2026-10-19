@@ -5,7 +5,21 @@ import (
 	"log/slog"
 	"strings"
 	"testing"
+
+	"cnccool/internal/applog"
 )
+
+func TestNewLoggerIgnoresTypedNilLogFile(t *testing.T) {
+	var file *applog.RotatingFile
+	logger := newLogger("info", file)
+
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			t.Fatalf("typed nil 日志文件不应导致 panic：%v", recovered)
+		}
+	}()
+	logger.Warn("日志文件不可用时仍应输出到控制台")
+}
 
 func TestBrowserAddrUsesLoopbackForAllInterfaces(t *testing.T) {
 	if got := browserAddr("0.0.0.0:8080"); got != "127.0.0.1:8080" {

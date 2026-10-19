@@ -302,6 +302,12 @@ func newLogger(level string, file io.Writer) *slog.Logger {
 		lv = slog.LevelInfo
 	}
 
+	// interface 里装着 (*RotatingFile)(nil) 时，interface 本身并不等于 nil。
+	// 日志文件打开失败正好会出现这种情况；若交给 MultiWriter，第一条日志就会 panic。
+	if rotating, ok := file.(*applog.RotatingFile); ok && rotating == nil {
+		file = nil
+	}
+
 	out := io.Writer(os.Stdout)
 	if file != nil {
 		out = io.MultiWriter(os.Stdout, file)

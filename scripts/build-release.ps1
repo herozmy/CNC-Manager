@@ -1,8 +1,12 @@
 ﻿<#
-  build-release.ps1 —— 打包 Windows 免安装版
+  build-release.ps1 —— 打包 Windows 和 Linux amd64 发布版
 
-  产出：.local\release\cnccool-<版本>-windows-amd64.zip
-  解压后的目录结构：
+  产出：
+      .local\release\cnccool-<版本>-windows-amd64.zip
+      .local\release\cnccool-<版本>-linux-amd64.tar.gz
+
+  两个平台的包都包含后端程序、web\ 前端构建产物、README 和 VERSION。
+  Linux 包使用 CNC-Manager 作为程序名，并附带 systemd 服务及安装、卸载脚本。
 
       CNC-Manager.exe      后端服务（接口和界面都由它提供）
       web\                 前端构建产物
@@ -52,33 +56,50 @@ if (Test-Path $gitExe) {
     }
 }
 
-$name   = "cnccool-$version-windows-amd64"
 $outDir = Join-Path $root '.local\release'
-$stage  = Join-Path $outDir $name
-$zip    = Join-Path $outDir "$name.zip"
+$windowsName = "cnccool-$version-windows-amd64"
+$linuxName = "cnccool-$version-linux-amd64"
+$windowsStage = Join-Path $outDir $windowsName
+$linuxStage = Join-Path $outDir $linuxName
+$zip = Join-Path $outDir "$windowsName.zip"
+$tarGz = Join-Path $outDir "$linuxName.tar.gz"
 
 # 每次从干净目录开始，避免上一次的残留文件混进包里。
-if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
-New-Item -ItemType Directory -Force -Path $stage | Out-Null
+foreach ($stage in @($windowsStage, $linuxStage)) {
+    if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
+    New-Item -ItemType Directory -Force -Path $stage | Out-Null
+}
 
 # ---- 1. 后端 ------------------------------------------------------------
-Write-Host "`n[1/4] 编译后端 ..." -ForegroundColor Cyan
+Write-Host "`n[1/4] 编译 Windows 和 Linux 后端 ..." -ForegroundColor Cyan
 $env:GOTOOLCHAIN = 'local'
 $env:CGO_ENABLED = '0'
 # -trimpath 去掉二进制里本机的绝对路径；-s -w 去掉调试信息，体积能小三分之一；
 # 版本号用 ldflags 注入，保证界面显示的版本和 VERSION 文件一致。
 $ldflags = "-H windowsgui -s -w -X main.version=$version"
 $exeName = 'CNC-Manager.exe'
-$exePath = Join-Path $stage $exeName
+$exePath = Join-Path $windowsStage $exeName
 Push-Location $backend
 try {
+    $env:GOOS = 'windows'
+    $env:GOARCH = 'amd64'
     & $goExe build -trimpath -ldflags $ldflags -o $exePath '.\cmd\server'
-    if ($LASTEXITCODE -ne 0) { throw '后端编译失败' }
+    if ($LASTEXITCODE -ne 0) { throw 'Windows 后端编译失败' }
+
+    $linuxPath = Join-Path $linuxStage 'CNC-Manager'
+    $env:GOOS = 'linux'
+    $env:GOARCH = 'amd64'
+    & $goExe build -trimpath -ldflags "-s -w -X main.version=$version" -o $linuxPath '.\cmd\server'
+    if ($LASTEXITCODE -ne 0) { throw 'Linux 后端编译失败' }
 } finally {
+    Remove-Item Env:GOOS -ErrorAction SilentlyContinue
+    Remove-Item Env:GOARCH -ErrorAction SilentlyContinue
     Pop-Location
 }
 $exeMB = [math]::Round((Get-Item $exePath).Length / 1MB, 1)
 Write-Host "      $exeName  $exeMB MB"
+$linuxMB = [math]::Round((Get-Item $linuxPath).Length / 1MB, 1)
+Write-Host "      CNC-Manager      $linuxMB MB"
 
 # ---- 2. 前端 ------------------------------------------------------------
 if ($SkipFrontend) {
@@ -104,9 +125,11 @@ if (-not (Test-Path (Join-Path $dist 'index.html'))) {
 # ---- 3. 组装 ------------------------------------------------------------
 Write-Host "`n[3/4] 组装免安装目录 ..." -ForegroundColor Cyan
 
-$webStage = Join-Path $stage 'web'
-New-Item -ItemType Directory -Force -Path $webStage | Out-Null
-Copy-Item (Join-Path $dist '*') $webStage -Recurse -Force
+foreach ($stage in @($windowsStage, $linuxStage)) {
+    $webStage = Join-Path $stage 'web'
+    New-Item -ItemType Directory -Force -Path $webStage | Out-Null
+    Copy-Item (Join-Path $dist '*') $webStage -Recurse -Force
+}
 
 # 包内 README.txt 使用 GBK，保证简体中文 Windows 的记事本正确识别。
 # 内容里因此不能出现 GBK 收录不了的字符（例如 Ø）。
@@ -202,20 +225,126 @@ data\ 目录，就在 exe 旁边：
 源码地址：https://github.com/herozmy/CNC-Manager
 "@
 
-[System.IO.File]::WriteAllText((Join-Path $stage 'README.txt'), $readme, $gbk)
+[System.IO.File]::WriteAllText((Join-Path $windowsStage 'README.txt'), $readme, $gbk)
+
+$linuxReadme = @"
+CNC 加工程序管理系统 $version（Linux amd64）
+
+安装或升级（需要 root）：
+    sudo ./install.sh
+
+安装后浏览器访问 http://服务器IP:8080。
+
+常用命令：
+    sudo systemctl status cnc-manager
+    sudo systemctl restart cnc-manager
+    sudo journalctl -u cnc-manager -f
+    sudo ./uninstall.sh
+
+程序安装在 /opt/CNC-Manager，数据保存在 /var/lib/cnc-manager。
+再次执行新版 install.sh 即可升级，安装脚本不会删除数据。升级前仍建议在界面中创建备份。
+uninstall.sh 默认只卸载程序和服务、保留数据，并会明确打印数据目录位置。
+
+Linux 版不支持 Windows 免安装版的界面内离线升级和自动恢复重启。
+"@
+$utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+[System.IO.File]::WriteAllText((Join-Path $linuxStage 'README.txt'), $linuxReadme, $utf8NoBom)
+
+$installSh = @'
+#!/bin/sh
+set -eu
+if [ "$(id -u)" -ne 0 ]; then
+  echo "请使用 sudo ./install.sh 运行" >&2
+  exit 1
+fi
+SOURCE_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+APP_DIR=/opt/CNC-Manager
+DATA_DIR=/var/lib/cnc-manager
+if ! id cnc-manager >/dev/null 2>&1; then
+  useradd --system --home-dir "$DATA_DIR" --shell /usr/sbin/nologin cnc-manager
+fi
+systemctl stop cnc-manager.service 2>/dev/null || true
+install -d -m 0755 "$APP_DIR" "$APP_DIR/web"
+install -d -o cnc-manager -g cnc-manager -m 0750 "$DATA_DIR"
+install -m 0755 "$SOURCE_DIR/CNC-Manager" "$APP_DIR/CNC-Manager"
+rm -rf "$APP_DIR/web"
+cp -R "$SOURCE_DIR/web" "$APP_DIR/web"
+chown -R root:root "$APP_DIR"
+find "$APP_DIR/web" -type d -exec chmod 0755 {} \;
+find "$APP_DIR/web" -type f -exec chmod 0644 {} \;
+install -m 0644 "$SOURCE_DIR/cnc-manager.service" /etc/systemd/system/cnc-manager.service
+systemctl daemon-reload
+systemctl enable --now cnc-manager.service
+echo "安装完成：http://服务器IP:8080"
+'@
+[System.IO.File]::WriteAllText((Join-Path $linuxStage 'install.sh'), $installSh.Replace("`r`n", "`n") + "`n", $utf8NoBom)
+
+$uninstallSh = @'
+#!/bin/sh
+set -eu
+if [ "$(id -u)" -ne 0 ]; then
+  echo "请使用 sudo ./uninstall.sh 运行" >&2
+  exit 1
+fi
+systemctl disable --now cnc-manager.service 2>/dev/null || true
+rm -f /etc/systemd/system/cnc-manager.service
+systemctl daemon-reload
+rm -rf /opt/CNC-Manager
+echo "程序和服务已卸载。数据仍保留在 /var/lib/cnc-manager。"
+'@
+[System.IO.File]::WriteAllText((Join-Path $linuxStage 'uninstall.sh'), $uninstallSh.Replace("`r`n", "`n") + "`n", $utf8NoBom)
+
+$service = @'
+[Unit]
+Description=CNC Manager
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=cnc-manager
+Group=cnc-manager
+WorkingDirectory=/var/lib/cnc-manager
+Environment=TZ=Asia/Shanghai
+Environment=CNC_ADDR=0.0.0.0:8080
+Environment=CNC_DATA_DIR=/var/lib/cnc-manager
+Environment=CNC_WEB_DIR=/opt/CNC-Manager/web
+Environment=CNC_NO_BROWSER=1
+Environment=CNC_UPDATE_REPO=
+ExecStart=/opt/CNC-Manager/CNC-Manager
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/cnc-manager
+
+[Install]
+WantedBy=multi-user.target
+'@
+[System.IO.File]::WriteAllText((Join-Path $linuxStage 'cnc-manager.service'), $service.Replace("`r`n", "`n") + "`n", $utf8NoBom)
 
 # VERSION 必须放进包里：离线安装要先读它才知道装的是哪一版，
 # 读到比较当前版本更新才允许装。少了它后端会直接拒绝这个包。
 # 用 ASCII 写，不带行尾换行，跟仓库里那个文件保持一致。
-[System.IO.File]::WriteAllText((Join-Path $stage 'VERSION'), $version, [System.Text.Encoding]::ASCII)
+foreach ($stage in @($windowsStage, $linuxStage)) {
+    [System.IO.File]::WriteAllText((Join-Path $stage 'VERSION'), $version, [System.Text.Encoding]::ASCII)
+}
 
 # ---- 4. 压缩 ------------------------------------------------------------
-Write-Host "`n[4/4] 压缩 ..." -ForegroundColor Cyan
+Write-Host "`n[4/4] 压缩 Windows zip 和 Linux tar.gz ..." -ForegroundColor Cyan
 if (Test-Path $zip) { Remove-Item $zip -Force }
-Compress-Archive -Path (Join-Path $stage '*') -DestinationPath $zip -CompressionLevel Optimal
+Compress-Archive -Path (Join-Path $windowsStage '*') -DestinationPath $zip -CompressionLevel Optimal
+
+if (Test-Path $tarGz) { Remove-Item $tarGz -Force }
+& $goExe run (Join-Path $PSScriptRoot 'pack-linux-release.go') -source $linuxStage -output $tarGz -name $linuxName
+if ($LASTEXITCODE -ne 0) { throw 'Linux tar.gz 压缩失败' }
 
 $zipMB  = [math]::Round((Get-Item $zip).Length / 1MB, 1)
 $sha256 = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
+$tarMB = [math]::Round((Get-Item $tarGz).Length / 1MB, 1)
+$tarSHA256 = (Get-FileHash $tarGz -Algorithm SHA256).Hash.ToLower()
 
 Write-Host ""
 Write-Host "打包完成" -ForegroundColor Green
@@ -223,3 +352,8 @@ Write-Host "  文件    $zip"
 Write-Host "  大小    $zipMB MB"
 Write-Host "  版本    $version"
 Write-Host "  SHA256  $sha256"
+Write-Host ""
+Write-Host "  文件    $tarGz"
+Write-Host "  大小    $tarMB MB"
+Write-Host "  版本    $version"
+Write-Host "  SHA256  $tarSHA256"

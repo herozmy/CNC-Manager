@@ -1,0 +1,12 @@
+services:
+  cnc-manager:
+    image: herozmy/cnc-manager:latest
+    pull_policy: always
+    restart: unless-stopped
+    environment:
+      PUID: "0"
+      PGID: "0"
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./docker-data:/data

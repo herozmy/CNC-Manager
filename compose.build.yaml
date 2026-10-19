@@ -1,0 +1,7 @@
+services:
+  cnc-manager:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: cnc-manager:latest
+    pull_policy: build

@@ -8,6 +8,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -45,6 +46,10 @@ func DetectLayout() Layout {
 	if err != nil {
 		return Layout{}
 	}
+	return detectLayout(exe, runtime.GOOS)
+}
+
+func detectLayout(exe, goos string) Layout {
 	// 走软链/快捷方式时取真实路径，否则会更新到错的目录
 	if resolved, err := filepath.EvalSymlinks(exe); err == nil {
 		exe = resolved
@@ -52,7 +57,9 @@ func DetectLayout() Layout {
 
 	root := filepath.Dir(exe)
 	l := Layout{Root: root, ExePath: exe}
-	if fileExists(filepath.Join(root, filepath.FromSlash(webIndexRel))) {
+	// 替换流程会生成并启动 Windows cmd 脚本；即使 Linux/Docker 旁边也有 web，
+	// 也不能把它误报成可自更新布局。
+	if goos == "windows" && fileExists(filepath.Join(root, filepath.FromSlash(webIndexRel))) {
 		l.CanSelfUpdate = true
 	}
 	return l

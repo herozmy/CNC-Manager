@@ -1,6 +1,6 @@
 @echo off
 rem ---------------------------------------------------------------
-rem  Build the Windows portable release zip.
+rem  Build the Windows zip and Linux amd64 tar.gz release packages.
 rem  Wrapped in .cmd because the default Windows execution policy is
 rem  Restricted, which refuses to run .ps1 files directly.
 rem  Bypass only affects this process; it does not change system settings.

@@ -44,7 +44,7 @@ func (s *Server) handleUpdateInstall(w http.ResponseWriter, r *http.Request) {
 	}
 	if !s.layout.CanSelfUpdate {
 		writeError(w, http.StatusBadRequest,
-			"当前不是免安装版布局（可执行文件旁边没有 web 目录），无法自更新。"+
+			"当前系统或部署方式不支持 Windows 免安装版自更新。"+
 				"开发模式下请用 scripts\\build-release.cmd 重新打包。")
 		return
 	}

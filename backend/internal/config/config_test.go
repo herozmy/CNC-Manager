@@ -35,3 +35,32 @@ func TestLocalLayoutDefaultsKeepSourceDevelopmentBehavior(t *testing.T) {
 		t.Fatalf("没有前端构建时 web 应为空，实际为 %q", web)
 	}
 }
+
+func TestLoadAllowsEmptyUpdateRepo(t *testing.T) {
+	t.Setenv("CNC_UPDATE_REPO", "")
+	t.Setenv("CNC_DATA_DIR", t.TempDir())
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.UpdateRepo != "" {
+		t.Fatalf("UpdateRepo = %q，显式空值应关闭更新检查", cfg.UpdateRepo)
+	}
+}
+
+func TestGetEnvAllowEmptyUsesDefaultOnlyWhenUnset(t *testing.T) {
+	const key = "CNC_TEST_ALLOW_EMPTY"
+	if err := os.Unsetenv(key); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Unsetenv(key) })
+	if got := getEnvAllowEmpty(key, "default"); got != "default" {
+		t.Fatalf("未设置时得到 %q，期望 default", got)
+	}
+
+	t.Setenv(key, "   ")
+	if got := getEnvAllowEmpty(key, "default"); got != "" {
+		t.Fatalf("显式空值时得到 %q，期望空字符串", got)
+	}
+}

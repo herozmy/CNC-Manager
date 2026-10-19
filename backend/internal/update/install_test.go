@@ -311,6 +311,25 @@ func TestLayoutPaths(t *testing.T) {
 	}
 }
 
+func TestDetectLayoutOnlyAllowsWindowsSelfUpdate(t *testing.T) {
+	root := t.TempDir()
+	web := filepath.Join(root, "web")
+	if err := os.MkdirAll(web, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(web, "index.html"), []byte("test"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	exe := filepath.Join(root, "CNC-Manager")
+
+	if got := detectLayout(exe, "linux"); got.CanSelfUpdate {
+		t.Fatal("Linux/Docker 布局不应报告支持 Windows 离线自更新")
+	}
+	if got := detectLayout(exe, "windows"); !got.CanSelfUpdate {
+		t.Fatal("Windows 免安装布局应报告支持离线自更新")
+	}
+}
+
 // TestCleanStageKeepsLog 验证清理暂存时不会把日志一起删掉。
 //
 // 更新失败时那个日志是唯一的线索，删了就没法查了。

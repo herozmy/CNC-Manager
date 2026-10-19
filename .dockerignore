@@ -1,0 +1,16 @@
+.git
+.github
+.local
+.tmp
+.tools
+.vscode
+.idea
+AGENTS.md
+DEVELOPMENT_PLAN.md
+backend/data
+backend/cnccool-server
+backend/cnccool-server.exe
+docker-data
+frontend/dist
+frontend/node_modules
+*.log
