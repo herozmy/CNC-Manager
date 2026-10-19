@@ -22,6 +22,8 @@ export interface Meta {
    * 而不是让用户点了才发现不支持。
    */
   canInstall: boolean
+  /** 当前交付形态，决定升级提示使用 Windows、Linux 还是 Docker 流程 */
+  deployment: 'windows' | 'linux' | 'docker' | 'development'
 }
 
 export interface AuthStatus {

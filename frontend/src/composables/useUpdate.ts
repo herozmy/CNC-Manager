@@ -25,6 +25,7 @@ export function useUpdate() {
   const version = ref('')
   /** 当前这套是不是免安装版布局（能不能自己装离线包） */
   const canInstall = ref(false)
+  const deployment = ref<'windows' | 'linux' | 'docker' | 'development'>('development')
   const status = ref<UpdateStatus | null>(null)
   const checking = ref(false)
 
@@ -33,6 +34,7 @@ export function useUpdate() {
       const meta = await getMeta()
       version.value = meta.version
       canInstall.value = meta.canInstall
+      deployment.value = meta.deployment
     } catch {
       // 版本号只是辅助信息，拿不到就留空，不影响主流程
       version.value = ''
@@ -61,7 +63,7 @@ export function useUpdate() {
     void check()
   })
 
-  return { version, canInstall, status, checking, check, install: installPackage }
+  return { version, canInstall, deployment, status, checking, check, install: installPackage }
 }
 
 /**

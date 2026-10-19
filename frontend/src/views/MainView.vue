@@ -220,6 +220,7 @@ onMounted(async () => {
 const {
   version: appVersion,
   canInstall,
+  deployment,
   status: updateStatus,
   checking: updateChecking,
   install: installPackage
@@ -538,6 +539,7 @@ async function confirmCreateOperation(): Promise<void> {
       v-model="updateVisible"
       :status="updateStatus"
       :can-install="canInstall"
+      :deployment="deployment"
       :current-version="appVersion"
       :checking="updateChecking"
       :installing="installing"

@@ -64,3 +64,16 @@ func TestGetEnvAllowEmptyUsesDefaultOnlyWhenUnset(t *testing.T) {
 		t.Fatalf("显式空值时得到 %q，期望空字符串", got)
 	}
 }
+
+func TestLoadAcceptsDockerDeployment(t *testing.T) {
+	t.Setenv("CNC_DEPLOYMENT", "docker")
+	t.Setenv("CNC_DATA_DIR", t.TempDir())
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Deployment != "docker" {
+		t.Fatalf("Deployment = %q，期望 docker", cfg.Deployment)
+	}
+}

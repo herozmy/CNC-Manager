@@ -18,6 +18,8 @@ const props = defineProps<{
   status: UpdateStatus | null
   /** 当前这套能不能自己装离线包（免安装版布局才行） */
   canInstall: boolean
+  /** 当前部署形态，用于展示正确的人工升级方法 */
+  deployment: 'windows' | 'linux' | 'docker' | 'development'
   /** 当前运行的版本号 */
   currentVersion: string
   /** 正在检查 */
@@ -184,9 +186,27 @@ async function confirmInstall(): Promise<void> {
       </el-button>
     </template>
 
+    <template v-else-if="deployment === 'docker'">
+      <div class="section-title">Docker 更新</div>
+      <p class="hint">当前是 Docker 部署，检测到新版本时请在 Compose 文件所在目录执行：</p>
+      <pre class="update-command">docker compose pull cnc-manager
+docker compose up -d --no-deps cnc-manager</pre>
+      <p class="hint muted">数据卷不会被替换。更新完成后重新打开本页面确认版本号。</p>
+    </template>
+
+    <template v-else-if="deployment === 'linux'">
+      <div class="section-title">Linux 更新</div>
+      <p class="hint">
+        从发布页下载 <code>cnccool-vX.Y.Z-linux-amd64.tar.gz</code>，解压后执行：
+      </p>
+      <pre class="update-command">sudo ./install.sh</pre>
+      <p class="hint muted">
+        安装脚本会更新程序和前端，保留 <code>/var/lib/cnc-manager</code> 中的数据。
+      </p>
+    </template>
+
     <p v-else class="hint muted">
-      当前不是免安装版布局（可执行文件旁边没有 web 目录），不支持在这里安装离线包。
-      开发模式下请用 <code>scripts\build-release.cmd</code> 重新打包后再试。
+      当前开发环境不支持在界面内安装。请重新构建并按对应部署方式更新。
     </p>
 
     <p v-if="installMessage" class="install-msg">{{ installMessage }}</p>
@@ -259,6 +279,17 @@ code {
   border-radius: 3px;
   background: var(--el-fill-color-light);
   font-size: 12px;
+}
+
+.update-command {
+  margin: 10px 0;
+  padding: 10px 12px;
+  overflow-x: auto;
+  border-radius: 4px;
+  background: var(--el-fill-color-light);
+  color: var(--el-text-color-primary);
+  font-size: 12px;
+  line-height: 1.7;
 }
 
 .file-row {

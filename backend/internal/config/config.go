@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 )
@@ -22,6 +23,7 @@ type Config struct {
 	MaxUploadMB int64    // 单个 NC 文件上传上限（MB）
 	CORSOrigins []string // 允许跨域访问的前端来源，开发时是 Vite 的 5173
 	LogLevel    string   // debug / info / warn / error
+	Deployment  string   // windows / linux / docker / development
 
 	// LogFile 是日志文件路径。留空则写到 <dataDir>/logs/server.log。
 	//
@@ -46,6 +48,7 @@ func Load() (*Config, error) {
 		Addr:        getEnv("CNC_ADDR", "127.0.0.1:8080"),
 		MaxUploadMB: getEnvInt("CNC_MAX_UPLOAD_MB", 64),
 		LogLevel:    getEnv("CNC_LOG_LEVEL", "info"),
+		Deployment:  getEnv("CNC_DEPLOYMENT", defaultDeployment()),
 
 		// CNC_UPDATE_REPO 允许显式设为空，以便离线环境和 Docker 镜像关闭联网查新。
 		// 这里不能使用 getEnv：它会把空字符串当作未配置并回退到默认仓库。
@@ -86,6 +89,16 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("CNC_MAX_UPLOAD_MB 必须为正数，当前为 %d", c.MaxUploadMB)
 	}
 	return c, nil
+}
+
+func defaultDeployment() string {
+	if runtime.GOOS == "windows" {
+		return "windows"
+	}
+	if runtime.GOOS == "linux" {
+		return "linux"
+	}
+	return "development"
 }
 
 // localLayoutDefaults 支持直接双击发布目录里的 exe：如果 exe 旁边存在

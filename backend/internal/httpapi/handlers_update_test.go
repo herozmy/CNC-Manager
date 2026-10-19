@@ -105,4 +105,7 @@ func TestMetaReportsInstallCapability(t *testing.T) {
 	if !strings.Contains(rec.Body.String(), "canInstall") {
 		t.Errorf("/api/meta 应当带上 canInstall：%q", rec.Body.String())
 	}
+	if !strings.Contains(rec.Body.String(), `"deployment":"`) {
+		t.Errorf("/api/meta 应当带上 deployment：%q", rec.Body.String())
+	}
 }

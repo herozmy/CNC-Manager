@@ -119,7 +119,9 @@ docker compose logs --tail=100 cnc-manager
 
 `docker compose up -d` 会用新镜像替换容器，但继续挂载原来的 `docker-data/`。启动时数据库迁移会自动执行。不要在 Docker 环境使用 Windows 版的界面内离线升级功能。
 
-默认镜像为 `herozmy/cnc-manager:latest`。生产环境也可以把 `compose.yaml` 中的标签固定为发布版本，例如 `herozmy/cnc-manager:v1.2.9`，避免 `latest` 随后续发布变化。
+默认镜像为 `herozmy/cnc-manager:latest`。生产环境也可以把 `compose.yaml` 中的标签固定为发布版本，例如 `herozmy/cnc-manager:v1.2.10`，避免 `latest` 随后续发布变化。
+
+Docker 版会检查 GitHub Release 并在界面提示新版本，但不会在容器内替换自身。更新弹窗会提示运行 `docker compose pull` 和 `docker compose up -d`；实际更新仍由部署管理员执行。
 
 如果需要从当前源码构建而不是从 Docker Hub 拉取，执行：
 

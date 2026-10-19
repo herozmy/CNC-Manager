@@ -32,7 +32,7 @@ type Server struct {
 	// update 负责查仓库上有没有新版本。
 	update *update.Client
 	// restart 是「离线包装好了，准备重启」时要执行的动作，由 main 注入。
-	restart func()
+	restart  func()
 	backupMu sync.Mutex
 
 	loginMu       sync.Mutex
@@ -173,6 +173,7 @@ func (s *Server) handleMeta(w http.ResponseWriter, r *http.Request) {
 		"version":    s.version,
 		"serverTime": nowString(),
 		"dataDir":    s.cfg.DataDir,
+		"deployment": s.cfg.Deployment,
 		// 只有「exe 旁边就是 web\index.html」这种免安装布局才谈得上离线安装；
 		// 开发模式下 exe 在 backend\ 而前端在别处，界面据此把安装入口藏起来。
 		"canInstall": s.layout.CanSelfUpdate,

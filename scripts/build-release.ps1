@@ -310,7 +310,7 @@ Environment=CNC_ADDR=0.0.0.0:8080
 Environment=CNC_DATA_DIR=/var/lib/cnc-manager
 Environment=CNC_WEB_DIR=/opt/CNC-Manager/web
 Environment=CNC_NO_BROWSER=1
-Environment=CNC_UPDATE_REPO=
+Environment=CNC_DEPLOYMENT=linux
 ExecStart=/opt/CNC-Manager/CNC-Manager
 Restart=on-failure
 RestartSec=5

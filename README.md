@@ -1,6 +1,6 @@
 # CNC 加工程序管理系统
 
-**v1.2.9**
+**v1.2.10**
 
 数控加工程序的结构化管理工具：以**图纸号**为主线，挂**工序**（一序、二序…），
 工序下挂**程序**，每个程序带 **NC 文件版本历史**、**刀具补偿表**和**备注**。
@@ -112,7 +112,7 @@ backend\data\
 ### 方式一：免安装包（现场推荐）
 
 从 [Releases](https://github.com/herozmy/CNC-Manager/releases) 下载
-`cnccool-v1.2.9-windows-amd64.zip`，解压到任意目录，双击 `CNC-Manager.exe`。
+`cnccool-v1.2.10-windows-amd64.zip`，解压到任意目录，双击 `CNC-Manager.exe`。
 浏览器会自动打开 <http://127.0.0.1:8080>。
 
 也可以直接双击 `CNC-Manager.exe`：程序不会弹出命令行窗口，会自动识别旁边的
@@ -554,7 +554,7 @@ docker compose -f compose.yaml -f compose.build.yaml up -d --build
 
 1. `docker-data/` 包含 SQLite 数据库、WAL、NC 文件、备份和日志，必须整体持久化，不能只挂载 `nc/`。
 2. 不要让多个容器实例同时使用同一个 `docker-data/`；SQLite 部署保持单实例。
-3. 容器内已关闭 GitHub 更新检查。Docker 版本应通过替换镜像升级，不能使用 Windows 免安装版的离线自升级。
+3. Docker 和 Linux 版会照常检查并提示新版本，但不会执行 Windows 专用的离线自升级；更新弹窗会显示对应的 Docker Compose 或 Linux 安装命令。
 4. 当前“恢复备份并自动重启”依赖 Windows 批处理，在 Linux 容器内不可用；可创建和下载备份，恢复时需先停止容器后人工处理。
 5. 公网使用时，应在容器前配置 Caddy、Nginx 或 Traefik 提供 HTTPS。
 

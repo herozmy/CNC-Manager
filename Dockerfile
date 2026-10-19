@@ -38,7 +38,7 @@ ENV TZ=Asia/Shanghai \
     CNC_DATA_DIR=/data \
     CNC_WEB_DIR=/opt/CNC-Manager/web \
     CNC_NO_BROWSER=1 \
-    CNC_UPDATE_REPO="" \
+    CNC_DEPLOYMENT=docker \
     CNC_MAX_UPLOAD_MB=64
 
 VOLUME ["/data"]
