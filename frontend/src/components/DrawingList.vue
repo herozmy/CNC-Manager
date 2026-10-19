@@ -68,11 +68,17 @@ function onInput(value: string): void {
 
     <!-- 版本号放在左下角：现场排查问题时第一件事就是确认装的是哪一版 -->
     <div v-if="version" class="list-foot">
-      <div class="foot-version">CNC 加工程序管理 {{ version }}</div>
-
-      <!-- 有新版本时在版本号旁边点一下就能去装 -->
-      <button v-if="hasUpdate" type="button" class="update-badge" @click="emit('update')">
-        有新版本 {{ latestVersion }} · 去安装
+      <!-- 无论有没有新版本，版本号本身都能打开版本信息和手动检查窗口。 -->
+      <button
+        type="button"
+        class="version-button"
+        :class="{ 'has-update': hasUpdate }"
+        title="查看版本信息并检查更新"
+        @click="emit('update')"
+      >
+        <span class="foot-version">CNC 加工程序管理 {{ version }}</span>
+        <span v-if="hasUpdate" class="update-badge">有新版本 {{ latestVersion }}</span>
+        <span v-else class="version-hint">点击查看版本信息 / 检查更新</span>
       </button>
     </div>
   </aside>
@@ -162,34 +168,55 @@ function onInput(value: string): void {
 }
 
 .list-foot {
-  padding: 8px 12px;
+  padding: 8px;
   border-top: 1px solid var(--el-border-color-lighter);
-  color: var(--el-text-color-placeholder);
   font-size: 12px;
   text-align: center;
 }
 
-.foot-version {
-  white-space: nowrap;
+.version-button {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 7px 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--el-text-color-secondary);
+  font: inherit;
+  cursor: pointer;
 }
 
-/* 更新提示用主色：这是正常的升级，不是出错，别用警告色吓人 */
-.update-badge {
-  display: block;
-  width: 100%;
-  margin-top: 6px;
-  padding: 4px 8px;
-  border: 1px solid var(--el-color-primary-light-5);
-  border-radius: 10px;
+.version-button:hover,
+.version-button:focus-visible {
+  border-color: var(--el-color-primary-light-7);
   background: var(--el-color-primary-light-9);
   color: var(--el-color-primary);
-  font: inherit;
-  font-size: 12px;
-  cursor: pointer;
+  outline: none;
+}
+
+.version-button.has-update {
+  border-color: var(--el-color-primary-light-7);
+  background: var(--el-color-primary-light-9);
+}
+
+.foot-version {
+  font-weight: 600;
   white-space: nowrap;
 }
 
-.update-badge:hover {
+.update-badge {
+  padding: 1px 7px;
+  border-radius: 8px;
   background: var(--el-color-primary-light-8);
+  color: var(--el-color-primary);
+  white-space: nowrap;
+}
+
+.version-hint {
+  color: var(--el-text-color-placeholder);
+  font-size: 11px;
 }
 </style>

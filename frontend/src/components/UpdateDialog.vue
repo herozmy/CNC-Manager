@@ -112,7 +112,7 @@ async function confirmInstall(): Promise<void> {
 </script>
 
 <template>
-  <el-dialog v-model="visible" title="版本更新" width="560px">
+  <el-dialog v-model="visible" title="版本信息与更新" width="560px">
     <!-- 当前版本 / 最新版本 -->
     <div class="ver-grid">
       <span class="ver-label">当前版本</span>
