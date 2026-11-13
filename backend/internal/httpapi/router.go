@@ -9,11 +9,15 @@ import (
 )
 
 // New 返回根路由。version 来自构建时注入的 VERSION。
-func New(version string) http.Handler {
+func New(version string, static http.Handler) http.Handler {
 	r := chi.NewRouter()
 	r.Get("/api/meta", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		_ = json.NewEncoder(w).Encode(map[string]string{"version": version})
 	})
+	r.Handle("/api/*", http.NotFoundHandler())
+	if static != nil {
+		r.NotFound(static.ServeHTTP)
+	}
 	return r
 }
