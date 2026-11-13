@@ -69,6 +69,23 @@ func New(o Options) http.Handler {
 			p.Use(s.requireAuth)
 			p.Get("/auth/me", s.handleMe)
 			p.Post("/auth/logout", s.handleLogout)
+
+			p.Get("/drawings", s.handleListDrawings)
+			p.Post("/drawings", s.handleCreateDrawing)
+			p.Get("/drawings/{id}/detail", s.handleDrawingDetail)
+			p.Put("/drawings/{id}", s.handleUpdateDrawing)
+			p.Delete("/drawings/{id}", s.handleDeleteDrawing)
+			p.Post("/drawings/{id}/operations", s.handleCreateOperation)
+			p.Put("/drawings/{id}/operations/order", s.handleReorderOperations)
+
+			p.Put("/operations/{id}", s.handleUpdateOperation)
+			p.Delete("/operations/{id}", s.handleDeleteOperation)
+			p.Post("/operations/{id}/programs", s.handleCreateProgram)
+			p.Put("/operations/{id}/programs/order", s.handleReorderPrograms)
+
+			p.Get("/programs/{id}", s.handleGetProgram)
+			p.Put("/programs/{id}", s.handleUpdateProgram)
+			p.Delete("/programs/{id}", s.handleDeleteProgram)
 		})
 	})
 	if o.Static != nil {
