@@ -10,6 +10,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"cnc-manager/internal/domain"
+	"cnc-manager/internal/ncstore"
 )
 
 type errorBody struct {
@@ -36,6 +37,10 @@ func (s *Server) fail(w http.ResponseWriter, err error) {
 	case errors.Is(err, domain.ErrConflict):
 		writeError(w, http.StatusConflict, err.Error())
 	case errors.Is(err, domain.ErrInvalid):
+		writeError(w, http.StatusBadRequest, err.Error())
+	case errors.Is(err, ncstore.ErrTooLarge):
+		writeError(w, http.StatusRequestEntityTooLarge, err.Error())
+	case errors.Is(err, ncstore.ErrEmpty):
 		writeError(w, http.StatusBadRequest, err.Error())
 	case errors.Is(err, domain.ErrUnauthorized):
 		writeError(w, http.StatusUnauthorized, err.Error())

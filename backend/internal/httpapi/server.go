@@ -86,6 +86,17 @@ func New(o Options) http.Handler {
 			p.Get("/programs/{id}", s.handleGetProgram)
 			p.Put("/programs/{id}", s.handleUpdateProgram)
 			p.Delete("/programs/{id}", s.handleDeleteProgram)
+			p.Get("/programs/{id}/versions", s.handleListVersions)
+			p.Post("/programs/{id}/versions", s.handleUploadVersion)
+			p.Post("/programs/{id}/versions/content", s.handleSaveContentAsNew)
+			p.Put("/programs/{id}/current-version", s.handleSetCurrentVersion)
+
+			p.Get("/versions/{id}/download", s.handleDownloadVersion)
+			p.Get("/versions/{id}/content", s.handleGetVersionContent)
+			p.Put("/versions/{id}/content", s.handleOverwriteContent)
+			p.Get("/versions/{id}/diff", s.handleDiffVersions)
+
+			p.Post("/nc/parse", s.handleParseText)
 		})
 	})
 	if o.Static != nil {

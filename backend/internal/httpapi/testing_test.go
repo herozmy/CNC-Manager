@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"io"
@@ -12,11 +13,17 @@ import (
 	"testing"
 	"time"
 
+	"cnc-manager/internal/ncstore"
 	"cnc-manager/internal/repo"
 	"cnc-manager/internal/store"
 )
 
 func newTestServer(t *testing.T) (http.Handler, *repo.Repo) {
+	t.Helper()
+	return newTestServerMax(t, 1<<20)
+}
+
+func newTestServerMax(t *testing.T, maxBytes int64) (http.Handler, *repo.Repo) {
 	t.Helper()
 	db, err := store.Open(filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
@@ -27,7 +34,11 @@ func newTestServer(t *testing.T) (http.Handler, *repo.Repo) {
 		t.Fatal(err)
 	}
 	r := repo.New(db)
-	h := New(Options{Version: "test", Repo: r, Log: slog.New(slog.NewTextHandler(io.Discard, nil)), SessionLifetime: time.Hour})
+	files, err := ncstore.New(filepath.Join(t.TempDir(), "nc"), maxBytes, bytes.Repeat([]byte{7}, ncstore.KeySize))
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := New(Options{Version: "test", Repo: r, Files: files, Log: slog.New(slog.NewTextHandler(io.Discard, nil)), SessionLifetime: time.Hour})
 	return h, r
 }
 

@@ -130,6 +130,9 @@ func LoadOrCreateKey(path string) ([]byte, error) {
 	return key, nil
 }
 
+// MaxBytes 返回单个文件大小上限。
+func (s *Store) MaxBytes() int64 { return s.maxBytes }
+
 // Root 返回文件库根目录。
 func (s *Store) Root() string { return s.root }
 
