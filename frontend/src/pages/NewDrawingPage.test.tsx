@@ -1,0 +1,63 @@
+import { screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { Route, Routes } from 'react-router-dom'
+import { afterEach, expect, test, vi } from 'vitest'
+import { drawing, mockApi, renderApp } from '../test-utils'
+import NewDrawingPage from './NewDrawingPage'
+
+afterEach(() => vi.unstubAllGlobals())
+
+function page() {
+  return (
+    <Routes>
+      <Route path="/drawings/new" element={<NewDrawingPage />} />
+      <Route path="/drawings/:id" element={<p>详情页</p>} />
+    </Routes>
+  )
+}
+
+test('图纸号为空时不提交并提示', async () => {
+  const calls = mockApi(() => undefined)
+  renderApp(page(), '/drawings/new')
+  await userEvent.setup().click(screen.getByRole('button', { name: '创建图纸' }))
+  expect(await screen.findByText('请输入图纸号')).toBeInTheDocument()
+  expect(calls).toHaveLength(0)
+})
+
+test('创建成功后跳转到详情页，并提交全部字段', async () => {
+  const calls = mockApi((r) => (r.method === 'POST' ? { status: 201, body: drawing({ id: 7 }) } : undefined))
+  renderApp(page(), '/drawings/new')
+  const u = userEvent.setup()
+  await u.type(screen.getByLabelText('图纸号'), 'D-2001')
+  await u.type(screen.getByLabelText('名称'), '端盖')
+  await u.type(screen.getByLabelText('客户'), '客户B')
+  await u.type(screen.getByLabelText('材料'), '45#')
+  await u.type(screen.getByLabelText('图纸版本'), 'A')
+  await u.type(screen.getByLabelText('备注'), '急件')
+  await u.click(screen.getByRole('button', { name: '创建图纸' }))
+  expect(await screen.findByText('详情页')).toBeInTheDocument()
+  expect(calls[0]).toMatchObject({
+    method: 'POST',
+    path: '/drawings',
+    body: { drawingNo: 'D-2001', name: '端盖', customer: '客户B', material: '45#', drawingVersion: 'A', remark: '急件' },
+  })
+})
+
+test('图纸号重复时标在输入框上，且停留在表单', async () => {
+  mockApi(() => ({ status: 409, body: { error: '记录已存在，或与现有数据冲突: 该图纸号已存在' } }))
+  renderApp(page(), '/drawings/new')
+  const u = userEvent.setup()
+  await u.type(screen.getByLabelText('图纸号'), 'D-1')
+  await u.click(screen.getByRole('button', { name: '创建图纸' }))
+  expect(await screen.findByText('该图纸号已存在')).toBeInTheDocument()
+  expect(screen.getByLabelText('图纸号')).toHaveAttribute('aria-invalid', 'true')
+  expect(screen.queryByText('详情页')).not.toBeInTheDocument()
+})
+
+test('其他错误显示在表单底部', async () => {
+  mockApi(() => ({ status: 400, body: { error: '参数不合法: 名称不能超过 100 字节' } }))
+  renderApp(page(), '/drawings/new')
+  await userEvent.setup().type(screen.getByLabelText('图纸号'), 'D-1')
+  await userEvent.setup().click(screen.getByRole('button', { name: '创建图纸' }))
+  expect(await screen.findByText(/名称不能超过/)).toBeInTheDocument()
+})
