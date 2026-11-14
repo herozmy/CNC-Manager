@@ -12,6 +12,7 @@ backend/server
 .local/
 scripts/__pycache__/
 
-# Local documentation must never be included in repository pushes.
+# Only the root project README is published; other Markdown stays local.
 *.[mM][dD]
 *.[mM][aA][rR][kK][dD][oO][wW][nN]
+!/README.md
