@@ -49,7 +49,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusTooManyRequests, "登录失败次数过多，请一分钟后重试")
 		return
 	}
-	user, err := s.repo.Authenticate(r.Context(), in.Username, in.Password)
+	user, token, err := s.repo.Login(r.Context(), in.Username, in.Password, s.sessionLifetime)
 	if err != nil {
 		if errors.Is(err, domain.ErrUnauthorized) {
 			s.recordLoginFailure(key)
@@ -58,7 +58,8 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.clearLoginFailures(key)
-	s.startSession(w, r, user)
+	http.SetCookie(w, s.sessionCookie(r, token, int(s.sessionLifetime.Seconds())))
+	writeJSON(w, http.StatusOK, user)
 }
 
 func loginAttemptKey(r *http.Request, username string) string {
@@ -113,6 +114,56 @@ func (s *Server) startSession(w http.ResponseWriter, r *http.Request, user domai
 func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 	user, _ := domain.UserFromContext(r.Context())
 	writeJSON(w, http.StatusOK, user)
+}
+
+func (s *Server) handleUpdateMe(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		DisplayName *string `json:"displayName"`
+	}
+	if !decodeJSONLimit(w, r, &in, 8<<10) {
+		return
+	}
+	if in.DisplayName == nil {
+		writeError(w, http.StatusBadRequest, "请输入显示名称")
+		return
+	}
+	user, _ := domain.UserFromContext(r.Context())
+	updated, err := s.repo.UpdateDisplayName(r.Context(), user.ID, *in.DisplayName)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, updated)
+}
+
+func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		CurrentPassword string `json:"currentPassword"`
+		NewPassword     string `json:"newPassword"`
+	}
+	if !decodeJSONLimit(w, r, &in, 8<<10) {
+		return
+	}
+	user, _ := domain.UserFromContext(r.Context())
+	key := "change-password|" + loginAttemptKey(r, user.Username)
+	if s.loginBlocked(key) {
+		w.Header().Set("Retry-After", "60")
+		writeError(w, http.StatusTooManyRequests, "原密码错误次数过多，请一分钟后重试")
+		return
+	}
+	if err := s.repo.ChangePassword(r.Context(), user.ID, in.CurrentPassword, in.NewPassword); err != nil {
+		if errors.Is(err, domain.ErrUnauthorized) {
+			s.recordLoginFailure(key)
+			// An incorrect current password does not invalidate a valid login.
+			writeError(w, http.StatusBadRequest, "原密码不正确")
+		} else {
+			s.fail(w, err)
+		}
+		return
+	}
+	s.clearLoginFailures(key)
+	http.SetCookie(w, s.sessionCookie(r, "", -1))
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {

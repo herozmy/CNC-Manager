@@ -150,6 +150,93 @@ func TestEditDrawingPreservesChildrenAndUpdatesSearch(t *testing.T) {
 	}
 }
 
+func TestOperationCoordinates(t *testing.T) {
+	h, _ := newTestServer(t)
+	ck := setupAdmin(t, h)
+	var d domain.Drawing
+	decode(t, do(t, h, "POST", "/api/drawings", `{"drawingNo":"XYZ"}`, ck), &d)
+	base := fmt.Sprintf("/api/drawings/%d", d.ID)
+	rec := do(t, h, "POST", base+"/operations", `{"opNo":10,"xCoordinate":-12.3456,"yCoordinate":0.1234,"zHeight":-25.5005}`, ck)
+	var op domain.Operation
+	decode(t, rec, &op)
+	if rec.Code != 201 || op.XCoordinate != -12.346 || op.YCoordinate != 0.123 || op.ZHeight != -25.501 {
+		t.Fatalf("三轴应支持负数并保留 0.001 mm 精度: %d %+v", rec.Code, op)
+	}
+	path := fmt.Sprintf("/api/operations/%d", op.ID)
+	var detail domain.DrawingDetail
+	decode(t, do(t, h, "GET", base+"/detail", "", ck), &detail)
+	if len(detail.Operations) != 1 || detail.Operations[0].XCoordinate != op.XCoordinate || detail.Operations[0].YCoordinate != op.YCoordinate || detail.Operations[0].ZHeight != op.ZHeight {
+		t.Fatalf("详情应返回已保存坐标: %+v", detail)
+	}
+	for _, field := range []string{"xCoordinate", "yCoordinate", "zHeight"} {
+		for _, bad := range []string{"100000.001", "-100000.001", `"abc"`} {
+			rec := do(t, h, "PUT", path, fmt.Sprintf(`{"opNo":10,%q:%s}`, field, bad), ck)
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("非法 %s=%s 应拒绝: %d", field, bad, rec.Code)
+			}
+		}
+	}
+	decode(t, do(t, h, "GET", base+"/detail", "", ck), &detail)
+	if detail.Operations[0].XCoordinate != op.XCoordinate || detail.Operations[0].YCoordinate != op.YCoordinate || detail.Operations[0].ZHeight != op.ZHeight {
+		t.Fatal("非法坐标不应修改已保存值")
+	}
+	// 旧客户端只传 zHeight 时，新增 X/Y 不应被清空。
+	decode(t, do(t, h, "PUT", path, `{"opNo":10,"zHeight":12.5}`, ck), &op)
+	if op.XCoordinate != -12.346 || op.YCoordinate != 0.123 || op.ZHeight != 12.5 {
+		t.Fatalf("旧请求应保留 X/Y: %+v", op)
+	}
+	decode(t, do(t, h, "PUT", path, `{"opNo":10,"xCoordinate":0,"yCoordinate":0,"zHeight":0}`, ck), &op)
+	if op.XCoordinate != 0 || op.YCoordinate != 0 || op.ZHeight != 0 {
+		t.Fatalf("显式 0 应能清空坐标: %+v", op)
+	}
+}
+
+func TestOperationCenteringMethod(t *testing.T) {
+	h, _ := newTestServer(t)
+	ck := setupAdmin(t, h)
+	var d domain.Drawing
+	decode(t, do(t, h, "POST", "/api/drawings", `{"drawingNo":"CENTERING"}`, ck), &d)
+	base := fmt.Sprintf("/api/drawings/%d", d.ID)
+	var op domain.Operation
+	rec := do(t, h, "POST", base+"/operations", `{"opNo":10,"centeringMethod":"  四面分中  ","xCoordinate":-12.345,"yCoordinate":6.5,"zHeight":25.5}`, ck)
+	decode(t, rec, &op)
+	if rec.Code != http.StatusCreated || op.CenteringMethod != "四面分中" {
+		t.Fatalf("创建分中方式失败: %+v %s", op, rec.Body.String())
+	}
+	path := fmt.Sprintf("/api/operations/%d", op.ID)
+	for _, tc := range []struct{ body, want string }{
+		{`{"opNo":10,"zHeight":25.5,"centeringMethod":" 孔分中 "}`, "孔分中"},
+		{`{"opNo":10,"zHeight":25.5}`, "孔分中"},
+		{`{"opNo":10,"zHeight":25.5,"centeringMethod":null}`, "孔分中"},
+		{`{"opNo":10,"zHeight":25.5,"centeringMethod":"  "}`, ""},
+		{fmt.Sprintf(`{"opNo":10,"zHeight":25.5,"centeringMethod":%q}`, strings.Repeat("中", 200)), strings.Repeat("中", 200)},
+	} {
+		rec = do(t, h, "PUT", path, tc.body, ck)
+		decode(t, rec, &op)
+		if rec.Code != http.StatusOK || op.CenteringMethod != tc.want || op.XCoordinate != -12.345 || op.YCoordinate != 6.5 || op.ZHeight != 25.5 {
+			t.Fatalf("修改或兼容保留失败: %+v %s", op, rec.Body.String())
+		}
+		var detail domain.DrawingDetail
+		decode(t, do(t, h, "GET", base+"/detail", "", ck), &detail)
+		if len(detail.Operations) != 1 || detail.Operations[0].CenteringMethod != tc.want {
+			t.Fatalf("详情未返回分中方式: %+v", detail)
+		}
+	}
+	rec = do(t, h, "PUT", path, fmt.Sprintf(`{"opNo":10,"centeringMethod":%q}`, strings.Repeat("中", 201)), ck)
+	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "分中方式") {
+		t.Fatalf("过长分中方式应拒绝: %d %s", rec.Code, rec.Body.String())
+	}
+	var detail domain.DrawingDetail
+	decode(t, do(t, h, "GET", base+"/detail", "", ck), &detail)
+	if detail.Operations[0].CenteringMethod != strings.Repeat("中", 200) || detail.Operations[0].ZHeight != 25.5 {
+		t.Fatal("失败请求不应更改原值")
+	}
+	decode(t, do(t, h, "POST", base+"/operations", `{"opNo":20}`, ck), &op)
+	if op.CenteringMethod != "" {
+		t.Fatalf("旧客户端新增工序分中方式应为空: %+v", op)
+	}
+}
+
 func TestOperationAndProgramFlow(t *testing.T) {
 	h, _ := newTestServer(t)
 	ck := setupAdmin(t, h)

@@ -61,7 +61,7 @@ export const program = (over: Partial<Record<string, unknown>> = {}) => ({
 })
 
 export const operation = (over: Partial<Record<string, unknown>> = {}) => ({
-  id: 1, drawingId: 1, opNo: 10, opName: '粗车', machineId: null, machineName: '', fixture: '三爪', zHeight: 25.5, remark: '',
+  id: 1, drawingId: 1, opNo: 10, opName: '粗车', machineId: null, machineName: '', fixture: '三爪', centeringMethod: '', xCoordinate: 0, yCoordinate: 0, zHeight: 25.5, remark: '',
   programs: [program()], ...over,
 })
 

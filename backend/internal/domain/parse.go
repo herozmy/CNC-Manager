@@ -29,6 +29,8 @@ type DiffLine struct {
 
 // DiffResult 是版本对比结果。
 type DiffResult struct {
+	TotalLines     int        `json:"totalLines"`
+	TotalChanges   int        `json:"totalChanges"`
 	LeftVersionNo  int        `json:"leftVersionNo"`
 	RightVersionNo int        `json:"rightVersionNo"`
 	Identical      bool       `json:"identical"`

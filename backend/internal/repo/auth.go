@@ -9,6 +9,8 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/jmoiron/sqlx"
+
 	"cnc-manager/internal/auth"
 	"cnc-manager/internal/domain"
 )
@@ -81,11 +83,15 @@ func (r *Repo) CreateFirstUser(ctx context.Context, username, displayName, passw
 
 // Authenticate 校验用户名密码。用户不存在、被停用、密码错误一律返回 ErrUnauthorized。
 func (r *Repo) Authenticate(ctx context.Context, username, password string) (domain.User, error) {
+	return authenticate(ctx, r.db, username, password)
+}
+
+func authenticate(ctx context.Context, db sqlx.QueryerContext, username, password string) (domain.User, error) {
 	var rec struct {
 		domain.User
 		PasswordHash string `db:"password_hash"`
 	}
-	err := r.db.GetContext(ctx, &rec,
+	err := sqlx.GetContext(ctx, db, &rec,
 		`SELECT `+userColumns+`, password_hash FROM app_user WHERE username = ?`, strings.TrimSpace(username))
 	if errors.Is(err, sql.ErrNoRows) {
 		auth.CheckDummy(password) // 用户不存在也做一次等价开销的计算，避免通过耗时枚举用户名
@@ -100,14 +106,40 @@ func (r *Repo) Authenticate(ctx context.Context, username, password string) (dom
 	return rec.User, nil
 }
 
+// Login verifies the password and creates its session in a single transaction,
+// so an in-flight login cannot restore a session after a password change.
+func (r *Repo) Login(ctx context.Context, username, password string, lifetime time.Duration) (domain.User, string, error) {
+	tx, err := r.db.BeginTxx(ctx, nil)
+	if err != nil {
+		return domain.User{}, "", err
+	}
+	defer func() { _ = tx.Rollback() }()
+	u, err := authenticate(ctx, tx, username, password)
+	if err != nil {
+		return domain.User{}, "", err
+	}
+	token, _, err := createSession(ctx, tx, u.ID, lifetime)
+	if err != nil {
+		return domain.User{}, "", err
+	}
+	if err := tx.Commit(); err != nil {
+		return domain.User{}, "", err
+	}
+	return u, token, nil
+}
+
 // CreateSession 创建会话，返回明文令牌与过期时间；数据库只存令牌哈希。
 func (r *Repo) CreateSession(ctx context.Context, userID int64, lifetime time.Duration) (string, time.Time, error) {
+	return createSession(ctx, r.db, userID, lifetime)
+}
+
+func createSession(ctx context.Context, db sqlx.ExecerContext, userID int64, lifetime time.Duration) (string, time.Time, error) {
 	token, err := auth.NewToken()
 	if err != nil {
 		return "", time.Time{}, err
 	}
 	expires := time.Now().UTC().Add(lifetime)
-	_, err = r.db.ExecContext(ctx,
+	_, err = db.ExecContext(ctx,
 		`INSERT INTO user_session (token_hash, user_id, expires_at, created_at) VALUES (?, ?, ?, ?)`,
 		auth.HashToken(token), userID, expires.Format(time.RFC3339Nano), domain.Now())
 	return token, expires, wrap(err)

@@ -52,8 +52,17 @@ func (s *Server) fail(w http.ResponseWriter, err error) {
 
 // decodeJSON 解析请求体（上限 1MB）。不拒绝未知字段，便于前端表单多带字段。
 func decodeJSON(w http.ResponseWriter, r *http.Request, dst any) bool {
-	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
+	return decodeJSONLimit(w, r, dst, 1<<20)
+}
+
+func decodeJSONLimit(w http.ResponseWriter, r *http.Request, dst any, limit int64) bool {
+	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, limit))
 	if err := dec.Decode(dst); err != nil {
+		var tooBig *http.MaxBytesError
+		if errors.As(err, &tooBig) {
+			writeError(w, http.StatusRequestEntityTooLarge, "请求内容超过大小上限")
+			return false
+		}
 		writeError(w, http.StatusBadRequest, "请求内容格式错误："+err.Error())
 		return false
 	}

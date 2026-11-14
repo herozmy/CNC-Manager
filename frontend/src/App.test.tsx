@@ -102,3 +102,25 @@ test('退出登录回到登录页', async () => {
   await u.click(screen.getByRole('button', { name: '退出登录' }))
   expect(await screen.findByText('登录后查看数控程序台账')).toBeInTheDocument()
 })
+
+test('页面外的刀具草稿也会在刷新前提示，退出后清除草稿', async () => {
+  let out = false
+  mockApi((r) => {
+    if (r.path === '/auth/status') return { body: { setupRequired: false } }
+    if (r.path === '/auth/me') return out ? { status: 401 } : { body: user }
+    if (r.path === '/meta') return { body: { version: '2.1.0-dev' } }
+    if (r.path === '/auth/logout') { out = true; return { status: 204 } }
+  })
+  const { client } = renderApp(<App />, '/me')
+  await screen.findByText('版本 2.1.0-dev')
+  client.setQueryData(['version-tools-draft', 5], { dirty: true })
+  const before = new Event('beforeunload', { cancelable: true })
+  window.dispatchEvent(before)
+  expect(before.defaultPrevented).toBe(true)
+  await userEvent.click(screen.getByRole('button', { name: '退出登录' }))
+  await screen.findByText('登录后查看数控程序台账')
+  expect(client.getQueryData(['version-tools-draft', 5])).toBeUndefined()
+  const after = new Event('beforeunload', { cancelable: true })
+  window.dispatchEvent(after)
+  expect(after.defaultPrevented).toBe(false)
+})

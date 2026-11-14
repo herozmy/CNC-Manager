@@ -9,12 +9,15 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"cnc-manager/internal/backup"
+	"cnc-manager/internal/config"
 	"cnc-manager/internal/ncstore"
 	"cnc-manager/internal/repo"
 )
 
 // Options 是构造 HTTP 服务所需的依赖。
 type Options struct {
+	DataDir         string
 	Version         string
 	Repo            *repo.Repo
 	Files           *ncstore.Store
@@ -25,6 +28,8 @@ type Options struct {
 
 // Server 持有依赖与登录限速状态。
 type Server struct {
+	backup          *backup.Manager
+	maintenance     sync.RWMutex
 	version         string
 	repo            *repo.Repo
 	files           *ncstore.Store
@@ -50,11 +55,14 @@ func New(o Options) http.Handler {
 	}
 	s := &Server{version: o.Version, repo: o.Repo, files: o.Files, log: o.Log,
 		sessionLifetime: o.SessionLifetime, loginAttempts: map[string]loginAttempt{}}
+	if o.DataDir != "" {
+		s.backup = &backup.Manager{Repo: o.Repo, Files: o.Files, Layout: config.NewLayout(o.DataDir), Version: o.Version}
+	}
 
 	r := chi.NewRouter()
 	r.Use(s.recoverer, s.accessLog)
 	r.Route("/api", func(api chi.Router) {
-		api.Use(s.sameOrigin)
+		api.Use(s.sameOrigin, s.guardMaintenance)
 		api.NotFound(func(w http.ResponseWriter, _ *http.Request) { writeError(w, http.StatusNotFound, "接口不存在") })
 		api.MethodNotAllowed(func(w http.ResponseWriter, _ *http.Request) {
 			writeError(w, http.StatusMethodNotAllowed, "方法不允许")
@@ -68,7 +76,19 @@ func New(o Options) http.Handler {
 		api.Group(func(p chi.Router) {
 			p.Use(s.requireAuth)
 			p.Get("/auth/me", s.handleMe)
+			p.Put("/auth/me", s.handleUpdateMe)
+			p.Put("/auth/password", s.handleChangePassword)
 			p.Post("/auth/logout", s.handleLogout)
+			p.Route("/backup", func(b chi.Router) {
+				b.Use(s.requireBackupAdmin)
+				b.Get("/export", s.handleBackupExport)
+				b.Post("/create", s.handleBackupCreate)
+				b.Post("/inspect", s.handleBackupInspect)
+				b.Post("/import", s.handleBackupImport)
+				b.Get("/recoveries", s.handleBackupRecoveries)
+				b.Get("/recoveries/{name}", s.handleBackupRecoveryDownload)
+				b.Delete("/recoveries/{name}", s.handleBackupRecoveryDelete)
+			})
 
 			p.Get("/drawings", s.handleListDrawings)
 			p.Post("/drawings", s.handleCreateDrawing)
@@ -95,6 +115,9 @@ func New(o Options) http.Handler {
 			p.Get("/versions/{id}/content", s.handleGetVersionContent)
 			p.Put("/versions/{id}/content", s.handleOverwriteContent)
 			p.Get("/versions/{id}/diff", s.handleDiffVersions)
+			p.Get("/versions/{id}/tools", s.handleGetVersionTools)
+			p.Put("/versions/{id}/tools", s.handleReplaceVersionTools)
+			p.Get("/versions/{id}/tools/recognize", s.handleRecognizeVersionTools)
 
 			p.Post("/nc/parse", s.handleParseText)
 		})

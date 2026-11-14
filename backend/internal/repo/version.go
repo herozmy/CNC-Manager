@@ -46,7 +46,7 @@ func getVersion(ctx context.Context, q sqlx.QueryerContext, id int64) (*domain.V
 func (r *Repo) GetVersionFile(ctx context.Context, id int64) (*domain.VersionFile, error) {
 	var f domain.VersionFile
 	err := r.db.GetContext(ctx, &f,
-		`SELECT v.id, v.program_id, v.version_no, v.file_name, b.rel_path, b.encoding,
+		`SELECT v.id, v.program_id, v.version_no, v.sha256, v.file_name, b.rel_path, b.encoding,
 		        CASE WHEN p.current_version_id = v.id THEN 1 ELSE 0 END AS is_current`+versionFrom+`WHERE v.id = ?`, id)
 	if err != nil {
 		return nil, wrap(err)
@@ -111,7 +111,7 @@ func (r *Repo) AddVersion(ctx context.Context, programID int64, blob domain.Blob
 
 // OverwriteVersion 用新内容覆盖某个版本（不新增版本号）。
 // 只改这个版本指向的内容；原内容若不再被引用，由孤儿回收任务清理。
-func (r *Repo) OverwriteVersion(ctx context.Context, versionID int64, blob domain.BlobInput) (*domain.Version, error) {
+func (r *Repo) OverwriteVersion(ctx context.Context, versionID int64, blob domain.BlobInput, expectedSHA256 *string) (*domain.Version, error) {
 	tx, err := r.db.BeginTxx(ctx, nil)
 	if err != nil {
 		return nil, wrap(err)
@@ -120,6 +120,9 @@ func (r *Repo) OverwriteVersion(ctx context.Context, versionID int64, blob domai
 	old, err := getVersion(ctx, tx, versionID)
 	if err != nil {
 		return nil, err
+	}
+	if expectedSHA256 != nil && old.SHA256 != *expectedSHA256 {
+		return nil, fmt.Errorf("%w: 此版本已被其他操作修改，请载入最新内容或另存新版本", domain.ErrConflict)
 	}
 	if err := upsertBlob(ctx, tx, blob); err != nil {
 		return nil, err

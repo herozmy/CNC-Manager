@@ -165,6 +165,10 @@ func TestRunMigratesAllDataLosslessly(t *testing.T) {
 	if err := db.Get(&z, `SELECT z_height_milli FROM operation WHERE id = 11`); err != nil || z != 25500 {
 		t.Fatalf("z_height_milli = %d err=%v", z, err)
 	}
+	var xy int
+	if err := db.Get(&xy, `SELECT ABS(x_coordinate_milli) + ABS(y_coordinate_milli) FROM operation WHERE id = 11`); err != nil || xy != 0 {
+		t.Fatalf("v1 导入的 X/Y 应默认为 0: %d %v", xy, err)
+	}
 	var cur int
 	if err := db.Get(&cur, `SELECT current_version_id FROM nc_program WHERE id = 21`); err != nil || cur != 102 {
 		t.Fatalf("current_version_id = %d err=%v", cur, err)

@@ -10,3 +10,4 @@ backend/server
 .idea/
 *.log
 .local/
+scripts/__pycache__/

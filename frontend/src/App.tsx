@@ -23,9 +23,20 @@ export default function App() {
     return () => window.removeEventListener(UNAUTHORIZED_EVENT, onUnauthorized)
   }, [qc])
 
+  // Inline tool drafts survive internal navigation; warn before losing the login's in-memory drafts.
+  useEffect(() => {
+    const warn = (e: BeforeUnloadEvent) => {
+      if (!qc.getQueriesData<{ dirty: boolean }>({ queryKey: ['version-tools-draft'] }).some(([, draft]) => draft?.dirty)) return
+      e.preventDefault()
+      e.returnValue = ''
+    }
+    window.addEventListener('beforeunload', warn)
+    return () => window.removeEventListener('beforeunload', warn)
+  }, [qc])
+
   if (session.isPending) return <Spinner />
   if (session.isError) return <ErrorState message="无法连接服务器" onRetry={() => session.refetch()} />
-  if (session.data.state !== 'in') return <AuthPage setup={session.data.state === 'setup'} />
+  if (session.data.state !== 'in') return <AuthPage setup={session.data.state === 'setup'} notice={session.data.state === 'out' ? session.data.notice : undefined} initialUsername={session.data.state === 'out' ? session.data.username : undefined} />
 
   return (
     <Routes>

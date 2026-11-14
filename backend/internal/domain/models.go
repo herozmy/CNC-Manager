@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"strings"
+	"unicode/utf8"
 )
 
 // 全库数值约定：带小数的尺寸/进给/切深以「实际值 × 1000」整数落库。
@@ -35,22 +36,27 @@ type Drawing struct {
 	ProgramCount   int    `db:"program_count" json:"programCount"`
 }
 
-// Operation 工序。装夹方式、Z 轴垫高属于"这道工序怎么装夹"，同工序下程序共享。
+// Operation 工序。装夹方式、分中方式与 X/Y/Z 坐标由同工序下的程序共享。
 type Operation struct {
-	ID           int64   `db:"id" json:"id"`
-	DrawingID    int64   `db:"drawing_id" json:"drawingId"`
-	OpNo         int     `db:"op_no" json:"opNo"`
-	OpName       string  `db:"op_name" json:"opName"`
-	SortOrder    int     `db:"sort_order" json:"sortOrder"`
-	MachineID    *int64  `db:"machine_id" json:"machineId"`
-	MachineName  string  `db:"machine_name" json:"machineName"`
-	Fixture      string  `db:"fixture" json:"fixture"`
-	ZHeight      float64 `db:"-" json:"zHeight"` // mm
-	ZHeightMilli int64   `db:"z_height_milli" json:"-"`
-	Remark       string  `db:"remark" json:"remark"`
-	CreatedAt    string  `db:"created_at" json:"createdAt"`
-	UpdatedAt    string  `db:"updated_at" json:"updatedAt"`
-	ProgramCount int     `db:"program_count" json:"programCount"`
+	ID               int64   `db:"id" json:"id"`
+	DrawingID        int64   `db:"drawing_id" json:"drawingId"`
+	OpNo             int     `db:"op_no" json:"opNo"`
+	OpName           string  `db:"op_name" json:"opName"`
+	SortOrder        int     `db:"sort_order" json:"sortOrder"`
+	MachineID        *int64  `db:"machine_id" json:"machineId"`
+	MachineName      string  `db:"machine_name" json:"machineName"`
+	Fixture          string  `db:"fixture" json:"fixture"`
+	CenteringMethod  string  `db:"centering_method" json:"centeringMethod"`
+	XCoordinate      float64 `db:"-" json:"xCoordinate"` // mm
+	YCoordinate      float64 `db:"-" json:"yCoordinate"` // mm
+	XCoordinateMilli int64   `db:"x_coordinate_milli" json:"-"`
+	YCoordinateMilli int64   `db:"y_coordinate_milli" json:"-"`
+	ZHeight          float64 `db:"-" json:"zHeight"` // Z 坐标（mm）；沿用旧字段名兼容已有数据与客户端。
+	ZHeightMilli     int64   `db:"z_height_milli" json:"-"`
+	Remark           string  `db:"remark" json:"remark"`
+	CreatedAt        string  `db:"created_at" json:"createdAt"`
+	UpdatedAt        string  `db:"updated_at" json:"updatedAt"`
+	ProgramCount     int     `db:"program_count" json:"programCount"`
 }
 
 // Program 数控程序，挂在工序下。
@@ -131,25 +137,40 @@ func (in *DrawingInput) Normalize() error {
 }
 
 type OperationInput struct {
-	OpNo      int     `json:"opNo"`
-	OpName    string  `json:"opName"`
-	MachineID *int64  `json:"machineId"`
-	Fixture   string  `json:"fixture"`
-	ZHeight   float64 `json:"zHeight"`
-	Remark    string  `json:"remark"`
+	OpNo            int      `json:"opNo"`
+	OpName          string   `json:"opName"`
+	MachineID       *int64   `json:"machineId"`
+	Fixture         string   `json:"fixture"`
+	CenteringMethod *string  `json:"centeringMethod"` // 旧客户端未传时，编辑保留已有值。
+	XCoordinate     *float64 `json:"xCoordinate"`     // 旧客户端未传时，编辑保留已有值。
+	YCoordinate     *float64 `json:"yCoordinate"`
+	ZHeight         float64  `json:"zHeight"`
+	Remark          string   `json:"remark"`
 }
 
 func (in *OperationInput) Normalize() error {
 	in.OpName = strings.TrimSpace(in.OpName)
 	in.Fixture = strings.TrimSpace(in.Fixture)
+	if in.CenteringMethod != nil {
+		value := strings.TrimSpace(*in.CenteringMethod)
+		if utf8.RuneCountInString(value) > 200 {
+			return fmt.Errorf("%w: 分中方式不能超过 200 字", ErrInvalid)
+		}
+		in.CenteringMethod = &value
+	}
 	if in.OpNo <= 0 || in.OpNo > 9999 {
 		return fmt.Errorf("%w: 工序号应为 1~9999", ErrInvalid)
 	}
 	if in.MachineID != nil && *in.MachineID <= 0 {
 		in.MachineID = nil
 	}
-	if in.ZHeight < 0 || in.ZHeight > 100000 || math.IsNaN(in.ZHeight) || math.IsInf(in.ZHeight, 0) {
-		return fmt.Errorf("%w: Z 轴垫高应为 0~100000 mm", ErrInvalid)
+	for _, axis := range []struct {
+		name  string
+		value *float64
+	}{{"X", in.XCoordinate}, {"Y", in.YCoordinate}, {"Z", &in.ZHeight}} {
+		if axis.value != nil && (math.IsNaN(*axis.value) || math.IsInf(*axis.value, 0) || math.Abs(*axis.value) > 100000) {
+			return fmt.Errorf("%w: %s 坐标应为 -100000~100000 mm 的数字", ErrInvalid, axis.name)
+		}
 	}
 	if err := checkLen("工序名称", in.OpName, maxShortText); err != nil {
 		return err

@@ -58,6 +58,10 @@ export interface Operation {
   machineId: number | null
   machineName: string
   fixture: string
+  centeringMethod: string
+  xCoordinate: number
+  yCoordinate: number
+  /** Z 坐标，沿用旧 API 字段名。 */
   zHeight: number
   remark: string
   programs: Program[]
@@ -76,6 +80,9 @@ export interface OperationInput {
   opName: string
   machineId: number | null
   fixture: string
+  centeringMethod: string
+  xCoordinate: number
+  yCoordinate: number
   zHeight: number
   remark: string
 }
@@ -121,6 +128,7 @@ export interface UploadResult extends Version {
 }
 
 export interface VersionContent {
+	sha256: string
   versionId: number
   programId: number
   versionNo: number
@@ -133,6 +141,7 @@ export interface VersionContent {
 }
 
 export interface ContentInput {
+	expectedSHA256?: string
   content: string
   encoding: 'utf-8' | 'gbk'
   fileName: string
@@ -142,3 +151,55 @@ export interface ContentInput {
 export interface VersionSaveResult extends Version {
   warning?: string
 }
+
+export interface DiffLine {
+  type: 'same' | 'add' | 'del' | 'change'
+  leftNo: number | null
+  rightNo: number | null
+  leftText: string
+  rightText: string
+}
+
+export interface VersionDiff {
+  leftVersionNo: number
+  rightVersionNo: number
+  identical: boolean
+  truncated: boolean
+  totalLines: number
+  totalChanges: number
+  lines: DiffLine[]
+}
+
+export interface ToolCustomParam { name: string; value: string }
+
+export interface ProgramToolInput {
+  seq: number
+  toolId: number | null
+  toolNo: string
+  offsetNo: string
+  toolName: string
+  toolDia: number
+  cornerRadius: number
+  compAmount: number
+  spindleSpeed: number
+  speedMode: number
+  feed: number
+  feedMode: number
+  cutDepth: number
+  coolant: number
+  machiningContent: string
+  remark: string
+  customParams: ToolCustomParam[]
+}
+
+export interface ProgramTool extends ProgramToolInput { id: number; programId: number; versionId: number }
+export interface ToolTable { items: ProgramTool[]; revision: string }
+export interface BackupPreview {
+  format: string
+  version: string
+  createdAt: string
+  sha256: string
+  summary: { users: number; drawings: number; operations: number; programs: number; versions: number; tools: number; files: number; admins: string[] }
+}
+
+export interface BackupRecovery { name: string; createdAt: string; sizeBytes: number }

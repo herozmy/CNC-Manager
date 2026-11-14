@@ -23,6 +23,7 @@ function setup(fail = false) {
     }
     if (r.path === '/drawings/1/detail') return removed === '/drawings/1' ? { status: 404 } : { body: detail(removed === '/operations/1' ? [] : [operation({ programs: removed === '/programs/1' ? [] : [program()] })]) }
     if (r.path === '/programs/1/versions') return { body: [version()] }
+    if (r.path === '/versions/5/tools') return { body: { items: [], revision: 'empty' } }
   })
   return calls
 }
@@ -50,6 +51,7 @@ for (const c of cases) {
     client.setQueryData(['drawings', '', 1], { items: ['old'] })
     client.setQueryData(['version-content', 5], { content: 'old' })
     const u = userEvent.setup()
+    if (c.name === '工序') await u.click(await screen.findByRole('button', { name: '展开工序 10' }))
     await u.click(await screen.findByRole('button', { name: c.button }))
     expect(screen.getByRole('dialog', { name: `删除${c.name}` })).toHaveTextContent('无法恢复')
     expect(calls.filter((r) => r.method === 'DELETE')).toHaveLength(0)
@@ -57,6 +59,7 @@ for (const c of cases) {
     expect(calls.filter((r) => r.method === 'DELETE')).toHaveLength(0)
     await u.click(screen.getByRole('button', { name: c.button }))
     await u.click(screen.getByRole('button', { name: '确认删除' }))
+    if (c.name === '程序') await u.click(await screen.findByRole('button', { name: '展开工序 10' }))
     expect(await screen.findByText(c.outcome)).toBeInTheDocument()
     expect(calls.filter((r) => r.method === 'DELETE')).toEqual([expect.objectContaining({ path: c.path })])
     expect(client.getQueryState(['drawings', '', 1])?.isInvalidated).toBe(true)
@@ -66,11 +69,13 @@ for (const c of cases) {
     setup(true)
     view(c.route)
     const u = userEvent.setup()
+    if (c.name === '工序') await u.click(await screen.findByRole('button', { name: '展开工序 10' }))
     await u.click(await screen.findByRole('button', { name: c.button }))
     await u.click(screen.getByRole('button', { name: '确认删除' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('暂时无法删除')
     expect(screen.getByRole('dialog')).toBeInTheDocument()
     await u.click(screen.getByRole('button', { name: '确认删除' }))
+    if (c.name === '程序') await u.click(await screen.findByRole('button', { name: '展开工序 10' }))
     expect(await screen.findByText(c.outcome)).toBeInTheDocument()
   })
 }
@@ -100,11 +105,13 @@ test('程序已被其他用户删除时仍返回父级', async () => {
       return { status: 404, body: { error: '不存在' } }
     }
     if (r.path === '/programs/1/versions') return { body: [version()] }
+    if (r.path === '/versions/5/tools') return { body: { items: [], revision: 'empty' } }
     return { body: detail([operation({ programs: deleted ? [] : [program()] })]) }
   })
   view('/drawings/1/programs/1')
   const u = userEvent.setup()
   await u.click(await screen.findByRole('button', { name: '删除程序' }))
   await u.click(screen.getByRole('button', { name: '确认删除' }))
+  await u.click(await screen.findByRole('button', { name: '展开工序 10' }))
   expect(await screen.findByText('暂无程序')).toBeInTheDocument()
 })

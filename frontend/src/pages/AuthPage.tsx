@@ -8,9 +8,9 @@ import { Button } from '../components/ui/Button'
 import { Field } from '../components/ui/Field'
 
 /** 首次启动创建管理员，其余时候登录。 */
-export default function AuthPage({ setup }: { setup: boolean }) {
+export default function AuthPage({ setup, notice, initialUsername = '' }: { setup: boolean; notice?: string; initialUsername?: string }) {
   const qc = useQueryClient()
-  const [username, setUsername] = useState('')
+  const [username, setUsername] = useState(initialUsername)
   const [displayName, setDisplayName] = useState('')
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
@@ -43,6 +43,7 @@ export default function AuthPage({ setup }: { setup: boolean }) {
           <h1 className="text-2xl font-bold text-slate-900">CNC-Manager</h1>
           <p className="mt-1 text-slate-600">{setup ? '首次使用：创建管理员账号' : '登录后查看数控程序台账'}</p>
         </div>
+        {notice && <p role="status" className="rounded-lg bg-green-50 px-3 py-2 text-sm text-green-800">{notice}</p>}
         <Field label="用户名" value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" autoCapitalize="none" autoFocus />
         {setup && <Field label="显示名称（可选）" value={displayName} onChange={(e) => setDisplayName(e.target.value)} />}
         <Field
@@ -62,6 +63,14 @@ export default function AuthPage({ setup }: { setup: boolean }) {
         <Button type="submit" loading={busy} className="w-full">
           {setup ? '创建并进入' : '登录'}
         </Button>
+        {!setup && <details className="rounded-xl bg-slate-50 p-3 text-sm text-slate-600">
+          <summary className="cursor-pointer py-2 font-medium text-slate-800">忘记密码？</summary>
+          <div className="mt-2 space-y-2 leading-6">
+            <p>请联系负责部署本系统的服务器管理员，提供你的登录用户名，请管理员核实身份后重置密码。</p>
+            <p>重置后使用新密码登录，再到“我的 → 修改密码”设置自己的密码。</p>
+            <p>系统无法查看原密码，暂不支持短信或邮箱找回。无需重新注册或删除数据。</p>
+          </div>
+        </details>}
       </form>
     </main>
   )

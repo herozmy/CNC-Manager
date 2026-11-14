@@ -8,15 +8,17 @@ import type { UploadResult, Version } from '../api/types'
 import DeleteSheet from '../components/DeleteSheet'
 import NCEditorSheet from '../components/NCEditorSheet'
 import UploadSheet from '../components/UploadSheet'
+import VersionToolTable from '../components/VersionToolTable'
+import VersionDiffSheet from '../components/VersionDiffSheet'
 import { Button } from '../components/ui/Button'
 import { ConfirmSheet } from '../components/ui/Sheet'
 import { EmptyState, ErrorState, Spinner } from '../components/ui/State'
 import { formatBytes, relativeTime } from '../lib/format'
 import { VersionBadge } from './DrawingPage'
 
-function VersionRow({ v, onActivate, onView }: { v: Version; onActivate: () => void; onView: () => void }) {
+function VersionDetails({ v, onActivate, onView, onCompare }: { v: Version; onActivate: () => void; onView: () => void; onCompare?: () => void }) {
   return (
-    <li className={`rounded-2xl border p-4 ${v.isCurrent ? 'border-amber-400 bg-amber-50' : 'border-slate-200 bg-white'}`}>
+    <section aria-label={`V${v.versionNo} 版本详情`} className={`rounded-2xl border p-4 ${v.isCurrent ? 'border-amber-400 bg-amber-50' : 'border-slate-200 bg-white'}`}>
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <span className="text-lg font-bold">V{v.versionNo}</span>
@@ -31,6 +33,7 @@ function VersionRow({ v, onActivate, onView }: { v: Version; onActivate: () => v
       </p>
       {v.changeNote && <p className="mt-1 text-sm text-slate-700">{v.changeNote}</p>}
       <Button variant="secondary" className="mt-3 w-full" onClick={onView} aria-label={`查看 V${v.versionNo} 内容`}>查看 / 编辑 NC</Button>
+      {onCompare && <Button variant="secondary" className="mt-2 w-full" onClick={onCompare}>版本对比</Button>}
       <div className="mt-3 grid grid-cols-2 gap-2">
         <a
           href={api.downloadUrl(v.id)}
@@ -49,7 +52,7 @@ function VersionRow({ v, onActivate, onView }: { v: Version; onActivate: () => v
           </Button>
         )}
       </div>
-    </li>
+    </section>
   )
 }
 
@@ -70,13 +73,16 @@ export default function ProgramPage() {
   const [file, setFile] = useState<File | null>(null)
   const [uploaded, setUploaded] = useState<UploadResult | null>(null)
   const [viewVersion, setViewVersion] = useState<Version | null>(null)
+  const [compareVersion, setCompareVersion] = useState<Version | null>(null)
   const [saved, setSaved] = useState<string | null>(null)
   const [activate, setActivate] = useState<Version | null>(null)
+  const [selection, setSelection] = useState<{ programId: number; versionId: number } | null>(null)
 
   const switchVersion = useMutation({
     mutationFn: (v: Version) => api.setCurrentVersion(programId, v.id),
-    onSuccess: async () => {
+    onSuccess: async (_, v) => {
       await Promise.all([qc.invalidateQueries({ queryKey: ['versions', programId] }), qc.invalidateQueries({ queryKey: ['drawing', drawingId] })])
+      setSelection({ programId, versionId: v.id })
       setActivate(null)
     },
   })
@@ -84,6 +90,7 @@ export default function ProgramPage() {
   const op = drawing.data?.operations.find((o) => o.programs.some((p) => p.id === programId))
   const program = op?.programs.find((p) => p.id === programId)
   const current = versions.data?.find((v) => v.isCurrent)
+  const selected = selection?.programId === programId ? versions.data?.find((v) => v.id === selection.versionId) : undefined
   const notFound = [drawing.error, versions.error].some((e) => e instanceof ApiError && e.status === 404) || (drawing.isSuccess && !program)
 
   return (
@@ -129,16 +136,21 @@ export default function ProgramPage() {
             </div>
           )}
 
-          <div className="mb-6 grid gap-3 sm:grid-cols-2">
+          <div className={`mb-6 grid gap-3 ${current ? 'grid-cols-2 sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
             {current ? (
-              <a href={api.downloadUrl(current.id)} download aria-label="下载当前版本" className="inline-flex min-h-14 items-center justify-center gap-2 rounded-xl bg-amber-500 text-lg font-semibold text-slate-900 active:bg-amber-600">
-                <Download className="size-6" aria-hidden />
-                下载当前版本 V{current.versionNo}
-              </a>
+              <>
+                <a href={api.downloadUrl(current.id)} download aria-label="下载当前版本" className="inline-flex min-h-14 items-center justify-center gap-2 rounded-xl bg-amber-500 font-semibold text-slate-900 active:bg-amber-600">
+                  <Download className="size-5" aria-hidden />
+                  下载当前 V{current.versionNo}
+                </a>
+                <Button variant="secondary" className="min-h-14" aria-label="查看 / 编辑当前版本" onClick={() => setViewVersion(current)}>
+                  查看 / 编辑 V{current.versionNo}
+                </Button>
+              </>
             ) : (
               <p className="flex min-h-14 items-center justify-center rounded-xl bg-slate-100 text-slate-500">还没有 NC 文件</p>
             )}
-            <Button variant="secondary" className="min-h-14" onClick={() => fileInput.current?.click()}>
+            <Button variant="secondary" className={`min-h-14 ${current ? 'col-span-2 sm:col-span-1' : ''}`} onClick={() => fileInput.current?.click()}>
               <Upload className="size-5" aria-hidden />
               上传新版本
             </Button>
@@ -155,23 +167,42 @@ export default function ProgramPage() {
             />
           </div>
 
-          <h2 className="mb-2 text-lg font-bold">版本历史</h2>
           {versions.data.length === 0 ? (
             <EmptyState title="还没有版本">
               <p className="text-sm text-slate-500">点击「上传新版本」选择 NC 文件</p>
             </EmptyState>
           ) : (
-            <ul className="space-y-3">
-              {versions.data.map((v) => (
-                <VersionRow key={v.id} v={v} onView={() => setViewVersion(v)} onActivate={() => setActivate(v)} />
-              ))}
-            </ul>
+            <div className="space-y-3">
+              <label htmlFor="nc-version" className="block text-lg font-bold">版本历史</label>
+              <select
+                id="nc-version"
+                aria-label="选择 NC 程序版本"
+                className="h-12 w-full min-w-0 rounded-xl border border-slate-300 bg-white px-3 text-base text-slate-900 focus:outline-2 focus:outline-amber-500"
+                value={selected?.id ?? ''}
+                onChange={(e) => setSelection(e.target.value ? { programId, versionId: Number(e.target.value) } : null)}
+              >
+                <option value="">选择版本查看详情（共 {versions.data.length} 个）</option>
+                {versions.data.map((v) => (
+                  <option key={v.id} value={v.id}>V{v.versionNo}{v.isCurrent ? '（当前）' : ''} · {v.fileName}</option>
+                ))}
+              </select>
+              {selected && <VersionDetails v={selected} onView={() => setViewVersion(selected)} onCompare={versions.data.length > 1 ? () => setCompareVersion(selected) : undefined} onActivate={() => { switchVersion.reset(); setActivate(selected) }} />}
+            </div>
           )}
+          {(selected ?? current) && <VersionToolTable version={(selected ?? current)!} />}
         </>
       )}
 
-      {deleting && program && <DeleteSheet title="删除程序" message={`将删除程序「${program.programNo}」及其全部 ${versions.data?.length ?? 0} 个版本，无法恢复。`} remove={() => api.deleteProgram(programId)} onDeleted={() => navigate(`/drawings/${drawingId}`, { replace: true })} onClose={() => setDeleting(false)} />}
-      {viewVersion && <NCEditorSheet key={viewVersion.id} versionId={viewVersion.id} drawingId={drawingId} programId={programId} onClose={() => setViewVersion(null)} onSaved={(result) => { setSaved(`已保存 V${result.versionNo}${result.warning ? `：${result.warning}` : ''}`); setViewVersion(null) }} />}
+      {deleting && program && <DeleteSheet title="删除程序" message={`将删除程序「${program.programNo}」及其全部 ${versions.data?.length ?? 0} 个版本，无法恢复。`} remove={() => api.deleteProgram(programId)} onDeleted={() => {
+        for (const v of versions.data ?? []) qc.removeQueries({ queryKey: ['version-tools-draft', v.id], exact: true })
+        navigate(`/drawings/${drawingId}`, { replace: true })
+      }} onClose={() => setDeleting(false)} />}
+      {compareVersion && <VersionDiffSheet programId={programId} versionId={compareVersion.id} onClose={() => setCompareVersion(null)} />}
+      {viewVersion && <NCEditorSheet key={viewVersion.id} versionId={viewVersion.id} drawingId={drawingId} programId={programId} onClose={() => setViewVersion(null)} onSaved={(result) => {
+        setSaved(`已保存 V${result.versionNo}${result.warning ? `：${result.warning}` : ''}`)
+        setSelection({ programId, versionId: result.id })
+        setViewVersion(null)
+      }} />}
       {file && (
         <UploadSheet
           drawingId={drawingId}
@@ -181,6 +212,7 @@ export default function ProgramPage() {
           onDone={(r) => {
             setFile(null)
             setUploaded(r)
+            setSelection({ programId, versionId: r.id })
           }}
         />
       )}

@@ -59,7 +59,7 @@ func run(log *slog.Logger) error {
 
 	srv := &http.Server{
 		Addr:              cfg.Addr,
-		Handler:           httpapi.New(httpapi.Options{Version: version, Repo: r, Files: files, Log: log, SessionLifetime: cfg.SessionLifetime, Static: web.Handler()}),
+		Handler:           httpapi.New(httpapi.Options{DataDir: cfg.DataDir, Version: version, Repo: r, Files: files, Log: log, SessionLifetime: cfg.SessionLifetime, Static: web.Handler()}),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	errc := make(chan error, 1)

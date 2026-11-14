@@ -26,6 +26,7 @@ type BlobInput struct {
 
 // VersionFile 是读取版本内容所需的信息。
 type VersionFile struct {
+	SHA256    string `db:"sha256"`
 	VersionID int64  `db:"id"`
 	ProgramID int64  `db:"program_id"`
 	VersionNo int    `db:"version_no"`
@@ -38,6 +39,7 @@ type VersionFile struct {
 // VersionContent 是版本文本，已按 Encoding 解码成 UTF-8 供界面显示与编辑。
 // 保存时必须把 Encoding 原样带回，后端才能按同样编码写回。
 type VersionContent struct {
+	SHA256    string `json:"sha256"`
 	VersionID int64  `json:"versionId"`
 	ProgramID int64  `json:"programId"`
 	VersionNo int    `json:"versionNo"`
@@ -51,10 +53,11 @@ type VersionContent struct {
 
 // ContentInput 是保存程序文本的请求体。
 type ContentInput struct {
-	Content    string `json:"content"`
-	Encoding   string `json:"encoding"`
-	FileName   string `json:"fileName"`
-	ChangeNote string `json:"changeNote"`
+	ExpectedSHA256 *string `json:"expectedSHA256,omitempty"` // 覆盖时用于乐观并发检查；旧客户端可省略。
+	Content        string  `json:"content"`
+	Encoding       string  `json:"encoding"`
+	FileName       string  `json:"fileName"`
+	ChangeNote     string  `json:"changeNote"`
 }
 
 // VersionSaveResult 是保存文本的响应；Warning 提示被目标编码存不下而替换的字符。

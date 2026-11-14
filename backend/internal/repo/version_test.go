@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
 	"testing"
 
 	"cnc-manager/internal/domain"
@@ -11,6 +12,52 @@ import (
 
 func blob(sha, enc string) domain.BlobInput {
 	return domain.BlobInput{SHA256: sha, SizeBytes: 10, Encoding: enc, RelPath: sha[:2] + "/" + sha + ".nc"}
+}
+
+func TestOverwriteVersionConcurrentCheck(t *testing.T) {
+	r := newTestRepo(t)
+	ctx := context.Background()
+	p := newProgram(t, r, "CONFLICT")
+	v, err := r.AddVersion(ctx, p.ID, blob("aa11", "utf-8"), "a.nc", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var wg sync.WaitGroup
+	results := make(chan error, 2)
+	start := make(chan struct{})
+	for _, sha := range []string{"bb22", "cc33"} {
+		wg.Add(1)
+		go func(sha string) {
+			defer wg.Done()
+			<-start
+			_, err := r.OverwriteVersion(ctx, v.ID, blob(sha, "utf-8"), &v.SHA256)
+			results <- err
+		}(sha)
+	}
+	close(start)
+	wg.Wait()
+	close(results)
+	ok, conflicts := 0, 0
+	for err := range results {
+		if err == nil {
+			ok++
+		} else if errors.Is(err, domain.ErrConflict) {
+			conflicts++
+		} else {
+			t.Fatal(err)
+		}
+	}
+	if ok != 1 || conflicts != 1 {
+		t.Fatalf("成功=%d 冲突=%d", ok, conflicts)
+	}
+	var count int
+	if err := r.db.Get(&count, "SELECT COUNT(*) FROM nc_blob"); err != nil || count != 2 {
+		t.Fatalf("冲突不应写入 blob: %d %v", count, err)
+	}
+	got, err := r.GetVersion(ctx, v.ID)
+	if err != nil || (got.SHA256 != "bb22" && got.SHA256 != "cc33") {
+		t.Fatalf("%+v %v", got, err)
+	}
 }
 
 func newProgram(t *testing.T, r *Repo, drawingNo string) *domain.Program {
@@ -113,7 +160,7 @@ func TestOverwriteVersion(t *testing.T) {
 	v1, _ := r.AddVersion(ctx, p.ID, blob("aa11", "utf-8"), "a.nc", "")
 	v2, _ := r.AddVersion(ctx, p.ID, blob("bb22", "utf-8"), "b.nc", "")
 
-	got, err := r.OverwriteVersion(ctx, v1.ID, blob("ff66", "gbk"))
+	got, err := r.OverwriteVersion(ctx, v1.ID, blob("ff66", "gbk"), nil)
 	if err != nil || got.SHA256 != "ff66" || got.Encoding != "gbk" || got.VersionNo != 1 || got.FileName != "a.nc" {
 		t.Fatalf("覆盖异常: %+v %v", got, err)
 	}
@@ -125,7 +172,7 @@ func TestOverwriteVersion(t *testing.T) {
 	if len(list) != 2 {
 		t.Fatal("覆盖不应新增版本")
 	}
-	if _, err := r.OverwriteVersion(ctx, 999, blob("ab12", "utf-8")); !errors.Is(err, domain.ErrNotFound) {
+	if _, err := r.OverwriteVersion(ctx, 999, blob("ab12", "utf-8"), nil); !errors.Is(err, domain.ErrNotFound) {
 		t.Fatal("不存在的版本应 NotFound")
 	}
 }

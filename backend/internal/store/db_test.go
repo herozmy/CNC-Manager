@@ -26,8 +26,56 @@ func TestMigrateCreatesSchemaAndIsIdempotent(t *testing.T) {
 	if n != 7 {
 		t.Fatalf("核心表数量 = %d，期望 7", n)
 	}
-	if err := db.Get(&n, `SELECT COUNT(*) FROM schema_migration`); err != nil || n != 1 {
+	if err := db.Get(&n, `SELECT COUNT(*) FROM schema_migration`); err != nil || n != 3 {
 		t.Fatalf("迁移记录 = %d, err=%v", n, err)
+	}
+}
+
+func TestCoordinateMigrationPreservesExistingZ(t *testing.T) {
+	db, err := Open(filepath.Join(t.TempDir(), "old.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	initial, err := migrationsFS.ReadFile("migrations/0001_init.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(string(initial)); err != nil {
+		t.Fatal(err)
+	}
+	for _, sql := range []string{
+		`CREATE TABLE schema_migration (version TEXT PRIMARY KEY, applied_at TEXT NOT NULL)`,
+		`INSERT INTO schema_migration VALUES ('0001_init', '2026-11-14T00:00:00Z')`,
+		`INSERT INTO drawing (id, drawing_no, created_at, updated_at) VALUES (1, 'LEGACY', '', '')`,
+		`INSERT INTO operation (id, drawing_id, op_no, z_height_milli, fixture, created_at, updated_at) VALUES (1, 1, 10, 25500, '虎钳', '', '')`,
+		`INSERT INTO nc_program (id, operation_id, program_no, created_at, updated_at) VALUES (1, 1, 'O1', '', '')`,
+	} {
+		if _, err := db.Exec(sql); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for i := 0; i < 2; i++ {
+		if err := Migrate(context.Background(), db); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var coords struct {
+		X               int64  `db:"x_coordinate_milli"`
+		Y               int64  `db:"y_coordinate_milli"`
+		Z               int64  `db:"z_height_milli"`
+		Fixture         string `db:"fixture"`
+		CenteringMethod string `db:"centering_method"`
+	}
+	if err := db.Get(&coords, `SELECT x_coordinate_milli, y_coordinate_milli, z_height_milli, fixture, centering_method FROM operation WHERE id = 1`); err != nil {
+		t.Fatal(err)
+	}
+	if coords.X != 0 || coords.Y != 0 || coords.Z != 25500 || coords.Fixture != "虎钳" || coords.CenteringMethod != "" {
+		t.Fatalf("迁移不应改变原值: %+v", coords)
+	}
+	var operationID int64
+	if err := db.Get(&operationID, `SELECT operation_id FROM nc_program WHERE id = 1`); err != nil || operationID != 1 {
+		t.Fatalf("迁移不应破坏程序关联: %d %v", operationID, err)
 	}
 }
 

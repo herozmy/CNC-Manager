@@ -145,7 +145,7 @@ func (r *Repo) DeleteDrawing(ctx context.Context, id int64) error {
 // ---- 工序 ----
 
 const operationCols = `o.id, o.drawing_id, o.op_no, o.op_name, o.sort_order, o.machine_id,
-	COALESCE(m.name, '') AS machine_name, o.fixture, o.z_height_milli, o.remark, o.created_at, o.updated_at,
+	COALESCE(m.name, '') AS machine_name, o.fixture, o.centering_method, o.x_coordinate_milli, o.y_coordinate_milli, o.z_height_milli, o.remark, o.created_at, o.updated_at,
 	(SELECT COUNT(*) FROM nc_program p WHERE p.operation_id = o.id) AS program_count`
 
 const operationFrom = ` FROM operation o LEFT JOIN machine m ON m.id = o.machine_id `
@@ -158,6 +158,8 @@ func (r *Repo) ListOperations(ctx context.Context, drawingID int64) ([]domain.Op
 		return nil, wrap(err)
 	}
 	for i := range items {
+		items[i].XCoordinate = domain.MilliToFloat(items[i].XCoordinateMilli)
+		items[i].YCoordinate = domain.MilliToFloat(items[i].YCoordinateMilli)
 		items[i].ZHeight = domain.MilliToFloat(items[i].ZHeightMilli)
 	}
 	return items, nil
@@ -169,8 +171,17 @@ func (r *Repo) GetOperation(ctx context.Context, id int64) (*domain.Operation, e
 	if err := r.db.GetContext(ctx, &o, `SELECT `+operationCols+operationFrom+`WHERE o.id = ?`, id); err != nil {
 		return nil, wrap(err)
 	}
+	o.XCoordinate = domain.MilliToFloat(o.XCoordinateMilli)
+	o.YCoordinate = domain.MilliToFloat(o.YCoordinateMilli)
 	o.ZHeight = domain.MilliToFloat(o.ZHeightMilli)
 	return &o, nil
+}
+
+func coordinateMilli(value *float64, fallback int64) int64 {
+	if value == nil {
+		return fallback
+	}
+	return domain.FloatToMilli(*value)
 }
 
 // CreateOperation 在图纸下新增工序，排在最后。
@@ -183,9 +194,9 @@ func (r *Repo) CreateOperation(ctx context.Context, drawingID int64, in domain.O
 	}
 	now := domain.Now()
 	res, err := r.db.ExecContext(ctx,
-		`INSERT INTO operation (drawing_id, op_no, op_name, machine_id, sort_order, fixture, z_height_milli, remark, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM operation WHERE drawing_id = ?), ?, ?, ?, ?, ?)`,
-		drawingID, in.OpNo, in.OpName, in.MachineID, drawingID, in.Fixture, domain.FloatToMilli(in.ZHeight), in.Remark, now, now)
+		`INSERT INTO operation (drawing_id, op_no, op_name, machine_id, sort_order, fixture, centering_method, x_coordinate_milli, y_coordinate_milli, z_height_milli, remark, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM operation WHERE drawing_id = ?), ?, COALESCE(?, ''), ?, ?, ?, ?, ?, ?)`,
+		drawingID, in.OpNo, in.OpName, in.MachineID, drawingID, in.Fixture, in.CenteringMethod, coordinateMilli(in.XCoordinate, 0), coordinateMilli(in.YCoordinate, 0), domain.FloatToMilli(in.ZHeight), in.Remark, now, now)
 	if err != nil {
 		return nil, wrap(err)
 	}
@@ -201,12 +212,13 @@ func (r *Repo) UpdateOperation(ctx context.Context, id int64, in domain.Operatio
 	if err := in.Normalize(); err != nil {
 		return nil, err
 	}
-	if _, err := r.GetOperation(ctx, id); err != nil {
+	previous, err := r.GetOperation(ctx, id)
+	if err != nil {
 		return nil, err
 	}
 	if _, err := r.db.ExecContext(ctx,
-		`UPDATE operation SET op_no = ?, op_name = ?, machine_id = ?, fixture = ?, z_height_milli = ?, remark = ?, updated_at = ? WHERE id = ?`,
-		in.OpNo, in.OpName, in.MachineID, in.Fixture, domain.FloatToMilli(in.ZHeight), in.Remark, domain.Now(), id); err != nil {
+		`UPDATE operation SET op_no = ?, op_name = ?, machine_id = ?, fixture = ?, centering_method = COALESCE(?, centering_method), x_coordinate_milli = ?, y_coordinate_milli = ?, z_height_milli = ?, remark = ?, updated_at = ? WHERE id = ?`,
+		in.OpNo, in.OpName, in.MachineID, in.Fixture, in.CenteringMethod, coordinateMilli(in.XCoordinate, previous.XCoordinateMilli), coordinateMilli(in.YCoordinate, previous.YCoordinateMilli), domain.FloatToMilli(in.ZHeight), in.Remark, domain.Now(), id); err != nil {
 		return nil, wrap(err)
 	}
 	if err := r.log(ctx, r.db, "update", "operation", id, fmt.Sprintf("修改工序 %d %s", in.OpNo, in.OpName)); err != nil {

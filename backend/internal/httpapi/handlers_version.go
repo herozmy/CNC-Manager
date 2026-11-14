@@ -168,6 +168,7 @@ func (s *Server) handleGetVersionContent(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	writeJSON(w, http.StatusOK, domain.VersionContent{
+		SHA256:    f.SHA256,
 		VersionID: f.VersionID, ProgramID: f.ProgramID, VersionNo: f.VersionNo, FileName: f.FileName,
 		Encoding: f.Encoding, Content: text, LineCount: len(splitLines(text)), SizeBytes: len(raw), IsCurrent: f.IsCurrent,
 	})
@@ -200,7 +201,8 @@ func (s *Server) handleSaveContentAsNew(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	var in domain.ContentInput
-	if !decodeJSON(w, r, &in) {
+	// JSON 转义最多将一个源字节展开为六个字符；实际文件上限仍由 ncstore 校验。
+	if !decodeJSONLimit(w, r, &in, 6*s.files.MaxBytes()+multipartOverhead) {
 		return
 	}
 	p, err := s.repo.GetProgram(r.Context(), id)
@@ -240,7 +242,7 @@ func (s *Server) handleOverwriteContent(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	var in domain.ContentInput
-	if !decodeJSON(w, r, &in) {
+	if !decodeJSONLimit(w, r, &in, 6*s.files.MaxBytes()+multipartOverhead) {
 		return
 	}
 	f, err := s.repo.GetVersionFile(r.Context(), id)
@@ -248,12 +250,16 @@ func (s *Server) handleOverwriteContent(w http.ResponseWriter, r *http.Request) 
 		s.fail(w, err)
 		return
 	}
+	if in.ExpectedSHA256 != nil && *in.ExpectedSHA256 != f.SHA256 {
+		s.fail(w, fmt.Errorf("%w: 此版本已被其他操作修改，请载入最新内容或另存新版本", domain.ErrConflict))
+		return
+	}
 	saved, warning, err := s.saveText(&in, f.Encoding)
 	if err != nil {
 		s.fail(w, err)
 		return
 	}
-	v, err := s.repo.OverwriteVersion(r.Context(), id, blobOf(saved))
+	v, err := s.repo.OverwriteVersion(r.Context(), id, blobOf(saved), in.ExpectedSHA256)
 	if err != nil {
 		s.fail(w, err)
 		return
@@ -298,9 +304,30 @@ func (s *Server) handleDiffVersions(w http.ResponseWriter, r *http.Request) {
 	}
 	left, right := splitLines(lt), splitLines(rt)
 	res := diff.Compare(left, right)
+	changes := 0
+	lines := make([]domain.DiffLine, 0, len(res.Lines))
+	for _, line := range res.Lines {
+		if line.Type != "same" {
+			changes++
+		}
+		if r.URL.Query().Get("changesOnly") != "1" || line.Type != "same" {
+			lines = append(lines, line)
+		}
+	}
+	total := len(lines)
+	if r.URL.Query().Has("limit") {
+		limit, offset := queryInt(r, "limit", 0), queryInt(r, "offset", 0)
+		if limit < 1 || limit > 500 || offset < 0 {
+			writeError(w, http.StatusBadRequest, "对比页大小应为 1~500，起始位置不能为负数")
+			return
+		}
+		start := min(offset, total)
+		lines = lines[start:min(start+limit, total)]
+	}
 	writeJSON(w, http.StatusOK, domain.DiffResult{
+		TotalLines: total, TotalChanges: changes,
 		LeftVersionNo: lf.VersionNo, RightVersionNo: rf.VersionNo,
-		Identical: diff.Identical(left, right), Truncated: res.Truncated, Lines: res.Lines,
+		Identical: diff.Identical(left, right), Truncated: res.Truncated, Lines: lines,
 	})
 }
 

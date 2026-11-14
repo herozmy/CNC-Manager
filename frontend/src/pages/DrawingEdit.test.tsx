@@ -53,12 +53,57 @@ test('空图纸：新增第一道工序，工序号默认 10，成功后列表�
   const dialog = screen.getByRole('dialog', { name: '新增工序' })
   expect(within(dialog).getByLabelText('工序号')).toHaveValue('10')
   await u.type(within(dialog).getByLabelText('工序名称'), '粗车')
-  await u.type(within(dialog).getByLabelText('Z 轴垫高（mm）'), '25.5')
+  await u.type(within(dialog).getByLabelText('X 坐标（mm）'), '-12.25')
+  await u.type(within(dialog).getByLabelText('Y 坐标（mm）'), '0.125')
+  await u.type(within(dialog).getByLabelText('Z 坐标（mm）'), '-25.5')
   await u.click(within(dialog).getByRole('button', { name: '保存' }))
 
   expect(await screen.findByRole('heading', { name: '10# 粗车' })).toBeInTheDocument()
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-  expect(calls.find((c) => c.method === 'POST')?.body).toEqual({ opNo: 10, opName: '粗车', machineId: null, fixture: '', zHeight: 25.5, remark: '' })
+  expect(calls.find((c) => c.method === 'POST')?.body).toEqual({ opNo: 10, opName: '粗车', machineId: null, fixture: '', centeringMethod: '', xCoordinate: -12.25, yCoordinate: 0.125, zHeight: -25.5, remark: '' })
+})
+
+test('分中方式创建后展示，编辑回填，失败保留草稿，可修改和清空', async () => {
+  let saved: ReturnType<typeof operation> | undefined
+  let fail = false
+  const calls = mockApi((r) => {
+    if (r.path === '/drawings/1/detail') return { body: detail(saved ? [saved] : []) }
+    if (r.method === 'POST' || r.method === 'PUT') {
+      if (fail) return { status: 500, body: { error: '保存失败' } }
+      saved = operation({ ...r.body as Record<string, unknown>, programs: [] })
+      return { status: r.method === 'POST' ? 201 : 200, body: saved }
+    }
+  })
+  renderApp(view(), '/drawings/1')
+  const u = userEvent.setup()
+  await u.click(await screen.findByRole('button', { name: '新增第一道工序' }))
+  expect(screen.getByLabelText('分中方式')).toHaveValue('')
+  expect(screen.getByLabelText('分中方式')).toHaveAttribute('maxlength', '200')
+  await u.type(screen.getByLabelText('分中方式'), '  四面分中  ')
+  await u.click(screen.getByRole('button', { name: '保存' }))
+  await u.click(await screen.findByRole('button', { name: '展开工序 10' }))
+  expect(await screen.findByText('分中方式：四面分中')).toBeInTheDocument()
+  expect(calls.find((r) => r.method === 'POST')?.body).toMatchObject({ centeringMethod: '四面分中' })
+
+  await u.click(screen.getByRole('button', { name: '编辑工序 10' }))
+  expect(screen.getByLabelText('分中方式')).toHaveValue('四面分中')
+  await u.clear(screen.getByLabelText('分中方式'))
+  await u.type(screen.getByLabelText('分中方式'), '孔分中')
+  fail = true
+  await u.click(screen.getByRole('button', { name: '保存' }))
+  expect(await screen.findByRole('alert')).toHaveTextContent('保存失败')
+  expect(screen.getByLabelText('分中方式')).toHaveValue('孔分中')
+  fail = false
+  await u.click(screen.getByRole('button', { name: '保存' }))
+  expect(await screen.findByText('分中方式：孔分中')).toBeInTheDocument()
+
+  await u.click(screen.getByRole('button', { name: '编辑工序 10' }))
+  expect(screen.getByLabelText('分中方式')).toHaveValue('孔分中')
+  await u.clear(screen.getByLabelText('分中方式'))
+  await u.click(screen.getByRole('button', { name: '保存' }))
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  expect(screen.queryByText(/^分中方式：/)).not.toBeInTheDocument()
+  expect(calls.filter((r) => r.method === 'PUT').at(-1)?.body).toMatchObject({ centeringMethod: '' })
 })
 
 test('建议工序号 = 现有最大号 + 10', async () => {
@@ -94,7 +139,7 @@ test('自定义装夹方式会去除首尾空格后提交', async () => {
   expect(calls.find((c) => c.method === 'POST')?.body).toMatchObject({ fixture: '三爪卡盘' })
 })
 
-test('工序表单校验：工序号与垫高非法时不提交', async () => {
+test('工序表单校验：工序号与坐标非法时不提交', async () => {
   const calls = server([])
   renderApp(view(), '/drawings/1')
   const u = userEvent.setup()
@@ -106,9 +151,9 @@ test('工序表单校验：工序号与垫高非法时不提交', async () => {
 
   await u.clear(screen.getByLabelText('工序号'))
   await u.type(screen.getByLabelText('工序号'), '10')
-  await u.type(screen.getByLabelText('Z 轴垫高（mm）'), '-3')
+  await u.type(screen.getByLabelText('Z 坐标（mm）'), '100001')
   await u.click(screen.getByRole('button', { name: '保存' }))
-  expect(await screen.findByText('垫高应为不小于 0 的数字')).toBeInTheDocument()
+  expect(await screen.findByText('Z 坐标应为 -100000~100000 mm 的数字')).toBeInTheDocument()
   expect(calls.some((c) => c.method === 'POST')).toBe(false)
 })
 
@@ -126,26 +171,84 @@ test('工序号重复时标在输入框上，弹层保持打开', async () => {
 })
 
 test('编辑工序时原样带回机台，避免被后端清空', async () => {
-  const calls = server([operation({ machineId: 5, machineName: 'CK6150', fixture: '三爪', zHeight: 25.5 })])
+  const calls = server([operation({ machineId: 5, machineName: 'CK6150', fixture: '三爪', xCoordinate: -10.5, yCoordinate: 20.125, zHeight: -25.5 })])
   renderApp(view(), '/drawings/1')
   const u = userEvent.setup()
+  await u.click(await screen.findByRole('button', { name: '展开工序 10' }))
   await u.click(await screen.findByRole('button', { name: '编辑工序 10' }))
   const dialog = screen.getByRole('dialog', { name: '编辑工序' })
   expect(within(dialog).getByLabelText('工序名称')).toHaveValue('粗车')
-  expect(within(dialog).getByLabelText('Z 轴垫高（mm）')).toHaveValue('25.5')
+  expect(within(dialog).getByLabelText('X 坐标（mm）')).toHaveValue('-10.5')
+  expect(within(dialog).getByLabelText('Y 坐标（mm）')).toHaveValue('20.125')
+  expect(within(dialog).getByLabelText('Z 坐标（mm）')).toHaveValue('-25.5')
   expect(within(dialog).getByLabelText('装夹方式')).toHaveDisplayValue('自定义')
   expect(within(dialog).getByLabelText('自定义装夹方式')).toHaveValue('三爪')
   await u.clear(within(dialog).getByLabelText('工序名称'))
   await u.type(within(dialog).getByLabelText('工序名称'), '精车')
   await u.click(within(dialog).getByRole('button', { name: '保存' }))
   await waitFor(() => expect(calls.some((c) => c.method === 'PUT')).toBe(true))
-  expect(calls.find((c) => c.method === 'PUT')).toMatchObject({ path: '/operations/1', body: { opNo: 10, opName: '精车', machineId: 5, fixture: '三爪', zHeight: 25.5 } })
+  expect(calls.find((c) => c.method === 'PUT')).toMatchObject({ path: '/operations/1', body: { opNo: 10, opName: '精车', machineId: 5, fixture: '三爪', xCoordinate: -10.5, yCoordinate: 20.125, zHeight: -25.5 } })
+})
+
+test.each([['X', 'abc'], ['Y', '-100001'], ['Z', 'Infinity']])('%s 坐标非法时阻止提交并保留输入', async (axis, value) => {
+  const calls = server([])
+  renderApp(view(), '/drawings/1')
+  const u = userEvent.setup()
+  await u.click(await screen.findByRole('button', { name: '新增第一道工序' }))
+  const input = screen.getByLabelText(`${axis} 坐标（mm）`)
+  await u.type(input, value)
+  await u.click(screen.getByRole('button', { name: '保存' }))
+  expect(await screen.findByRole('alert')).toHaveTextContent(`${axis} 坐标应为 -100000~100000 mm 的数字`)
+  expect(input).toHaveValue(value)
+  expect(input).toHaveAttribute('aria-invalid', 'true')
+  expect(calls.some((c) => c.method === 'POST')).toBe(false)
+})
+
+test('旧工序未含 X/Y 时默认 0，三个坐标清空后保存为 0', async () => {
+  const calls = server([operation({ xCoordinate: undefined, yCoordinate: undefined, zHeight: 25.5 })])
+  renderApp(view(), '/drawings/1')
+  const u = userEvent.setup()
+  await u.click(await screen.findByRole('button', { name: '展开工序 10' }))
+  await u.click(await screen.findByRole('button', { name: '编辑工序 10' }))
+  expect(screen.getByLabelText('X 坐标（mm）')).toHaveValue('0')
+  expect(screen.getByLabelText('Y 坐标（mm）')).toHaveValue('0')
+  expect(screen.getByLabelText('Z 坐标（mm）')).toHaveValue('25.5')
+  for (const axis of ['X', 'Y', 'Z']) await u.clear(screen.getByLabelText(`${axis} 坐标（mm）`))
+  await u.click(screen.getByRole('button', { name: '保存' }))
+  await waitFor(() => expect(calls.some((c) => c.method === 'PUT')).toBe(true))
+  expect(calls.find((c) => c.method === 'PUT')?.body).toMatchObject({ xCoordinate: 0, yCoordinate: 0, zHeight: 0 })
+})
+
+test('保存失败保留三个坐标，可重试保存', async () => {
+  let fail = true
+  const calls = mockApi((r) => {
+    if (r.method === 'GET') return { body: detail([operation()]) }
+    if (r.method === 'PUT') return fail ? { status: 500, body: { error: '保存失败' } } : { body: operation(r.body as Record<string, unknown>) }
+  })
+  renderApp(view(), '/drawings/1')
+  const u = userEvent.setup()
+  await u.click(await screen.findByRole('button', { name: '展开工序 10' }))
+  await u.click(await screen.findByRole('button', { name: '编辑工序 10' }))
+  for (const [axis, value] of [['X', '-12.345'], ['Y', '67.89'], ['Z', '-0.125']]) {
+    await u.clear(screen.getByLabelText(`${axis} 坐标（mm）`))
+    await u.type(screen.getByLabelText(`${axis} 坐标（mm）`), value)
+  }
+  await u.click(screen.getByRole('button', { name: '保存' }))
+  expect(await screen.findByRole('alert')).toHaveTextContent('保存失败')
+  expect(screen.getByLabelText('X 坐标（mm）')).toHaveValue('-12.345')
+  expect(screen.getByLabelText('Y 坐标（mm）')).toHaveValue('67.89')
+  expect(screen.getByLabelText('Z 坐标（mm）')).toHaveValue('-0.125')
+  fail = false
+  await u.click(screen.getByRole('button', { name: '保存' }))
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  expect(calls.filter((c) => c.method === 'PUT')).toHaveLength(2)
 })
 
 test('删除工序需二次确认，并说明会连带删除程序', async () => {
   const calls = server([operation()])
   renderApp(view(), '/drawings/1')
   const u = userEvent.setup()
+  await u.click(await screen.findByRole('button', { name: '展开工序 10' }))
   await u.click(await screen.findByRole('button', { name: '编辑工序 10' }))
   await u.click(screen.getByRole('button', { name: '删除此工序' }))
   expect(screen.getByText(/及其下的 1 个程序和全部版本/)).toBeInTheDocument()
@@ -160,6 +263,7 @@ test('取消删除不会发请求', async () => {
   const calls = server([operation()])
   renderApp(view(), '/drawings/1')
   const u = userEvent.setup()
+  await u.click(await screen.findByRole('button', { name: '展开工序 10' }))
   await u.click(await screen.findByRole('button', { name: '编辑工序 10' }))
   await u.click(screen.getByRole('button', { name: '删除此工序' }))
   await u.click(screen.getByRole('button', { name: '取消' }))
@@ -170,6 +274,7 @@ test('新增程序：校验程序号，成功后进入程序页', async () => {
   const calls = server([operation({ programs: [] })])
   renderApp(view(), '/drawings/1')
   const u = userEvent.setup()
+  await u.click(await screen.findByRole('button', { name: '展开工序 10' }))
   await u.click(await screen.findByRole('button', { name: '在 10# 下新增程序' }))
   await u.click(screen.getByRole('button', { name: '创建并上传文件' }))
   expect(await screen.findByText('请输入程序号')).toBeInTheDocument()

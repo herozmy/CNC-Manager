@@ -6,7 +6,7 @@ import type { User } from '../api/types'
 
 export type Session =
   | { state: 'setup' } // 还没有任何用户，需要创建管理员
-  | { state: 'out' } // 未登录
+  | { state: 'out'; notice?: string; username?: string } // 未登录
   | { state: 'in'; user: User }
 
 export const SESSION_KEY = ['session'] as const

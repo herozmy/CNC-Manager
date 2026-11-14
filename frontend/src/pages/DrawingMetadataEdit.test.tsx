@@ -64,6 +64,7 @@ test('编辑已有图纸：回填字段，保存后详情和总览更新，保�
   expect(screen.getByText('45#')).toBeInTheDocument()
   expect(screen.getByText('调整装夹')).toBeInTheDocument()
   expect(screen.getByRole('heading', { name: '10# 粗车' })).toBeInTheDocument()
+  await u.click(screen.getByRole('button', { name: '展开工序 10' }))
   expect(screen.getByRole('link', { name: /O1234/ })).toBeInTheDocument()
   expect(calls.find((r) => r.method === 'PUT')?.body).toEqual({ drawingNo: 'D-2002', name: '轴类', material: '45#', remark: '调整装夹', customer: '客户A', drawingVersion: 'B' })
   await u.click(screen.getByRole('link', { name: '返回总览' }))

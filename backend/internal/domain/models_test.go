@@ -37,9 +37,32 @@ func TestOperationInputNormalize(t *testing.T) {
 	if err := in.Normalize(); err != nil || in.MachineID != nil {
 		t.Fatalf("机台 0 应视为未选择: %+v %v", in, err)
 	}
-	for _, bad := range []OperationInput{{OpNo: 0}, {OpNo: 10000}, {OpNo: 10, ZHeight: -1}, {OpNo: 10, ZHeight: math.NaN()}} {
+	for _, bad := range []OperationInput{{OpNo: 0}, {OpNo: 10000}, {OpNo: 10, ZHeight: -100001}, {OpNo: 10, ZHeight: math.NaN()}} {
 		if err := bad.Normalize(); !errors.Is(err, ErrInvalid) {
 			t.Errorf("%+v 应为参数错误", bad)
+		}
+	}
+}
+
+func TestOperationCoordinateBounds(t *testing.T) {
+	for _, axis := range []string{"X", "Y", "Z"} {
+		for _, value := range []float64{-100000, -25.501, 0, 25.501, 100000, -100000.001, 100000.001, math.Inf(-1), math.Inf(1), math.NaN()} {
+			in := OperationInput{OpNo: 10}
+			switch axis {
+			case "X":
+				in.XCoordinate = &value
+			case "Y":
+				in.YCoordinate = &value
+			case "Z":
+				in.ZHeight = value
+			}
+			err := in.Normalize()
+			invalid := math.Abs(value) > 100000 || math.IsNaN(value) || math.IsInf(value, 0)
+			if invalid && (!errors.Is(err, ErrInvalid) || !strings.Contains(err.Error(), axis+" 坐标")) {
+				t.Errorf("%s=%v 应提示该轴错误: %v", axis, value, err)
+			} else if !invalid && err != nil {
+				t.Errorf("%s=%v 应合法: %v", axis, value, err)
+			}
 		}
 	}
 }

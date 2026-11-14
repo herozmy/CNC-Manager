@@ -13,7 +13,7 @@ export class ApiError extends Error {
 /** 任何接口返回 401 时触发，由应用根节点接收并切回登录页。 */
 export const UNAUTHORIZED_EVENT = 'cnc:unauthorized'
 
-async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+async function request<T>(method: string, path: string, body?: unknown, binary = false): Promise<T> {
   // FormData 由浏览器自己带 multipart 边界，不能手动设置 Content-Type
   const isForm = body instanceof FormData
   const res = await fetch(`/api${path}`, {
@@ -22,6 +22,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     body: body === undefined ? undefined : isForm ? body : JSON.stringify(body),
   })
   if (res.status === 204) return undefined as T
+  if (res.ok && binary) return await res.blob() as T
 
   const text = await res.text()
   let data: unknown = null
@@ -45,6 +46,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 }
 
 export const http = {
+  getBlob: (path: string) => request<Blob>('GET', path, undefined, true),
   get: <T>(path: string) => request<T>('GET', path),
   post: <T>(path: string, body?: unknown) => request<T>('POST', path, body ?? {}),
   put: <T>(path: string, body?: unknown) => request<T>('PUT', path, body ?? {}),

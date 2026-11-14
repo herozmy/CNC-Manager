@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"mime/multipart"
 	"net/http"
@@ -17,6 +18,79 @@ type fixture struct {
 	ck     *http.Cookie
 	progID int64
 	path   string // /api/programs/{id}
+}
+
+func TestOverwriteContentRejectsStaleDraft(t *testing.T) {
+	f := newFixture(t, 1<<20)
+	v := f.uploadOK(t, "part.nc", []byte("O1\r\nM30\r\n"))
+	path := fmt.Sprintf("/api/versions/%d/content", v.ID)
+	var before domain.VersionContent
+	decode(t, f.get(t, path), &before)
+	if before.SHA256 != v.SHA256 {
+		t.Fatal("读取内容时缺少对应的校验值")
+	}
+	body, _ := json.Marshal(domain.ContentInput{Content: "O1\r\nG00 X2\r\nM30\r\n", ExpectedSHA256: &before.SHA256})
+	first := do(t, f.h, "PUT", path, string(body), f.ck)
+	if first.Code != 200 {
+		t.Fatal(first.Body.String())
+	}
+	body, _ = json.Marshal(domain.ContentInput{Content: "O1\r\nG00 X3\r\nM30\r\n", ExpectedSHA256: &before.SHA256})
+	stale := do(t, f.h, "PUT", path, string(body), f.ck)
+	if stale.Code != 409 {
+		t.Fatalf("旧草稿应拒绝: %d %s", stale.Code, stale.Body.String())
+	}
+	var after domain.VersionContent
+	decode(t, f.get(t, path), &after)
+	if !strings.Contains(after.Content, "X2") || after.SHA256 == before.SHA256 {
+		t.Fatalf("获胜内容不应被覆盖: %+v", after)
+	}
+	// 冲突草稿仍可另存，既有版本保留。
+	if rec := do(t, f.h, "POST", f.path+"/versions/content", string(body), f.ck); rec.Code != 201 {
+		t.Fatal(rec.Body.String())
+	}
+}
+
+func TestSaveLargeContentAndLimit(t *testing.T) {
+	f := newFixture(t, 2<<20)
+	content := strings.Repeat("G01 X1.25 Y2.50 F100\r\n", 60000)
+	if len(content) <= 1<<20 {
+		t.Fatal("fixture must exceed old JSON limit")
+	}
+	body, _ := json.Marshal(domain.ContentInput{Content: content, Encoding: "utf-8"})
+	response := do(t, f.h, "POST", f.path+"/versions/content", string(body), f.ck)
+	if response.Code != 201 {
+		t.Fatalf("大文件保存失败: %d %s", response.Code, response.Body.String())
+	}
+	var saved domain.VersionSaveResult
+	decode(t, response, &saved)
+	if got := f.get(t, fmt.Sprintf("/api/versions/%d/download", saved.ID)).Body.String(); got != content {
+		t.Fatal("大文件内容或换行改变")
+	}
+	body, _ = json.Marshal(domain.ContentInput{Content: strings.Repeat("X", (2<<20)+1)})
+	if rec := do(t, f.h, "POST", f.path+"/versions/content", string(body), f.ck); rec.Code != 413 {
+		t.Fatalf("超出文件上限应拒绝: %d", rec.Code)
+	}
+}
+
+func TestDiffPaginationAndChangesOnly(t *testing.T) {
+	f := newFixture(t, 1<<20)
+	a := f.uploadOK(t, "a.nc", []byte("O1\n"+strings.Repeat("G00 X1\n", 230)+"M30\n"))
+	b := f.uploadOK(t, "b.nc", []byte("O1\n"+strings.Repeat("G01 X2\n", 230)+"M30\n"))
+	path := fmt.Sprintf("/api/versions/%d/diff?with=%d", a.ID, b.ID)
+	var page domain.DiffResult
+	decode(t, f.get(t, path+"&limit=200&offset=200&changesOnly=1"), &page)
+	if page.TotalLines != 230 || page.TotalChanges != 230 || len(page.Lines) != 30 || *page.Lines[0].LeftNo != 202 {
+		t.Fatalf("分页异常: total=%d changes=%d lines=%d", page.TotalLines, page.TotalChanges, len(page.Lines))
+	}
+	decode(t, f.get(t, path+"&limit=200&changesOnly=0"), &page)
+	if page.TotalLines != 232 || len(page.Lines) != 200 || page.Lines[0].Type != "same" {
+		t.Fatal("完整对比分页错误")
+	}
+	for _, suffix := range []string{"&limit=501", "&limit=0", "&limit=200&offset=-1"} {
+		if rec := f.get(t, path+suffix); rec.Code != 400 {
+			t.Fatalf("非法分页未被拒绝: %s", suffix)
+		}
+	}
 }
 
 func newFixture(t *testing.T, maxBytes int64) *fixture {
