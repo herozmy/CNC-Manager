@@ -15,8 +15,8 @@ const view = <Routes>
   <Route path="/drawings/:id" element={<DrawingPage />} />
 </Routes>
 
-function server(errorStatus = 0) {
-  let current = detail([operation()])
+function server(errorStatus = 0, price: string | null = null) {
+  let current = detail([operation()], { price })
   let fail = errorStatus
   const calls = mockApi((r) => {
     if (r.method === 'GET' && r.path === '/drawings/1/detail') return { body: current }
@@ -27,8 +27,9 @@ function server(errorStatus = 0) {
         fail = 0
         return { status, body: { error: status === 409 ? '记录已存在: 该图纸号已存在' : '保存失败，请重试' } }
       }
-      current = { ...current, ...r.body as DrawingInput }
-      return { body: drawing({ ...r.body as DrawingInput }) }
+      const input = r.body as DrawingInput
+      current = { ...current, ...input, price: input.price.trim() ? Number(input.price).toFixed(2) : null }
+      return { body: drawing(current) }
     }
   })
   return calls
@@ -39,6 +40,43 @@ async function edit() {
   await u.click(await screen.findByRole('button', { name: '编辑图纸' }))
   return { u, dialog: within(screen.getByRole('dialog', { name: '编辑图纸' })) }
 }
+
+test('价格回填、失败保留草稿重试，保存后详情和再次编辑显示新价格', async () => {
+  const calls = server(500, '12.30')
+  renderApp(view, '/drawings/1')
+  expect(await screen.findByText('价格：12.30 元')).toBeInTheDocument()
+  const { u, dialog } = await edit()
+  expect(dialog.getByLabelText('价格（元）')).toHaveValue('12.30')
+  await u.clear(dialog.getByLabelText('价格（元）'))
+  await u.type(dialog.getByLabelText('价格（元）'), '0.29')
+  await u.click(dialog.getByRole('button', { name: '保存修改' }))
+  expect(await screen.findByText('保存失败，请重试')).toBeInTheDocument()
+  expect(dialog.getByLabelText('价格（元）')).toHaveValue('0.29')
+  await u.click(dialog.getByRole('button', { name: '保存修改' }))
+  expect(await screen.findByText('价格：0.29 元')).toBeInTheDocument()
+  await edit()
+  expect(screen.getByLabelText('价格（元）')).toHaveValue('0.29')
+  expect(calls.filter(r => r.method === 'PUT').every(r => (r.body as DrawingInput).price === '0.29')).toBe(true)
+})
+
+test('价格区分未填写和零，允许清空；无效编辑不提交', async () => {
+  const calls = server()
+  renderApp(view, '/drawings/1')
+  expect(await screen.findByText('价格：未填写')).toBeInTheDocument()
+  const { u, dialog } = await edit()
+  await u.type(dialog.getByLabelText('价格（元）'), '-1')
+  await u.click(dialog.getByRole('button', { name: '保存修改' }))
+  expect(await screen.findByText('价格应为 0~999999999.99 元，最多两位小数')).toBeInTheDocument()
+  expect(calls.filter(r => r.method === 'PUT')).toHaveLength(0)
+  await u.clear(dialog.getByLabelText('价格（元）'))
+  await u.type(dialog.getByLabelText('价格（元）'), '0')
+  await u.click(dialog.getByRole('button', { name: '保存修改' }))
+  expect(await screen.findByText('价格：0.00 元')).toBeInTheDocument()
+  await edit()
+  await u.clear(screen.getByLabelText('价格（元）'))
+  await u.click(screen.getByRole('button', { name: '保存修改' }))
+  expect(await screen.findByText('价格：未填写')).toBeInTheDocument()
+})
 
 test('编辑已有图纸：回填字段，保存后详情和总览更新，保留工序程序及停用字段', async () => {
   const calls = server()
@@ -66,7 +104,7 @@ test('编辑已有图纸：回填字段，保存后详情和总览更新，保�
   expect(screen.getByRole('heading', { name: '10# 粗车' })).toBeInTheDocument()
   await u.click(screen.getByRole('button', { name: '展开工序 10' }))
   expect(screen.getByRole('link', { name: /O1234/ })).toBeInTheDocument()
-  expect(calls.find((r) => r.method === 'PUT')?.body).toEqual({ drawingNo: 'D-2002', name: '轴类', material: '45#', remark: '调整装夹', customer: '客户A', drawingVersion: 'B' })
+  expect(calls.find((r) => r.method === 'PUT')?.body).toEqual({ drawingNo: 'D-2002', name: '轴类', material: '45#', price: '', remark: '调整装夹', customer: '客户A', drawingVersion: 'B' })
   await u.click(screen.getByRole('link', { name: '返回总览' }))
   expect(await screen.findByRole('link', { name: /D-2002.*类型：轴类/ })).toBeInTheDocument()
   expect(screen.queryByText('D-1001')).not.toBeInTheDocument()

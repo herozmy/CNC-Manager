@@ -13,6 +13,8 @@ export interface Drawing {
   name: string
   customer: string
   material: string
+  /** 人民币元，固定两位小数；null 表示未填写。 */
+  price: string | null
   drawingVersion: string
   remark: string
   createdAt: string
@@ -27,6 +29,8 @@ export interface DrawingInput {
   name: string
   customer: string
   material: string
+  /** 空字符串清空价格；使用十进制字符串避免金额精度丢失。 */
+  price: string
   drawingVersion: string
   remark: string
 }

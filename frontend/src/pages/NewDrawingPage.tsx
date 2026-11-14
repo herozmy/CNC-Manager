@@ -5,11 +5,12 @@ import type { FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { api } from '../api'
 import { ApiError } from '../api/client'
+import { priceError as validatePrice } from '../price'
 import type { DrawingInput } from '../api/types'
 import DrawingFields from '../components/DrawingFields'
 import { Button } from '../components/ui/Button'
 
-const empty: DrawingInput = { drawingNo: '', name: '', customer: '', material: '', drawingVersion: '', remark: '' }
+const empty: DrawingInput = { drawingNo: '', name: '', customer: '', material: '', price: '', drawingVersion: '', remark: '' }
 
 /** 新建图纸：只有图纸号必填，其余可以之后补。 */
 export default function NewDrawingPage() {
@@ -17,14 +18,19 @@ export default function NewDrawingPage() {
   const qc = useQueryClient()
   const [form, setForm] = useState<DrawingInput>(empty)
   const [noError, setNoError] = useState('')
+  const [priceError, setPriceError] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
 
   async function submit(e: FormEvent) {
     e.preventDefault()
+    if (busy) return
     setError('')
     setNoError('')
+    setPriceError('')
     if (!form.drawingNo.trim()) return setNoError('请输入图纸号')
+    const invalidPrice = validatePrice(form.price)
+    if (invalidPrice) return setPriceError(invalidPrice)
     setBusy(true)
     try {
       const d = await api.createDrawing(form)
@@ -50,7 +56,7 @@ export default function NewDrawingPage() {
       </header>
       <form onSubmit={submit} className="space-y-4" noValidate>
         <fieldset disabled={busy} className="space-y-4">
-          <DrawingFields value={form} onChange={setForm} noError={noError} />
+          <DrawingFields value={form} onChange={setForm} noError={noError} priceError={priceError} />
         </fieldset>
         {error && (
           <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">

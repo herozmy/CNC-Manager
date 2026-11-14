@@ -51,7 +51,7 @@ export const user = { id: 1, username: 'admin', displayName: '管理员', role: 
 export function drawing(over: Partial<Record<string, unknown>> = {}) {
   return {
     id: 1, drawingNo: 'D-1001', name: '壳体', customer: '客户A', material: '6061', drawingVersion: 'B',
-    remark: '', createdAt: '2026-01-01T00:00:00Z', updatedAt: new Date().toISOString(), operationCount: 2, programCount: 3, ...over,
+    price: null as string | null, remark: '', createdAt: '2026-01-01T00:00:00Z', updatedAt: new Date().toISOString(), operationCount: 2, programCount: 3, ...over,
   }
 }
 

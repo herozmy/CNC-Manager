@@ -52,7 +52,7 @@ func seed(t *testing.T, m *Manager, db *sqlx.DB) string {
 		t.Fatal(err)
 	}
 	queries := []string{
-		`INSERT INTO drawing(id,drawing_no,created_at,updated_at) VALUES (7,'迁移图纸','now','now')`,
+		`INSERT INTO drawing(id,drawing_no,price_cents,created_at,updated_at) VALUES (7,'迁移图纸',12345,'now','now')`,
 		`INSERT INTO operation(id,drawing_id,op_no,centering_method,x_coordinate_milli,created_at,updated_at) VALUES (8,7,10,'四面分中',1250,'now','now')`,
 		`INSERT INTO nc_program(id,operation_id,program_no,created_at,updated_at) VALUES (9,8,'O1000','now','now')`,
 	}
@@ -135,6 +135,10 @@ func TestMigrationRoundTripAcrossKeysAndRecovery(t *testing.T) {
 		t.Fatal("destination key changed")
 	}
 	var coord, comp, current int
+	var price int64
+	if err := dstDB.Get(&price, `SELECT price_cents FROM drawing WHERE id=7`); err != nil || price != 12345 {
+		t.Fatal("drawing price lost", price, err)
+	}
 	dstDB.Get(&coord, `SELECT x_coordinate_milli FROM operation WHERE id=8`)
 	dstDB.Get(&comp, `SELECT comp_amount_milli FROM program_tool WHERE id=11`)
 	dstDB.Get(&current, `SELECT current_version_id FROM nc_program WHERE id=9`)

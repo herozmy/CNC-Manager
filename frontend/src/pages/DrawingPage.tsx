@@ -123,6 +123,7 @@ export default function DrawingPage() {
             </div>
             <p className="mt-2 w-fit max-w-full break-words rounded-lg bg-slate-100 px-2 py-1 text-sm text-slate-700">类型：{query.data.name || '未分类'}</p>
             {query.data.material && <p className="mt-1 break-words text-sm text-slate-500">{query.data.material}</p>}
+            <p className="mt-1 break-words text-sm text-slate-600 tabular-nums">价格：{query.data.price == null ? '未填写' : `${query.data.price} 元`}</p>
             {query.data.remark && <p className="mt-2 rounded-xl bg-amber-50 p-3 text-sm text-slate-700">{query.data.remark}</p>}
           </header>
           {saved && <p role="status" className="mb-4 rounded-xl bg-green-50 p-3 text-sm text-green-900">图纸已保存</p>}

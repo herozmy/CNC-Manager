@@ -23,17 +23,19 @@ func FloatToMilli(v float64) int64 {
 
 // Drawing 图纸，模型最上层。
 type Drawing struct {
-	ID             int64  `db:"id" json:"id"`
-	DrawingNo      string `db:"drawing_no" json:"drawingNo"`
-	Name           string `db:"name" json:"name"` // 产品类型；保留 name 以兼容已有数据和接口。
-	Customer       string `db:"customer" json:"customer"`
-	Material       string `db:"material" json:"material"`
-	DrawingVersion string `db:"drawing_version" json:"drawingVersion"`
-	Remark         string `db:"remark" json:"remark"`
-	CreatedAt      string `db:"created_at" json:"createdAt"`
-	UpdatedAt      string `db:"updated_at" json:"updatedAt"`
-	OperationCount int    `db:"operation_count" json:"operationCount"`
-	ProgramCount   int    `db:"program_count" json:"programCount"`
+	ID             int64   `db:"id" json:"id"`
+	DrawingNo      string  `db:"drawing_no" json:"drawingNo"`
+	Name           string  `db:"name" json:"name"` // 产品类型；保留 name 以兼容已有数据和接口。
+	Customer       string  `db:"customer" json:"customer"`
+	Material       string  `db:"material" json:"material"`
+	Price          *string `db:"-" json:"price"` // 元，固定两位小数；nil 为未填写。
+	PriceCents     *int64  `db:"price_cents" json:"-"`
+	DrawingVersion string  `db:"drawing_version" json:"drawingVersion"`
+	Remark         string  `db:"remark" json:"remark"`
+	CreatedAt      string  `db:"created_at" json:"createdAt"`
+	UpdatedAt      string  `db:"updated_at" json:"updatedAt"`
+	OperationCount int     `db:"operation_count" json:"operationCount"`
+	ProgramCount   int     `db:"program_count" json:"programCount"`
 }
 
 // Operation 工序。装夹方式、分中方式与 X/Y/Z 坐标由同工序下的程序共享。
@@ -110,16 +112,20 @@ func checkLen(field, v string, max int) error {
 }
 
 type DrawingInput struct {
-	DrawingNo      string `json:"drawingNo"`
-	Name           string `json:"name"`
-	Customer       string `json:"customer"`
-	Material       string `json:"material"`
-	DrawingVersion string `json:"drawingVersion"`
-	Remark         string `json:"remark"`
+	Price          PriceInput `json:"price,omitzero"`
+	DrawingNo      string     `json:"drawingNo"`
+	Name           string     `json:"name"`
+	Customer       string     `json:"customer"`
+	Material       string     `json:"material"`
+	DrawingVersion string     `json:"drawingVersion"`
+	Remark         string     `json:"remark"`
 }
 
 // Normalize 整理并校验输入。
 func (in *DrawingInput) Normalize() error {
+	if in.Price.Cents != nil && (*in.Price.Cents < 0 || *in.Price.Cents > MaxPriceCents) {
+		return fmt.Errorf("%w: 价格应为 0~999999999.99 元，最多两位小数", ErrInvalid)
+	}
 	in.DrawingNo = strings.TrimSpace(in.DrawingNo)
 	in.Name = strings.TrimSpace(in.Name)
 	in.Customer = strings.TrimSpace(in.Customer)

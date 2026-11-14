@@ -9,7 +9,7 @@ import (
 	"cnc-manager/internal/domain"
 )
 
-const drawingCols = `d.id, d.drawing_no, d.name, d.customer, d.material, d.drawing_version, d.remark,
+const drawingCols = `d.id, d.drawing_no, d.name, d.customer, d.material, d.price_cents, d.drawing_version, d.remark,
 	d.created_at, d.updated_at,
 	(SELECT COUNT(*) FROM operation o WHERE o.drawing_id = d.id) AS operation_count,
 	(SELECT COUNT(*) FROM nc_program p JOIN operation o ON o.id = p.operation_id WHERE o.drawing_id = d.id) AS program_count`
@@ -39,6 +39,9 @@ func (r *Repo) ListDrawings(ctx context.Context, keyword string, page, size int)
 	if err := r.db.SelectContext(ctx, &out.Items, q, append(args, size, (page-1)*size)...); err != nil {
 		return out, wrap(err)
 	}
+	for i := range out.Items {
+		out.Items[i].Price = domain.PriceText(out.Items[i].PriceCents)
+	}
 	return out, nil
 }
 
@@ -48,6 +51,7 @@ func (r *Repo) GetDrawing(ctx context.Context, id int64) (*domain.Drawing, error
 	if err := r.db.GetContext(ctx, &d, `SELECT `+drawingCols+` FROM drawing d WHERE d.id = ?`, id); err != nil {
 		return nil, wrap(err)
 	}
+	d.Price = domain.PriceText(d.PriceCents)
 	return &d, nil
 }
 
@@ -98,9 +102,9 @@ func (r *Repo) CreateDrawing(ctx context.Context, in domain.DrawingInput) (*doma
 	}
 	now := domain.Now()
 	res, err := r.db.ExecContext(ctx,
-		`INSERT INTO drawing (drawing_no, name, customer, material, drawing_version, remark, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		in.DrawingNo, in.Name, in.Customer, in.Material, in.DrawingVersion, in.Remark, now, now)
+		`INSERT INTO drawing (drawing_no, name, customer, material, price_cents, drawing_version, remark, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		in.DrawingNo, in.Name, in.Customer, in.Material, in.Price.Cents, in.DrawingVersion, in.Remark, now, now)
 	if err != nil {
 		return nil, wrap(err)
 	}
@@ -120,8 +124,8 @@ func (r *Repo) UpdateDrawing(ctx context.Context, id int64, in domain.DrawingInp
 		return nil, err
 	}
 	if _, err := r.db.ExecContext(ctx,
-		`UPDATE drawing SET drawing_no = ?, name = ?, customer = ?, material = ?, drawing_version = ?, remark = ?, updated_at = ? WHERE id = ?`,
-		in.DrawingNo, in.Name, in.Customer, in.Material, in.DrawingVersion, in.Remark, domain.Now(), id); err != nil {
+		`UPDATE drawing SET drawing_no = ?, name = ?, customer = ?, material = ?, price_cents = CASE WHEN ? THEN ? ELSE price_cents END, drawing_version = ?, remark = ?, updated_at = ? WHERE id = ?`,
+		in.DrawingNo, in.Name, in.Customer, in.Material, in.Price.Set, in.Price.Cents, in.DrawingVersion, in.Remark, domain.Now(), id); err != nil {
 		return nil, wrap(err)
 	}
 	if err := r.log(ctx, r.db, "update", "drawing", id, "修改图纸 "+in.DrawingNo); err != nil {

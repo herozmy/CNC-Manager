@@ -2,9 +2,54 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"path/filepath"
 	"testing"
 )
+
+func TestDrawingPriceMigrationPreservesExistingData(t *testing.T) {
+	db, err := Open(filepath.Join(t.TempDir(), "legacy.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if _, err := db.Exec(`CREATE TABLE schema_migration (version TEXT PRIMARY KEY, applied_at TEXT NOT NULL)`); err != nil {
+		t.Fatal(err)
+	}
+	for _, version := range []string{"0001_init", "0002_operation_coordinates", "0003_operation_centering"} {
+		migration, err := migrationsFS.ReadFile("migrations/" + version + ".sql")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := db.Exec(string(migration)); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := db.Exec(`INSERT INTO schema_migration VALUES (?, 'before')`, version); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := db.Exec(`INSERT INTO drawing (id,drawing_no,name,material,remark,created_at,updated_at) VALUES (1,'LEGACY','壳体','6061','保留','before','before')`); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 2; i++ {
+		if err := Migrate(context.Background(), db); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var price sql.NullInt64
+	if err := db.Get(&price, `SELECT price_cents FROM drawing WHERE id=1`); err != nil || price.Valid {
+		t.Fatal(price, err)
+	}
+	var text string
+	if err := db.Get(&text, `SELECT drawing_no || name || material || remark || created_at || updated_at FROM drawing WHERE id=1`); err != nil || text != "LEGACY壳体6061保留beforebefore" {
+		t.Fatal(text, err)
+	}
+	for _, value := range []string{"-1", "1.5", "100000000000", "'invalid'"} {
+		if _, err := db.Exec(`UPDATE drawing SET price_cents=` + value + ` WHERE id=1`); err == nil {
+			t.Fatal("invalid stored price accepted", value)
+		}
+	}
+}
 
 func TestMigrateCreatesSchemaAndIsIdempotent(t *testing.T) {
 	db, err := Open(filepath.Join(t.TempDir(), "test.db"))
@@ -26,7 +71,7 @@ func TestMigrateCreatesSchemaAndIsIdempotent(t *testing.T) {
 	if n != 7 {
 		t.Fatalf("核心表数量 = %d，期望 7", n)
 	}
-	if err := db.Get(&n, `SELECT COUNT(*) FROM schema_migration`); err != nil || n != 3 {
+	if err := db.Get(&n, `SELECT COUNT(*) FROM schema_migration`); err != nil || n != 4 {
 		t.Fatalf("迁移记录 = %d, err=%v", n, err)
 	}
 }

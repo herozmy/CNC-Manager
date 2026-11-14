@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { api } from '../api'
 import { ApiError } from '../api/client'
+import { priceError as validatePrice } from '../price'
 import type { Drawing, DrawingDetail, DrawingInput } from '../api/types'
 import DrawingFields from './DrawingFields'
 import { Button } from './ui/Button'
@@ -20,9 +21,11 @@ export default function DrawingEditSheet({ drawing, onClose, onSaved }: Props) {
   const [initial] = useState<DrawingInput>(() => ({
     drawingNo: drawing.drawingNo, name: drawing.name, material: drawing.material, remark: drawing.remark,
     customer: drawing.customer, drawingVersion: drawing.drawingVersion,
+    price: drawing.price ?? '',
   }))
   const [form, setForm] = useState(initial)
   const [noError, setNoError] = useState('')
+  const [priceError, setPriceError] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const saving = useRef(false)
@@ -46,8 +49,11 @@ export default function DrawingEditSheet({ drawing, onClose, onSaved }: Props) {
     e.preventDefault()
     if (saving.current || discard) return
     setNoError('')
+    setPriceError('')
     setError('')
     if (!form.drawingNo.trim()) return setNoError('请输入图纸号')
+    const invalidPrice = validatePrice(form.price)
+    if (invalidPrice) return setPriceError(invalidPrice)
     saving.current = true
     setBusy(true)
     try {
@@ -71,7 +77,7 @@ export default function DrawingEditSheet({ drawing, onClose, onSaved }: Props) {
   return <Sheet open title="编辑图纸" onClose={close}>
     <form onSubmit={submit} className="space-y-4" noValidate>
       <fieldset disabled={busy || discard} className="space-y-4">
-        <DrawingFields value={form} onChange={setForm} noError={noError} />
+        <DrawingFields value={form} onChange={setForm} noError={noError} priceError={priceError} />
       </fieldset>
       {error && <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
       <div className="grid grid-cols-2 gap-3">
