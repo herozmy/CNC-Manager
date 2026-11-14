@@ -6,7 +6,8 @@ import { ApiError } from '../api/client'
 import type { Operation } from '../api/types'
 import { Button } from './ui/Button'
 import { Field, TextArea } from './ui/Field'
-import { ConfirmSheet, Sheet } from './ui/Sheet'
+import DeleteSheet from './DeleteSheet'
+import { Sheet } from './ui/Sheet'
 
 interface Props {
   drawingId: number
@@ -17,12 +18,22 @@ interface Props {
   onClose: () => void
 }
 
+const fixtureOptions = ['虎钳', '压板', 'V型工装', '吸盘', '工装板'] as const
+const customFixtureValue = '__custom__'
+
+function initialFixtureChoice(fixture: string) {
+  if (!fixture) return ''
+  return fixtureOptions.includes(fixture as (typeof fixtureOptions)[number]) ? fixture : customFixtureValue
+}
+
 /** 新增 / 编辑工序。表单只在打开时挂载，所以每次打开都是干净的初始状态。 */
 export default function OperationSheet({ drawingId, operation, suggestedNo = 10, onClose }: Props) {
   const qc = useQueryClient()
   const [opNo, setOpNo] = useState(String(operation?.opNo ?? suggestedNo))
   const [opName, setOpName] = useState(operation?.opName ?? '')
-  const [fixture, setFixture] = useState(operation?.fixture ?? '')
+  const existingFixture = operation?.fixture ?? ''
+  const [fixtureChoice, setFixtureChoice] = useState(initialFixtureChoice(existingFixture))
+  const [customFixture, setCustomFixture] = useState(initialFixtureChoice(existingFixture) === customFixtureValue ? existingFixture : '')
   const [zHeight, setZHeight] = useState(operation && operation.zHeight > 0 ? String(operation.zHeight) : '')
   const [remark, setRemark] = useState(operation?.remark ?? '')
   const [noError, setNoError] = useState('')
@@ -45,7 +56,8 @@ export default function OperationSheet({ drawingId, operation, suggestedNo = 10,
     setBusy(true)
     try {
       // machineId 必须原样带回：后端按请求整体覆盖，漏传会把已设置的机台清空
-      const input = { opNo: no, opName: opName.trim(), machineId: operation?.machineId ?? null, fixture: fixture.trim(), zHeight: z, remark }
+      const fixture = fixtureChoice === customFixtureValue ? customFixture.trim() : fixtureChoice
+      const input = { opNo: no, opName: opName.trim(), machineId: operation?.machineId ?? null, fixture, zHeight: z, remark }
       if (operation) await api.updateOperation(operation.id, input)
       else await api.createOperation(drawingId, input)
       await refresh()
@@ -59,20 +71,13 @@ export default function OperationSheet({ drawingId, operation, suggestedNo = 10,
     }
   }
 
-  async function remove() {
-    if (!operation) return
-    setBusy(true)
-    try {
-      await api.deleteOperation(operation.id)
-      await refresh()
-      onClose()
-    } catch (err) {
-      setConfirmDelete(false)
-      setError(err instanceof ApiError ? err.message : '无法连接服务器')
-    } finally {
-      setBusy(false)
-    }
-  }
+  if (confirmDelete && operation) return <DeleteSheet
+    title="删除工序"
+    message={`将删除「${operation.opNo}# ${operation.opName}」及其下的 ${operation.programs.length} 个程序和全部版本，无法恢复。`}
+    remove={() => api.deleteOperation(operation.id)}
+    onDeleted={onClose}
+    onClose={() => setConfirmDelete(false)}
+  />
 
   return (
     <>
@@ -84,7 +89,28 @@ export default function OperationSheet({ drawingId, operation, suggestedNo = 10,
               <Field label="工序名称" value={opName} onChange={(e) => setOpName(e.target.value)} placeholder="如 粗车、精铣" />
             </div>
           </div>
-          <Field label="装夹方式" value={fixture} onChange={(e) => setFixture(e.target.value)} />
+          <label className="block space-y-1.5 text-sm font-medium text-slate-700">
+            <span>装夹方式</span>
+            <select
+              aria-label="装夹方式"
+              value={fixtureChoice}
+              onChange={(e) => setFixtureChoice(e.target.value)}
+              className="h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-base text-slate-900 focus:outline-2 focus:outline-offset-0 focus:outline-amber-500"
+            >
+              <option value="">未选择</option>
+              {fixtureOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+              <option value={customFixtureValue}>自定义</option>
+            </select>
+          </label>
+          {fixtureChoice === customFixtureValue && (
+            <Field
+              label="自定义装夹方式"
+              value={customFixture}
+              onChange={(e) => setCustomFixture(e.target.value)}
+              placeholder="请输入装夹方式"
+              maxLength={200}
+            />
+          )}
           <Field label="Z 轴垫高（mm）" value={zHeight} onChange={(e) => setZHeight(e.target.value)} error={zError} inputMode="decimal" hint="工件垫块高度，影响 Z 向对刀" />
           <TextArea label="备注" value={remark} onChange={(e) => setRemark(e.target.value)} />
           {error && (
@@ -96,22 +122,13 @@ export default function OperationSheet({ drawingId, operation, suggestedNo = 10,
             保存
           </Button>
           {operation && (
-            <Button variant="ghost" className="w-full text-red-600" onClick={() => setConfirmDelete(true)}>
+            <Button variant="ghost" className="w-full text-red-600" disabled={busy} onClick={() => setConfirmDelete(true)}>
               删除此工序
             </Button>
           )}
         </form>
       </Sheet>
-      <ConfirmSheet
-        open={confirmDelete}
-        title="删除工序"
-        message={`将删除「${operation?.opNo}# ${operation?.opName}」及其下的 ${operation?.programs.length ?? 0} 个程序和全部版本，无法恢复。`}
-        confirmLabel="确认删除"
-        danger
-        busy={busy}
-        onConfirm={remove}
-        onClose={() => setConfirmDelete(false)}
-      />
+
     </>
   )
 }

@@ -24,7 +24,7 @@ func FloatToMilli(v float64) int64 {
 type Drawing struct {
 	ID             int64  `db:"id" json:"id"`
 	DrawingNo      string `db:"drawing_no" json:"drawingNo"`
-	Name           string `db:"name" json:"name"`
+	Name           string `db:"name" json:"name"` // 产品类型；保留 name 以兼容已有数据和接口。
 	Customer       string `db:"customer" json:"customer"`
 	Material       string `db:"material" json:"material"`
 	DrawingVersion string `db:"drawing_version" json:"drawingVersion"`
@@ -122,7 +122,7 @@ func (in *DrawingInput) Normalize() error {
 	if in.DrawingNo == "" {
 		return fmt.Errorf("%w: 图纸号不能为空", ErrInvalid)
 	}
-	for _, f := range []struct{ n, v string }{{"图纸号", in.DrawingNo}, {"名称", in.Name}, {"客户", in.Customer}, {"材料", in.Material}, {"图纸版本", in.DrawingVersion}} {
+	for _, f := range []struct{ n, v string }{{"图纸号", in.DrawingNo}, {"类型", in.Name}, {"客户", in.Customer}, {"材料", in.Material}, {"图纸版本", in.DrawingVersion}} {
 		if err := checkLen(f.n, f.v, maxShortText); err != nil {
 			return err
 		}

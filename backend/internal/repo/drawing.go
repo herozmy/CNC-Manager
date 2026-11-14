@@ -17,7 +17,7 @@ const drawingCols = `d.id, d.drawing_no, d.name, d.customer, d.material, d.drawi
 // 关键字同时匹配图纸字段与其下程序号/程序名——现场常见"只记得程序号 O1234"。
 const drawingFilter = `WHERE (
 	d.drawing_no LIKE ? ESCAPE '\' OR d.name LIKE ? ESCAPE '\' OR
-	d.customer   LIKE ? ESCAPE '\' OR d.material LIKE ? ESCAPE '\' OR
+	d.material LIKE ? ESCAPE '\' OR
 	EXISTS (SELECT 1 FROM operation o JOIN nc_program p ON p.operation_id = o.id
 	        WHERE o.drawing_id = d.id AND (p.program_no LIKE ? ESCAPE '\' OR p.program_name LIKE ? ESCAPE '\')))`
 
@@ -31,7 +31,7 @@ func (r *Repo) ListDrawings(ctx context.Context, keyword string, page, size int)
 	}
 	out := domain.Page[domain.Drawing]{Items: []domain.Drawing{}, Page: page, Size: size}
 	pat := likePattern(keyword)
-	args := []any{pat, pat, pat, pat, pat, pat}
+	args := []any{pat, pat, pat, pat, pat}
 	if err := r.db.GetContext(ctx, &out.Total, `SELECT COUNT(*) FROM drawing d `+drawingFilter, args...); err != nil {
 		return out, wrap(err)
 	}

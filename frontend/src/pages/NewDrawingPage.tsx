@@ -6,8 +6,8 @@ import { Link, useNavigate } from 'react-router-dom'
 import { api } from '../api'
 import { ApiError } from '../api/client'
 import type { DrawingInput } from '../api/types'
+import DrawingFields from '../components/DrawingFields'
 import { Button } from '../components/ui/Button'
-import { Field, TextArea } from '../components/ui/Field'
 
 const empty: DrawingInput = { drawingNo: '', name: '', customer: '', material: '', drawingVersion: '', remark: '' }
 
@@ -19,8 +19,6 @@ export default function NewDrawingPage() {
   const [noError, setNoError] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
-
-  const set = (key: keyof DrawingInput) => (e: { target: { value: string } }) => setForm((f) => ({ ...f, [key]: e.target.value }))
 
   async function submit(e: FormEvent) {
     e.preventDefault()
@@ -51,14 +49,9 @@ export default function NewDrawingPage() {
         <h1 className="text-2xl font-bold">新建图纸</h1>
       </header>
       <form onSubmit={submit} className="space-y-4" noValidate>
-        <Field label="图纸号" value={form.drawingNo} onChange={set('drawingNo')} error={noError} autoFocus autoCapitalize="characters" enterKeyHint="next" />
-        <Field label="名称" value={form.name} onChange={set('name')} enterKeyHint="next" />
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="客户" value={form.customer} onChange={set('customer')} enterKeyHint="next" />
-          <Field label="材料" value={form.material} onChange={set('material')} enterKeyHint="next" />
-        </div>
-        <Field label="图纸版本" value={form.drawingVersion} onChange={set('drawingVersion')} enterKeyHint="next" />
-        <TextArea label="备注" value={form.remark} onChange={set('remark')} />
+        <fieldset disabled={busy} className="space-y-4">
+          <DrawingFields value={form} onChange={setForm} noError={noError} />
+        </fieldset>
         {error && (
           <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
             {error}

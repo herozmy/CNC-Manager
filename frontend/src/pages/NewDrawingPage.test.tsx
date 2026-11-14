@@ -29,17 +29,17 @@ test('创建成功后跳转到详情页，并提交全部字段', async () => {
   renderApp(page(), '/drawings/new')
   const u = userEvent.setup()
   await u.type(screen.getByLabelText('图纸号'), 'D-2001')
-  await u.type(screen.getByLabelText('名称'), '端盖')
-  await u.type(screen.getByLabelText('客户'), '客户B')
+  await u.type(screen.getByLabelText('类型'), '端盖类')
+  expect(screen.queryByLabelText('客户')).not.toBeInTheDocument()
   await u.type(screen.getByLabelText('材料'), '45#')
-  await u.type(screen.getByLabelText('图纸版本'), 'A')
+  expect(screen.queryByLabelText('图纸版本')).not.toBeInTheDocument()
   await u.type(screen.getByLabelText('备注'), '急件')
   await u.click(screen.getByRole('button', { name: '创建图纸' }))
   expect(await screen.findByText('详情页')).toBeInTheDocument()
   expect(calls[0]).toMatchObject({
     method: 'POST',
     path: '/drawings',
-    body: { drawingNo: 'D-2001', name: '端盖', customer: '客户B', material: '45#', drawingVersion: 'A', remark: '急件' },
+    body: { drawingNo: 'D-2001', name: '端盖类', customer: '', material: '45#', drawingVersion: '', remark: '急件' },
   })
 })
 
@@ -55,9 +55,9 @@ test('图纸号重复时标在输入框上，且停留在表单', async () => {
 })
 
 test('其他错误显示在表单底部', async () => {
-  mockApi(() => ({ status: 400, body: { error: '参数不合法: 名称不能超过 100 字节' } }))
+  mockApi(() => ({ status: 400, body: { error: '参数不合法: 类型 不能超过 100 字节' } }))
   renderApp(page(), '/drawings/new')
   await userEvent.setup().type(screen.getByLabelText('图纸号'), 'D-1')
   await userEvent.setup().click(screen.getByRole('button', { name: '创建图纸' }))
-  expect(await screen.findByText(/名称不能超过/)).toBeInTheDocument()
+  expect(await screen.findByText(/类型 不能超过/)).toBeInTheDocument()
 })

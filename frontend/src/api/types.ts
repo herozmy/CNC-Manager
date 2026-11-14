@@ -9,6 +9,7 @@ export interface User {
 export interface Drawing {
   id: number
   drawingNo: string
+  /** 产品类型；沿用 name 字段以兼容已有数据。 */
   name: string
   customer: string
   material: string
@@ -22,6 +23,7 @@ export interface Drawing {
 
 export interface DrawingInput {
   drawingNo: string
+  /** 产品类型。 */
   name: string
   customer: string
   material: string
@@ -116,4 +118,27 @@ export interface ParseResult {
 
 export interface UploadResult extends Version {
   parse?: ParseResult
+}
+
+export interface VersionContent {
+  versionId: number
+  programId: number
+  versionNo: number
+  fileName: string
+  encoding: 'utf-8' | 'gbk'
+  content: string
+  lineCount: number
+  sizeBytes: number
+  isCurrent: boolean
+}
+
+export interface ContentInput {
+  content: string
+  encoding: 'utf-8' | 'gbk'
+  fileName: string
+  changeNote: string
+}
+
+export interface VersionSaveResult extends Version {
+  warning?: string
 }

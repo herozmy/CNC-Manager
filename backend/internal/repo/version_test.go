@@ -152,3 +152,60 @@ func TestGetVersionFileAndDeleteCascade(t *testing.T) {
 		t.Fatal("已删除程序的版本列表应 NotFound")
 	}
 }
+
+func TestCatalogDeleteCascadePreservesSharedBlob(t *testing.T) {
+	for _, level := range []string{"drawing", "operation", "program"} {
+		t.Run(level, func(t *testing.T) {
+			r := newTestRepo(t)
+			ctx := context.Background()
+			p := newProgram(t, r, "DELETE")
+			keep := newProgram(t, r, "KEEP")
+			v, err := r.AddVersion(ctx, p.ID, blob("aa11", "gbk"), "delete.nc", "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			kept, err := r.AddVersion(ctx, keep.ID, blob("aa11", "gbk"), "keep.nc", "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			op, err := r.GetOperation(ctx, p.OperationID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			switch level {
+			case "drawing":
+				err = r.DeleteDrawing(ctx, op.DrawingID)
+			case "operation":
+				err = r.DeleteOperation(ctx, op.ID)
+			case "program":
+				err = r.DeleteProgram(ctx, p.ID)
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := r.GetProgram(ctx, p.ID); !errors.Is(err, domain.ErrNotFound) {
+				t.Fatalf("program remains: %v", err)
+			}
+			if _, err := r.GetVersionFile(ctx, v.ID); !errors.Is(err, domain.ErrNotFound) {
+				t.Fatalf("version remains: %v", err)
+			}
+			f, err := r.GetVersionFile(ctx, kept.ID)
+			if err != nil || f.FileName != "keep.nc" || f.RelPath != "aa/aa11.nc" {
+				t.Fatalf("shared file damaged: %+v %v", f, err)
+			}
+			if _, err := r.GetProgram(ctx, keep.ID); err != nil {
+				t.Fatal(err)
+			}
+			if level != "drawing" {
+				if _, err := r.GetDrawing(ctx, op.DrawingID); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if level == "program" {
+				if _, err := r.GetOperation(ctx, op.ID); err != nil {
+					t.Fatal(err)
+				}
+			}
+		})
+	}
+}

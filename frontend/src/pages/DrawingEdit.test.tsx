@@ -14,6 +14,16 @@ const view = () => (
   </Routes>
 )
 
+test('图纸详情显示产品类型，未填写时显示未分类', async () => {
+  mockApi(() => ({ body: { ...detail([]), name: '壳体类' } }))
+  const { unmount } = renderApp(view(), '/drawings/1')
+  expect(await screen.findByText('类型：壳体类')).toBeInTheDocument()
+  unmount()
+  mockApi(() => ({ body: { ...detail([]), name: '' } }))
+  renderApp(view(), '/drawings/1')
+  expect(await screen.findByText('类型：未分类')).toBeInTheDocument()
+})
+
 /** 有状态的假服务器：写操作后详情会变化，用来验证界面确实重新加载。 */
 function server(initial: unknown[]) {
   let ops = initial
@@ -58,6 +68,32 @@ test('建议工序号 = 现有最大号 + 10', async () => {
   expect(screen.getByLabelText('工序号')).toHaveValue('30')
 })
 
+test('装夹方式可选预设值，也支持自定义输入', async () => {
+  const calls = server([])
+  renderApp(view(), '/drawings/1')
+  const u = userEvent.setup()
+  await u.click(await screen.findByRole('button', { name: '新增第一道工序' }))
+  const fixture = screen.getByLabelText('装夹方式')
+  expect(fixture).toHaveValue('')
+  expect(within(fixture).getAllByRole('option').map((option) => option.textContent)).toEqual([
+    '未选择', '虎钳', '压板', 'V型工装', '吸盘', '工装板', '自定义',
+  ])
+  await u.selectOptions(fixture, '虎钳')
+  await u.click(screen.getByRole('button', { name: '保存' }))
+  expect(calls.find((c) => c.method === 'POST')?.body).toMatchObject({ fixture: '虎钳' })
+})
+
+test('自定义装夹方式会去除首尾空格后提交', async () => {
+  const calls = server([])
+  renderApp(view(), '/drawings/1')
+  const u = userEvent.setup()
+  await u.click(await screen.findByRole('button', { name: '新增第一道工序' }))
+  await u.selectOptions(screen.getByLabelText('装夹方式'), '自定义')
+  await u.type(screen.getByLabelText('自定义装夹方式'), '  三爪卡盘  ')
+  await u.click(screen.getByRole('button', { name: '保存' }))
+  expect(calls.find((c) => c.method === 'POST')?.body).toMatchObject({ fixture: '三爪卡盘' })
+})
+
 test('工序表单校验：工序号与垫高非法时不提交', async () => {
   const calls = server([])
   renderApp(view(), '/drawings/1')
@@ -97,11 +133,13 @@ test('编辑工序时原样带回机台，避免被后端清空', async () => {
   const dialog = screen.getByRole('dialog', { name: '编辑工序' })
   expect(within(dialog).getByLabelText('工序名称')).toHaveValue('粗车')
   expect(within(dialog).getByLabelText('Z 轴垫高（mm）')).toHaveValue('25.5')
+  expect(within(dialog).getByLabelText('装夹方式')).toHaveDisplayValue('自定义')
+  expect(within(dialog).getByLabelText('自定义装夹方式')).toHaveValue('三爪')
   await u.clear(within(dialog).getByLabelText('工序名称'))
   await u.type(within(dialog).getByLabelText('工序名称'), '精车')
   await u.click(within(dialog).getByRole('button', { name: '保存' }))
   await waitFor(() => expect(calls.some((c) => c.method === 'PUT')).toBe(true))
-  expect(calls.find((c) => c.method === 'PUT')).toMatchObject({ path: '/operations/1', body: { opNo: 10, opName: '精车', machineId: 5, zHeight: 25.5 } })
+  expect(calls.find((c) => c.method === 'PUT')).toMatchObject({ path: '/operations/1', body: { opNo: 10, opName: '精车', machineId: 5, fixture: '三爪', zHeight: 25.5 } })
 })
 
 test('删除工序需二次确认，并说明会连带删除程序', async () => {

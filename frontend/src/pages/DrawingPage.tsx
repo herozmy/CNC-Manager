@@ -1,10 +1,12 @@
 import { useQuery } from '@tanstack/react-query'
-import { ArrowLeft, ChevronRight, Pencil, Plus } from 'lucide-react'
+import { ArrowLeft, ChevronRight, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { api } from '../api'
 import { ApiError } from '../api/client'
 import type { Operation, Program } from '../api/types'
+import DeleteSheet from '../components/DeleteSheet'
+import DrawingEditSheet from '../components/DrawingEditSheet'
 import OperationSheet from '../components/OperationSheet'
 import ProgramSheet from '../components/ProgramSheet'
 import { Button } from '../components/ui/Button'
@@ -35,7 +37,7 @@ function ProgramRow({ drawingId, p }: { drawingId: number; p: Program }) {
   )
 }
 
-function OperationCard({ drawingId, op, onEdit, onAddProgram }: { drawingId: number; op: Operation; onEdit: () => void; onAddProgram: () => void }) {
+function OperationCard({ drawingId, op, onEdit, onDelete, onAddProgram }: { drawingId: number; op: Operation; onEdit: () => void; onDelete: () => void; onAddProgram: () => void }) {
   const facts = [op.machineName, op.fixture && `装夹 ${op.fixture}`, op.zHeight > 0 && `垫高 ${op.zHeight} mm`].filter(Boolean)
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -47,9 +49,12 @@ function OperationCard({ drawingId, op, onEdit, onAddProgram }: { drawingId: num
           {facts.length > 0 && <p className="mt-0.5 text-sm text-slate-600">{facts.join(' · ')}</p>}
           {op.remark && <p className="mt-1 text-sm text-slate-500">{op.remark}</p>}
         </div>
-        <button onClick={onEdit} aria-label={`编辑工序 ${op.opNo}`} className="flex size-12 shrink-0 items-center justify-center rounded-xl text-slate-600 hover:bg-slate-100">
-          <Pencil className="size-5" aria-hidden />
-        </button>
+        <div className="flex shrink-0">
+          <button onClick={onEdit} aria-label={`编辑工序 ${op.opNo}`} className="flex size-12 shrink-0 items-center justify-center rounded-xl text-slate-600 hover:bg-slate-100">
+            <Pencil className="size-5" aria-hidden />
+          </button>
+          <button onClick={onDelete} aria-label={`删除工序 ${op.opNo}`} className="flex size-12 items-center justify-center rounded-xl text-red-600 hover:bg-red-50"><Trash2 className="size-5" aria-hidden /></button>
+        </div>
       </div>
       {op.programs.length > 0 ? (
         <ul className="mt-3 space-y-2">
@@ -68,14 +73,16 @@ function OperationCard({ drawingId, op, onEdit, onAddProgram }: { drawingId: num
   )
 }
 
-type Sheet = { kind: 'op'; op?: Operation } | { kind: 'program'; operationId: number } | null
+type Sheet = { kind: 'drawing' } | { kind: 'op'; op?: Operation } | { kind: 'program'; operationId: number } | null
 
 /** 图纸详情：图纸信息 → 工序 → 程序。 */
 export default function DrawingPage() {
+  const [deleting, setDeleting] = useState<Operation | null>(null)
   const id = Number(useParams().id)
   const valid = Number.isInteger(id) && id > 0
   const query = useQuery({ queryKey: ['drawing', id], queryFn: () => api.drawingDetail(id), enabled: valid, retry: false })
   const [sheet, setSheet] = useState<Sheet>(null)
+  const [saved, setSaved] = useState(false)
   const notFound = query.error instanceof ApiError && query.error.status === 404
   const ops = query.data?.operations ?? []
   const nextNo = (ops.reduce((m, o) => Math.max(m, o.opNo), 0) || 0) + 10
@@ -91,13 +98,17 @@ export default function DrawingPage() {
       {query.data && (
         <>
           <header className="mb-4">
-            <h1 className="break-words text-2xl font-bold">{query.data.drawingNo}</h1>
-            {query.data.name && <p className="text-lg text-slate-700">{query.data.name}</p>}
-            <p className="mt-1 text-sm text-slate-500">
-              {[query.data.customer, query.data.material, query.data.drawingVersion && `版本 ${query.data.drawingVersion}`].filter(Boolean).join(' · ')}
-            </p>
+            <div className="flex items-start justify-between gap-3">
+              <h1 className="min-w-0 break-words text-2xl font-bold">{query.data.drawingNo}</h1>
+              <Button variant="secondary" className="shrink-0 px-3" onClick={() => { setSaved(false); setSheet({ kind: 'drawing' }) }}>
+                <Pencil className="size-4" aria-hidden />编辑图纸
+              </Button>
+            </div>
+            <p className="mt-2 w-fit max-w-full break-words rounded-lg bg-slate-100 px-2 py-1 text-sm text-slate-700">类型：{query.data.name || '未分类'}</p>
+            {query.data.material && <p className="mt-1 break-words text-sm text-slate-500">{query.data.material}</p>}
             {query.data.remark && <p className="mt-2 rounded-xl bg-amber-50 p-3 text-sm text-slate-700">{query.data.remark}</p>}
           </header>
+          {saved && <p role="status" className="mb-4 rounded-xl bg-green-50 p-3 text-sm text-green-900">图纸已保存</p>}
           {ops.length === 0 ? (
             <EmptyState title="暂无工序">
               <Button onClick={() => setSheet({ kind: 'op' })}>新增第一道工序</Button>
@@ -105,7 +116,7 @@ export default function DrawingPage() {
           ) : (
             <div className="space-y-3">
               {ops.map((op) => (
-                <OperationCard key={op.id} drawingId={id} op={op} onEdit={() => setSheet({ kind: 'op', op })} onAddProgram={() => setSheet({ kind: 'program', operationId: op.id })} />
+                <OperationCard key={op.id} drawingId={id} op={op} onDelete={() => setDeleting(op)} onEdit={() => setSheet({ kind: 'op', op })} onAddProgram={() => setSheet({ kind: 'program', operationId: op.id })} />
               ))}
               <Button variant="secondary" className="w-full" onClick={() => setSheet({ kind: 'op' })}>
                 <Plus className="size-5" aria-hidden />
@@ -115,8 +126,16 @@ export default function DrawingPage() {
           )}
         </>
       )}
-      {sheet?.kind === 'op' && <OperationSheet drawingId={id} operation={sheet.op} suggestedNo={nextNo} onClose={() => setSheet(null)} />}
+      {deleting && <DeleteSheet
+        title="删除工序"
+        message={`将删除「${deleting.opNo}# ${deleting.opName}」及其下的 ${deleting.programs.length} 个程序和全部版本，无法恢复。`}
+        remove={() => api.deleteOperation(deleting.id)}
+        onDeleted={() => setDeleting(null)}
+        onClose={() => setDeleting(null)}
+      />}
+      {sheet?.kind === 'op'  && <OperationSheet drawingId={id} operation={sheet.op} suggestedNo={nextNo} onClose={() => setSheet(null)} />}
       {sheet?.kind === 'program' && <ProgramSheet drawingId={id} operationId={sheet.operationId} onClose={() => setSheet(null)} />}
+      {sheet?.kind === 'drawing' && query.data && <DrawingEditSheet key={id} drawing={query.data} onClose={() => setSheet(null)} onSaved={() => { setSheet(null); setSaved(true) }} />}
     </main>
   )
 }

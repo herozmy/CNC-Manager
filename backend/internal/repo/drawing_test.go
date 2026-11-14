@@ -41,11 +41,15 @@ func TestDrawingCRUDAndSearch(t *testing.T) {
 	if err != nil || page.Total != 2 || len(page.Items) != 2 {
 		t.Fatalf("列表异常: %+v %v", page, err)
 	}
-	for _, kw := range []string{"d-1", "壳体", "客户A", "6061", "O7788"} {
+	for _, kw := range []string{"d-1", "壳体", "6061", "O7788"} {
 		page, _ = r.ListDrawings(ctx, kw, 1, 10)
 		if page.Total != 1 || page.Items[0].ID != d.ID {
 			t.Errorf("关键字 %q 应命中 D-100，得到 %+v", kw, page)
 		}
+	}
+	page, err = r.ListDrawings(ctx, "客户A", 1, 10)
+	if err != nil || page.Total != 0 {
+		t.Fatalf("已停用的客户字段不应参与搜索: %+v %v", page, err)
 	}
 	page, _ = r.ListDrawings(ctx, "D_1", 1, 10)
 	if page.Total != 0 {

@@ -1,10 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Download, Upload } from 'lucide-react'
 import { useRef, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api } from '../api'
 import { ApiError } from '../api/client'
 import type { UploadResult, Version } from '../api/types'
+import DeleteSheet from '../components/DeleteSheet'
+import NCEditorSheet from '../components/NCEditorSheet'
 import UploadSheet from '../components/UploadSheet'
 import { Button } from '../components/ui/Button'
 import { ConfirmSheet } from '../components/ui/Sheet'
@@ -12,7 +14,7 @@ import { EmptyState, ErrorState, Spinner } from '../components/ui/State'
 import { formatBytes, relativeTime } from '../lib/format'
 import { VersionBadge } from './DrawingPage'
 
-function VersionRow({ v, onActivate }: { v: Version; onActivate: () => void }) {
+function VersionRow({ v, onActivate, onView }: { v: Version; onActivate: () => void; onView: () => void }) {
   return (
     <li className={`rounded-2xl border p-4 ${v.isCurrent ? 'border-amber-400 bg-amber-50' : 'border-slate-200 bg-white'}`}>
       <div className="flex items-center justify-between gap-2">
@@ -28,6 +30,7 @@ function VersionRow({ v, onActivate }: { v: Version; onActivate: () => void }) {
         {v.createdBy && ` · ${v.createdBy}`}
       </p>
       {v.changeNote && <p className="mt-1 text-sm text-slate-700">{v.changeNote}</p>}
+      <Button variant="secondary" className="mt-3 w-full" onClick={onView} aria-label={`查看 V${v.versionNo} 内容`}>查看 / 编辑 NC</Button>
       <div className="mt-3 grid grid-cols-2 gap-2">
         <a
           href={api.downloadUrl(v.id)}
@@ -52,6 +55,8 @@ function VersionRow({ v, onActivate }: { v: Version; onActivate: () => void }) {
 
 /** 程序页：当前版本一键下载、上传新版本、版本历史与回滚。 */
 export default function ProgramPage() {
+  const navigate = useNavigate()
+  const [deleting, setDeleting] = useState(false)
   const params = useParams()
   const drawingId = Number(params.id)
   const programId = Number(params.programId)
@@ -64,6 +69,8 @@ export default function ProgramPage() {
   const fileInput = useRef<HTMLInputElement>(null)
   const [file, setFile] = useState<File | null>(null)
   const [uploaded, setUploaded] = useState<UploadResult | null>(null)
+  const [viewVersion, setViewVersion] = useState<Version | null>(null)
+  const [saved, setSaved] = useState<string | null>(null)
   const [activate, setActivate] = useState<Version | null>(null)
 
   const switchVersion = useMutation({
@@ -100,8 +107,10 @@ export default function ProgramPage() {
             </div>
             {(program.programName || program.controller) && <p className="text-slate-600">{[program.programName, program.controller].filter(Boolean).join(' · ')}</p>}
             {program.remark && <p className="mt-2 rounded-xl bg-amber-50 p-3 text-sm text-slate-700">{program.remark}</p>}
+            <Button variant="ghost" className="mt-2 text-red-600" onClick={() => setDeleting(true)}>删除程序</Button>
           </header>
 
+          {saved && <p role="status" className="mb-4 rounded-xl bg-green-50 p-3">{saved}</p>}
           {uploaded && (
             <div role="status" className="mb-4 rounded-xl bg-green-50 p-3 text-sm text-green-900">
               <p className="font-semibold">已上传 V{uploaded.versionNo}</p>
@@ -154,13 +163,15 @@ export default function ProgramPage() {
           ) : (
             <ul className="space-y-3">
               {versions.data.map((v) => (
-                <VersionRow key={v.id} v={v} onActivate={() => setActivate(v)} />
+                <VersionRow key={v.id} v={v} onView={() => setViewVersion(v)} onActivate={() => setActivate(v)} />
               ))}
             </ul>
           )}
         </>
       )}
 
+      {deleting && program && <DeleteSheet title="删除程序" message={`将删除程序「${program.programNo}」及其全部 ${versions.data?.length ?? 0} 个版本，无法恢复。`} remove={() => api.deleteProgram(programId)} onDeleted={() => navigate(`/drawings/${drawingId}`, { replace: true })} onClose={() => setDeleting(false)} />}
+      {viewVersion && <NCEditorSheet key={viewVersion.id} versionId={viewVersion.id} drawingId={drawingId} programId={programId} onClose={() => setViewVersion(null)} onSaved={(result) => { setSaved(`已保存 V${result.versionNo}${result.warning ? `：${result.warning}` : ''}`); setViewVersion(null) }} />}
       {file && (
         <UploadSheet
           drawingId={drawingId}

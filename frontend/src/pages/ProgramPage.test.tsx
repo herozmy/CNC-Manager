@@ -124,3 +124,12 @@ test('加载失败可重试', async () => {
   renderApp(view(), URL)
   expect(await screen.findByText('程序加载失败')).toBeInTheDocument()
 })
+
+test('从历史版本打开 NC 查看入口，读取选中的版本', async () => {
+  server([version({ id: 4, versionNo: 2, isCurrent: false })], (r) => r.path === '/versions/4/content' ? { body: { versionId: 4, programId: 1, versionNo: 2, fileName: 'old.nc', encoding: 'utf-8', content: 'O1234\nM30', lineCount: 2, sizeBytes: 10, isCurrent: false } } : undefined)
+  renderApp(view(), URL)
+  await userEvent.click(await screen.findByRole('button', { name: '查看 V2 内容' }))
+  expect(await screen.findByRole('dialog', { name: 'NC 内容 · V2' })).toBeInTheDocument()
+  expect(screen.getByLabelText('NC 程序内容')).toHaveValue('O1234\nM30')
+  expect(screen.getByLabelText('NC 程序内容')).toHaveAttribute('readonly')
+})
