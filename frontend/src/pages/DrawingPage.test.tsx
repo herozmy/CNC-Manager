@@ -1,13 +1,12 @@
 import { screen } from '@testing-library/react'
 import { Route, Routes } from 'react-router-dom'
 import { afterEach, expect, test, vi } from 'vitest'
-import { drawing, mockApi, renderApp } from '../test-utils'
+import { detail, drawing, mockApi, operation, program, renderApp } from '../test-utils'
 import DrawingPage from './DrawingPage'
 
 afterEach(() => vi.unstubAllGlobals())
 
-const program = (over = {}) => ({ id: 1, operationId: 1, programNo: 'O1234', programName: '粗车', controller: 'FANUC', currentVersionId: 5, currentVersionNo: 3, versionCount: 3, remark: '', ...over })
-const op = (over = {}) => ({ id: 1, drawingId: 1, opNo: 10, opName: '粗车', machineName: 'CK6150', fixture: '三爪', zHeight: 25.5, remark: '', programs: [program()], ...over })
+const op = operation
 const view = () => (
   <Routes>
     <Route path="/drawings/:id" element={<DrawingPage />} />
@@ -15,7 +14,7 @@ const view = () => (
 )
 
 test('显示图纸信息、工序要点与程序当前版本', async () => {
-  mockApi(() => ({ body: { ...drawing({ remark: '注意变形' }), operations: [op(), op({ id: 2, opNo: 20, opName: '精车', zHeight: 0, programs: [program({ id: 2, programNo: 'O2', currentVersionNo: null })] })] } }))
+  mockApi(() => ({ body: detail([op({ machineId: 5, machineName: 'CK6150' }), op({ id: 2, opNo: 20, opName: '精车', zHeight: 0, programs: [program({ id: 2, programNo: 'O2', currentVersionNo: null })] })], { remark: '注意变形' }) }))
   renderApp(view(), '/drawings/1')
   expect(await screen.findByRole('heading', { name: 'D-1001' })).toBeInTheDocument()
   expect(screen.getByText('注意变形')).toBeInTheDocument()

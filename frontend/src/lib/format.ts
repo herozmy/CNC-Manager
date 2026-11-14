@@ -12,3 +12,9 @@ export function relativeTime(iso: string, now: number = Date.now()): string {
   if (day < 30) return `${day} 天前`
   return new Date(t).toLocaleDateString('zh-CN')
 }
+
+export function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`
+  return `${(n / 1024 / 1024).toFixed(1)} MB`
+}

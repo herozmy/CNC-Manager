@@ -22,7 +22,8 @@ export function mockApi(handler: (req: MockReq) => MockRes | undefined) {
     const req: MockReq = {
       method: init?.method ?? 'GET',
       path: url.replace(/^\/api/, ''),
-      body: init?.body ? JSON.parse(String(init.body)) : undefined,
+      // FormData（上传）原样保留，其余按 JSON 解析
+      body: init?.body instanceof FormData ? init.body : init?.body ? JSON.parse(String(init.body)) : undefined,
     }
     calls.push(req)
     const res = handler(req)
@@ -53,3 +54,20 @@ export function drawing(over: Partial<Record<string, unknown>> = {}) {
     remark: '', createdAt: '2026-01-01T00:00:00Z', updatedAt: new Date().toISOString(), operationCount: 2, programCount: 3, ...over,
   }
 }
+
+export const program = (over: Partial<Record<string, unknown>> = {}) => ({
+  id: 1, operationId: 1, programNo: 'O1234', programName: '粗车', controller: 'FANUC',
+  currentVersionId: 5, currentVersionNo: 3, versionCount: 3, remark: '', ...over,
+})
+
+export const operation = (over: Partial<Record<string, unknown>> = {}) => ({
+  id: 1, drawingId: 1, opNo: 10, opName: '粗车', machineId: null, machineName: '', fixture: '三爪', zHeight: 25.5, remark: '',
+  programs: [program()], ...over,
+})
+
+export const detail = (ops: unknown[], over: Partial<Record<string, unknown>> = {}) => ({ ...drawing(over), operations: ops })
+
+export const version = (over: Partial<Record<string, unknown>> = {}) => ({
+  id: 5, programId: 1, versionNo: 3, sha256: 'ab', fileName: 'O1234.nc', fileSize: 2048, encoding: 'utf-8',
+  changeNote: '', createdBy: 'alice', createdAt: new Date().toISOString(), isCurrent: true, ...over,
+})

@@ -10,6 +10,7 @@ import DrawingPage from './pages/DrawingPage'
 import MePage from './pages/MePage'
 import NewDrawingPage from './pages/NewDrawingPage'
 import OverviewPage from './pages/OverviewPage'
+import ProgramPage from './pages/ProgramPage'
 
 export default function App() {
   const qc = useQueryClient()
@@ -32,6 +33,7 @@ export default function App() {
         <Route index element={<OverviewPage />} />
         <Route path="drawings/new" element={<NewDrawingPage />} />
         <Route path="drawings/:id" element={<DrawingPage />} />
+        <Route path="drawings/:id/programs/:programId" element={<ProgramPage />} />
         <Route path="me" element={<MePage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>

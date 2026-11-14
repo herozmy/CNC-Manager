@@ -53,6 +53,7 @@ export interface Operation {
   drawingId: number
   opNo: number
   opName: string
+  machineId: number | null
   machineName: string
   fixture: string
   zHeight: number
@@ -66,4 +67,53 @@ export interface DrawingDetail extends Drawing {
 
 export interface Meta {
   version: string
+}
+
+export interface OperationInput {
+  opNo: number
+  opName: string
+  machineId: number | null
+  fixture: string
+  zHeight: number
+  remark: string
+}
+
+export interface ProgramInput {
+  programNo: string
+  programName: string
+  controller: string
+  remark: string
+}
+
+export interface Version {
+  id: number
+  programId: number
+  versionNo: number
+  sha256: string
+  fileName: string
+  fileSize: number
+  encoding: 'utf-8' | 'gbk'
+  changeNote: string
+  createdBy: string
+  createdAt: string
+  isCurrent: boolean
+}
+
+export interface ToolUse {
+  seq: number
+  toolNo: string
+  offsetNo: string
+  lineNo: number
+  raw: string
+}
+
+export interface ParseResult {
+  controller: string
+  tools: ToolUse[]
+  lineCount: number
+  warnings: string[]
+}
+
+export interface UploadResult extends Version {
+  parse?: ParseResult
 }

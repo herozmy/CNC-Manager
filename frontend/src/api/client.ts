@@ -14,10 +14,12 @@ export class ApiError extends Error {
 export const UNAUTHORIZED_EVENT = 'cnc:unauthorized'
 
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+  // FormData 由浏览器自己带 multipart 边界，不能手动设置 Content-Type
+  const isForm = body instanceof FormData
   const res = await fetch(`/api${path}`, {
     method,
-    headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
-    body: body === undefined ? undefined : JSON.stringify(body),
+    headers: body === undefined || isForm ? undefined : { 'Content-Type': 'application/json' },
+    body: body === undefined ? undefined : isForm ? body : JSON.stringify(body),
   })
   if (res.status === 204) return undefined as T
 
@@ -46,5 +48,6 @@ export const http = {
   get: <T>(path: string) => request<T>('GET', path),
   post: <T>(path: string, body?: unknown) => request<T>('POST', path, body ?? {}),
   put: <T>(path: string, body?: unknown) => request<T>('PUT', path, body ?? {}),
+  postForm: <T>(path: string, form: FormData) => request<T>('POST', path, form),
   del: <T>(path: string) => request<T>('DELETE', path),
 }
