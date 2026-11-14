@@ -42,6 +42,7 @@ export const api = {
   updateOperation: (id: number, input: OperationInput) => http.put<Operation>(`/operations/${id}`, input),
   deleteOperation: (id: number) => http.del<void>(`/operations/${id}`),
 
+  updateProgram: (id: number, input: ProgramInput) => http.put<Program>(`/programs/${id}`, input),
   deleteProgram: (id: number) => http.del<void>(`/programs/${id}`),
   createProgram: (operationId: number, input: ProgramInput) => http.post<Program>(`/operations/${operationId}/programs`, input),
 

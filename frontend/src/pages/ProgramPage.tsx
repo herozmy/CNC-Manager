@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Download, Upload } from 'lucide-react'
+import { ArrowLeft, Download, Pencil, Upload } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api } from '../api'
@@ -8,6 +8,7 @@ import type { UploadResult, Version } from '../api/types'
 import DeleteSheet from '../components/DeleteSheet'
 import NCEditorSheet from '../components/NCEditorSheet'
 import UploadSheet from '../components/UploadSheet'
+import ProgramSheet from '../components/ProgramSheet'
 import VersionToolTable from '../components/VersionToolTable'
 import VersionDiffSheet from '../components/VersionDiffSheet'
 import { Button } from '../components/ui/Button'
@@ -60,6 +61,7 @@ function VersionDetails({ v, onActivate, onView, onCompare }: { v: Version; onAc
 export default function ProgramPage() {
   const navigate = useNavigate()
   const [deleting, setDeleting] = useState(false)
+  const [editing, setEditing] = useState(false)
   const params = useParams()
   const drawingId = Number(params.id)
   const programId = Number(params.programId)
@@ -114,7 +116,10 @@ export default function ProgramPage() {
             </div>
             {(program.programName || program.controller) && <p className="text-slate-600">{[program.programName, program.controller].filter(Boolean).join(' · ')}</p>}
             {program.remark && <p className="mt-2 rounded-xl bg-amber-50 p-3 text-sm text-slate-700">{program.remark}</p>}
-            <Button variant="ghost" className="mt-2 text-red-600" onClick={() => setDeleting(true)}>删除程序</Button>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button variant="secondary" onClick={() => setEditing(true)}><Pencil className="size-5" aria-hidden />编辑程序信息</Button>
+              <Button variant="ghost" className="text-red-600" onClick={() => setDeleting(true)}>删除程序</Button>
+            </div>
           </header>
 
           {saved && <p role="status" className="mb-4 rounded-xl bg-green-50 p-3">{saved}</p>}
@@ -193,6 +198,7 @@ export default function ProgramPage() {
         </>
       )}
 
+      {editing && program && <ProgramSheet key={program.id} drawingId={drawingId} operationId={program.operationId} program={program} onClose={() => setEditing(false)} onSaved={() => setSaved('程序信息已保存')} />}
       {deleting && program && <DeleteSheet title="删除程序" message={`将删除程序「${program.programNo}」及其全部 ${versions.data?.length ?? 0} 个版本，无法恢复。`} remove={() => api.deleteProgram(programId)} onDeleted={() => {
         for (const v of versions.data ?? []) qc.removeQueries({ queryKey: ['version-tools-draft', v.id], exact: true })
         navigate(`/drawings/${drawingId}`, { replace: true })
