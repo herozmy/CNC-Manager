@@ -11,3 +11,7 @@ backend/server
 *.log
 .local/
 scripts/__pycache__/
+
+# Local documentation must never be included in repository pushes.
+*.[mM][dD]
+*.[mM][aA][rR][kK][dD][oO][wW][nN]
