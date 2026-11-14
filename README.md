@@ -2,7 +2,7 @@
 
 面向数控加工场景的程序台账系统，按“图纸 → 工序 → 程序 → 版本”组织 NC 文件，支持手机、平板和桌面浏览器访问。Go 服务内嵌 React 前端，业务数据使用 SQLite 保存。
 
-源码分支为 `v2`，源码基线标签为 `v2`。应用构建版本以根目录 [VERSION](VERSION) 为准。
+源码分支为 `v2`，源码基线标签为 `v2`。应用构建版本以根目录 [VERSION](VERSION) 为准；可从 [Releases](https://github.com/herozmy/CNC-Manager/releases) 下载 Linux amd64 二进制及 SHA-256 校验清单。
 
 ## 主要功能
 
@@ -33,13 +33,13 @@ CNC_ADDR=127.0.0.1:8080 CNC_DATA_DIR=./data ./.local/bin/cnc-manager
 
 ## Linux 构建
 
-在源码根目录执行，另需 Python 3 以运行维护工具测试：
+在源码根目录执行：
 
 ```bash
 bash scripts/build.sh
 ```
 
-生成 Linux amd64 服务 `.local/release/cnc-manager`，以及需要 Python 3 的密码重置工具 `.local/release/cnc-reset-password`。前端已内嵌，运行服务不需要 Node.js。
+生成 Linux amd64 单文件程序 `.local/release/cnc-manager`。前端和密码重置功能均已内置，运行时不需要 Node.js 或 Python。使用 `cnc-manager --version` 查看版本。
 
 ## Docker 部署
 
@@ -92,7 +92,29 @@ ZIP 包含账号、已保存的业务数据、NC 文件及密钥；不包含有�
 
 网页备份上限为 ZIP 512 MB、解压后 2 GB、100,000 个 NC 文件。超出范围时采用停服复制完整数据目录的方式迁移。
 
-忘记应用密码时，服务器管理员可使用 [密码重置工具](scripts/reset-password.py)。运行 `python3 scripts/reset-password.py --help` 查看服务和数据目录参数；工具会先备份，再重置指定账号并撤销其旧会话。
+## 忘记密码
+
+从 `v2.0.1` 起，服务器管理员直接使用主程序的 `reset-password` 子命令：
+
+```bash
+sudo ./cnc-manager reset-password \
+  --data-dir /opt/cnc-manager-v2/data \
+  --service cnc-manager-v2.service
+```
+
+默认数据目录为 `/opt/cnc-manager-v2/data`（可通过 `CNC_DATA_DIR` 或 `--data-dir` 修改），默认服务为 `cnc-manager-v2.service`。服务必须显式配置相同的绝对路径 `CNC_DATA_DIR`；工具会核对目录与服务的对应关系。
+
+只有一个启用账号时自动选择，多个账号时按编号选择；也可增加 `--user admin` 指定登录用户名。交互输入两次新密码（8～128 个字符），输入不显示，Ctrl+C 可取消；远程使用 `ssh -t` 分配终端。工具先停服，将完整数据复制到数据目录同级的 `backups/pre-password-reset-*/data/`，再事务修改密码并撤销该账号全部旧登录，最后恢复原本运行的服务。其他账号、业务数据和密钥保留。
+
+```bash
+./cnc-manager reset-password --help
+./cnc-manager reset-password --data-dir /path/to/data --list
+./cnc-manager reset-password --data-dir /path/to/offline/data --no-service
+```
+
+`--list` 只列出账号。`--no-service` 只用于已停止服务的离线数据目录，需由调用方先确认所有写入进程已停止；新版本有数据目录占用检查，旧版本不具备此检查。
+
+备份或数据库操作失败不会提交密码变更，并尝试恢复服务；若提示“密码已重置，但服务恢复失败”，请检查服务状态后使用新密码登录。此功能依赖服务器文件访问/管理权限，无公开 HTTP 密码重置入口。
 
 ## 项目结构与检查
 
@@ -104,5 +126,4 @@ ZIP 包含账号、已保存的业务数据、NC 文件及密钥；不包含有�
 ```bash
 (cd frontend && npm ci && npm run typecheck && npm test && npm run lint && npm run build)
 (cd backend && go vet ./... && go test ./...)
-python3 -m unittest discover -s scripts -p 'test_*.py'
 ```

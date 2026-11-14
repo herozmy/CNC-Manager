@@ -4,16 +4,20 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
 	"cnc-manager/internal/config"
+	"cnc-manager/internal/datalock"
 	"cnc-manager/internal/httpapi"
 	"cnc-manager/internal/ncstore"
+	"cnc-manager/internal/recovery"
 	"cnc-manager/internal/repo"
 	"cnc-manager/internal/store"
 	"cnc-manager/internal/web"
@@ -23,6 +27,27 @@ import (
 var version = "dev"
 
 func main() {
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "reset-password":
+			ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
+			defer stop()
+			if err := recovery.Run(ctx, os.Args[2:], os.Stdin, os.Stdout); err != nil {
+				fmt.Fprintln(os.Stderr, "操作未完成：", err)
+				os.Exit(1)
+			}
+			return
+		case "--version", "version":
+			fmt.Println(version)
+			return
+		case "--help", "-h", "help":
+			fmt.Println("用法：cnc-manager [reset-password | --version | --help]\n无参数启动服务；reset-password --help 查看密码重置用法。")
+			return
+		default:
+			fmt.Fprintln(os.Stderr, "未知命令，请运行 cnc-manager --help")
+			os.Exit(2)
+		}
+	}
 	log := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	if err := run(log); err != nil {
 		log.Error("服务退出", "err", err)
@@ -35,6 +60,14 @@ func run(log *slog.Logger) error {
 	if err != nil {
 		return err
 	}
+	if err := os.MkdirAll(cfg.DataDir, 0755); err != nil {
+		return err
+	}
+	lock, err := datalock.Acquire(filepath.Join(cfg.DataDir, ".cnc-manager.lock"))
+	if err != nil {
+		return err
+	}
+	defer lock.Close()
 	db, err := store.Open(cfg.Layout.DBPath)
 	if err != nil {
 		return err
