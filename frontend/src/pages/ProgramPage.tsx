@@ -115,7 +115,7 @@ export default function ProgramPage() {
               {drawing.data?.drawingNo} · {op.opNo}# {op.opName}
             </p>
             <div className="flex items-center justify-between gap-3">
-              <h1 className="break-words text-2xl font-bold">{program.programNo}</h1>
+              <h1 className="min-w-0 text-2xl font-bold">{program.programNo}</h1>
               <VersionBadge no={current?.versionNo ?? null} />
             </div>
             {(program.programName || program.controller) && <p className="text-slate-600">{[program.programName, program.controller].filter(Boolean).join(' · ')}</p>}

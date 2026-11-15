@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { api } from '../api'
 import { ApiError } from '../api/client'
@@ -23,9 +23,22 @@ export default function UploadSheet({ drawingId, programId, file, onClose, onDon
   const [note, setNote] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const pending = useRef(false)
+
+  useEffect(() => {
+    const warn = (e: BeforeUnloadEvent) => {
+      if (!pending.current) return
+      e.preventDefault()
+      e.returnValue = ''
+    }
+    window.addEventListener('beforeunload', warn)
+    return () => window.removeEventListener('beforeunload', warn)
+  }, [])
 
   async function submit(e: FormEvent) {
     e.preventDefault()
+    if (pending.current) return
+    pending.current = true
     setError('')
     setBusy(true)
     try {
@@ -39,18 +52,22 @@ export default function UploadSheet({ drawingId, programId, file, onClose, onDon
     } catch (err) {
       setError(err instanceof ApiError ? err.message : '上传失败，请检查网络后重试')
     } finally {
+      pending.current = false
       setBusy(false)
     }
   }
 
   return (
-    <Sheet open title="上传新版本" onClose={onClose}>
+    <Sheet open title="上传新版本" onClose={() => { if (!pending.current) onClose() }}>
       <form onSubmit={submit} className="space-y-4" noValidate>
         <div className="rounded-xl bg-slate-50 p-3">
           <p className="break-all font-semibold">{file.name}</p>
           <p className="text-sm text-slate-500">{formatBytes(file.size)}</p>
         </div>
-        <Field label="变更说明（可选）" value={note} onChange={(e) => setNote(e.target.value)} placeholder="如 调整精车进给" maxLength={500} />
+        <fieldset disabled={busy} className="space-y-4">
+          <Field label="变更说明（可选）" value={note} onChange={(e) => setNote(e.target.value)} placeholder="如 调整精车进给" maxLength={500} />
+        </fieldset>
+        {busy && <p role="status" className="text-sm text-slate-600">正在上传，请保持页面打开…</p>}
         {error && (
           <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
             {error}

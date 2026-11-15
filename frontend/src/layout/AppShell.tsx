@@ -17,7 +17,7 @@ export default function AppShell() {
   const access = useAccess()
   const visibleItems = items.filter((item) => item.to !== '/drawings/new' || access.can('create'))
   return (
-    <div className="min-h-dvh bg-slate-50 text-slate-900 md:flex">
+    <div className="min-h-dvh bg-slate-50 text-slate-900 [overflow-wrap:anywhere] md:flex">
       <aside className="hidden w-56 shrink-0 flex-col gap-2 bg-slate-900 p-4 md:flex">
         <p className="mb-4 px-3 text-lg font-bold text-amber-400">CNC-Manager</p>
         {visibleItems.map(({ to, label, icon: Icon, ...rest }) => (
