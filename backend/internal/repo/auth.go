@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/jmoiron/sqlx"
 
@@ -15,7 +16,59 @@ import (
 	"cnc-manager/internal/domain"
 )
 
-const userColumns = `id, username, display_name, role, enabled, created_at, updated_at`
+const userSelectColumns = `u.id, u.username, u.display_name, u.role, u.enabled, u.created_at, u.updated_at`
+const userJoin = ` FROM app_user u `
+
+type userRecord struct {
+	domain.User
+	PasswordHash string `db:"password_hash"`
+}
+
+func (rec userRecord) user() (domain.User, error) { return rec.User, nil }
+
+func loadUser(ctx context.Context, q sqlx.QueryerContext, id int64) (domain.User, error) {
+	var rec userRecord
+	if err := sqlx.GetContext(ctx, q, &rec, `SELECT `+userSelectColumns+userJoin+`WHERE u.id = ?`, id); err != nil {
+		return domain.User{}, wrap(err)
+	}
+	return rec.user()
+}
+
+func requireAdmin(ctx context.Context, q sqlx.QueryerContext) error {
+	actor, ok := domain.UserFromContext(ctx)
+	if !ok || actor.ID <= 0 || !actor.IsAdmin() {
+		return domain.ErrForbidden
+	}
+	current, err := loadUser(ctx, q, actor.ID)
+	if errors.Is(err, domain.ErrNotFound) {
+		return domain.ErrForbidden
+	}
+	if err != nil {
+		return err
+	}
+	if !current.Enabled || !current.IsAdmin() {
+		return domain.ErrForbidden
+	}
+	return nil
+}
+
+func requireSelf(ctx context.Context, q sqlx.QueryerContext, id int64) error {
+	actor, ok := domain.UserFromContext(ctx)
+	if !ok || actor.ID != id || id <= 0 {
+		return domain.ErrForbidden
+	}
+	current, err := loadUser(ctx, q, id)
+	if errors.Is(err, domain.ErrNotFound) {
+		return domain.ErrForbidden
+	}
+	if err != nil {
+		return err
+	}
+	if !current.Enabled {
+		return domain.ErrForbidden
+	}
+	return nil
+}
 
 // SetupRequired 在还没有任何用户时为 true。
 func (r *Repo) SetupRequired(ctx context.Context) (bool, error) {
@@ -32,13 +85,13 @@ func validateCredentials(username, displayName, password string) (string, string
 	if username == "" || len(username) > 64 || strings.ContainsFunc(username, unicode.IsSpace) {
 		return "", "", fmt.Errorf("%w: 用户名应为 1~64 个字符且不含空白", domain.ErrInvalid)
 	}
-	if len(password) < 8 || len(password) > 128 {
+	if utf8.RuneCountInString(password) < 8 || utf8.RuneCountInString(password) > 128 {
 		return "", "", fmt.Errorf("%w: 密码长度应为 8~128 个字符", domain.ErrInvalid)
 	}
 	if displayName == "" {
 		displayName = username
 	}
-	if len(displayName) > 64 {
+	if utf8.RuneCountInString(displayName) > 64 {
 		return "", "", fmt.Errorf("%w: 显示名称不能超过 64 个字符", domain.ErrInvalid)
 	}
 	return username, displayName, nil
@@ -74,11 +127,17 @@ func (r *Repo) CreateFirstUser(ctx context.Context, username, displayName, passw
 		return domain.User{}, wrap(err)
 	}
 	id, _ := res.LastInsertId()
+	u, err := loadUser(ctx, tx, id)
+	if err != nil {
+		return domain.User{}, err
+	}
+	if err := r.log(domain.WithUser(ctx, u), tx, "create", "app_user", id, "创建初始管理员"); err != nil {
+		return domain.User{}, err
+	}
 	if err := tx.Commit(); err != nil {
 		return domain.User{}, err
 	}
-	return domain.User{ID: id, Username: username, DisplayName: displayName, Role: domain.RoleAdmin,
-		Enabled: true, CreatedAt: now, UpdatedAt: now}, nil
+	return u, nil
 }
 
 // Authenticate 校验用户名密码。用户不存在、被停用、密码错误一律返回 ErrUnauthorized。
@@ -87,12 +146,9 @@ func (r *Repo) Authenticate(ctx context.Context, username, password string) (dom
 }
 
 func authenticate(ctx context.Context, db sqlx.QueryerContext, username, password string) (domain.User, error) {
-	var rec struct {
-		domain.User
-		PasswordHash string `db:"password_hash"`
-	}
+	var rec userRecord
 	err := sqlx.GetContext(ctx, db, &rec,
-		`SELECT `+userColumns+`, password_hash FROM app_user WHERE username = ?`, strings.TrimSpace(username))
+		`SELECT `+userSelectColumns+`, u.password_hash`+userJoin+`WHERE u.username = ?`, strings.TrimSpace(username))
 	if errors.Is(err, sql.ErrNoRows) {
 		auth.CheckDummy(password) // 用户不存在也做一次等价开销的计算，避免通过耗时枚举用户名
 		return domain.User{}, domain.ErrUnauthorized
@@ -103,7 +159,7 @@ func authenticate(ctx context.Context, db sqlx.QueryerContext, username, passwor
 	if !auth.CheckPassword(rec.PasswordHash, password) || !rec.Enabled {
 		return domain.User{}, domain.ErrUnauthorized
 	}
-	return rec.User, nil
+	return rec.user()
 }
 
 // Login verifies the password and creates its session in a single transaction,
@@ -120,6 +176,9 @@ func (r *Repo) Login(ctx context.Context, username, password string, lifetime ti
 	}
 	token, _, err := createSession(ctx, tx, u.ID, lifetime)
 	if err != nil {
+		return domain.User{}, "", err
+	}
+	if err := r.log(domain.WithUser(ctx, u), tx, "login", "app_user", u.ID, "账号登录"); err != nil {
 		return domain.User{}, "", err
 	}
 	if err := tx.Commit(); err != nil {
@@ -147,13 +206,15 @@ func createSession(ctx context.Context, db sqlx.ExecerContext, userID int64, lif
 
 // UserBySession 按令牌取有效会话对应的启用用户，无效时返回 ErrNotFound。
 func (r *Repo) UserBySession(ctx context.Context, token string) (domain.User, error) {
-	var u domain.User
-	err := r.db.GetContext(ctx, &u,
-		`SELECT u.id, u.username, u.display_name, u.role, u.enabled, u.created_at, u.updated_at
-		 FROM user_session s JOIN app_user u ON u.id = s.user_id
-		 WHERE s.token_hash = ? AND s.expires_at > ? AND u.enabled = 1`,
+	var rec userRecord
+	err := r.db.GetContext(ctx, &rec,
+		`SELECT `+userSelectColumns+userJoin+`JOIN user_session s ON s.user_id = u.id
+   WHERE s.token_hash = ? AND s.expires_at > ? AND u.enabled = 1`,
 		auth.HashToken(token), time.Now().UTC().Format(time.RFC3339Nano))
-	return u, wrap(err)
+	if err != nil {
+		return domain.User{}, wrap(err)
+	}
+	return rec.user()
 }
 
 // DeleteSession 注销一个会话。

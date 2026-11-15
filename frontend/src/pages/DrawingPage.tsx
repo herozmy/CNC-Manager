@@ -1,8 +1,10 @@
-import { useQuery } from '@tanstack/react-query'
+import { useAccess } from '../auth/permissions'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, ChevronDown, ChevronRight, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useId, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { api } from '../api'
+import OwnerSelect from '../components/OwnerSelect'
 import { ApiError } from '../api/client'
 import type { Operation, Program } from '../api/types'
 import DeleteSheet from '../components/DeleteSheet'
@@ -38,6 +40,7 @@ function ProgramRow({ drawingId, p }: { drawingId: number; p: Program }) {
 }
 
 function OperationCard({ drawingId, op, onEdit, onDelete, onAddProgram }: { drawingId: number; op: Operation; onEdit: () => void; onDelete: () => void; onAddProgram: () => void }) {
+  const access = useAccess()
   const [expanded, setExpanded] = useState(false)
   const panelId = useId()
   const facts = [op.machineName, op.fixture && `装夹 ${op.fixture}`].filter(Boolean)
@@ -53,12 +56,12 @@ function OperationCard({ drawingId, op, onEdit, onDelete, onAddProgram }: { draw
       <div id={panelId} role="region" aria-label={`工序 ${op.opNo} 详情`} hidden={!expanded}>
         {expanded && <div className="border-t border-slate-100 p-4">
           <div className="flex flex-wrap justify-end gap-1">
-            <Button variant="ghost" onClick={onEdit} aria-label={`编辑工序 ${op.opNo}`} className="px-3">
+            {access.can('edit') && <Button variant="ghost" onClick={onEdit} aria-label={`编辑工序 ${op.opNo}`} className="px-3">
               <Pencil className="size-4" aria-hidden />编辑
-            </Button>
-            <Button variant="ghost" onClick={onDelete} aria-label={`删除工序 ${op.opNo}`} className="px-3 text-red-600">
+            </Button>}
+            {access.can('delete') && <Button variant="ghost" onClick={onDelete} aria-label={`删除工序 ${op.opNo}`} className="px-3 text-red-600">
               <Trash2 className="size-4" aria-hidden />删除
-            </Button>
+            </Button>}
           </div>
           {facts.length > 0 && <p className="text-sm text-slate-600 [overflow-wrap:anywhere]">{facts.join(' · ')}</p>}
           {op.centeringMethod && <p className="mt-1 text-sm text-slate-600 [overflow-wrap:anywhere]">分中方式：{op.centeringMethod}</p>}
@@ -80,10 +83,10 @@ function OperationCard({ drawingId, op, onEdit, onDelete, onAddProgram }: { draw
           ) : (
             <p className="mt-3 text-sm text-slate-400">暂无程序</p>
           )}
-          <Button variant="secondary" onClick={onAddProgram} className="mt-3 w-full" aria-label={`在 ${op.opNo}# 下新增程序`}>
+          {access.can('create') && <Button variant="secondary" onClick={onAddProgram} className="mt-3 w-full" aria-label={`在 ${op.opNo}# 下新增程序`}>
             <Plus className="size-5" aria-hidden />
             新增程序
-          </Button>
+          </Button>}
         </div>}
       </div>
     </section>
@@ -94,15 +97,21 @@ type Sheet = { kind: 'drawing' } | { kind: 'op'; op?: Operation } | { kind: 'pro
 
 /** 图纸详情：图纸信息 → 工序 → 程序。 */
 export default function DrawingPage() {
+  const access = useAccess()
+  const qc = useQueryClient()
+  const [assignOwner, setAssignOwner] = useState<number | ''>('')
+  const [assignBusy, setAssignBusy] = useState(false)
+  const [assignError, setAssignError] = useState('')
   const [deleting, setDeleting] = useState<Operation | null>(null)
   const id = Number(useParams().id)
   const valid = Number.isInteger(id) && id > 0
-  const query = useQuery({ queryKey: ['drawing', id], queryFn: () => api.drawingDetail(id), enabled: valid, retry: false })
+  const query = useQuery({ queryKey: ['drawing', id], queryFn: () => api.drawingDetail(id), enabled: valid && access.can('read'), retry: false })
   const [sheet, setSheet] = useState<Sheet>(null)
   const [saved, setSaved] = useState(false)
   const notFound = query.error instanceof ApiError && query.error.status === 404
   const ops = query.data?.operations ?? []
   const nextNo = (ops.reduce((m, o) => Math.max(m, o.opNo), 0) || 0) + 10
+  if (!access.can('read')) return <main className="p-6"><p>账号不可用，请联系管理员。</p><Link to="/" className="mt-4 inline-block">返回总览</Link></main>
 
   return (
     <main className="mx-auto max-w-3xl px-4 pt-4 pb-8">
@@ -115,11 +124,13 @@ export default function DrawingPage() {
       {query.data && (
         <>
           <header className="mb-4">
+            <p className="mb-2 text-sm text-slate-500">所属账号：{query.data.ownerName || '待分配'}</p>
+            {access.admin && query.data.ownerUserId === 0 && <form className="mb-4 space-y-3 rounded-xl bg-amber-50 p-3" onSubmit={async (e) => { e.preventDefault(); if (!assignOwner || assignBusy) return; setAssignBusy(true); setAssignError(''); try { await api.assignDrawingOwner(id, assignOwner); await Promise.all([qc.invalidateQueries({ queryKey: ['drawing', id] }), qc.invalidateQueries({ queryKey: ['drawings'] }), qc.invalidateQueries({ queryKey: ['admin-users'] })]) } catch (err) { setAssignError(err instanceof Error ? err.message : '分配失败') } finally { setAssignBusy(false) } }}><p>此图纸仅管理员可见。分配后，其工序、程序和版本将由目标账号管理。</p><OwnerSelect required value={assignOwner} onChange={setAssignOwner} /><Button type="submit" loading={assignBusy}>确认分配图纸</Button>{assignError && <p role="alert" className="text-red-700">{assignError}</p>}</form>}
             <div className="flex items-start justify-between gap-3">
               <h1 className="min-w-0 break-words text-2xl font-bold">{query.data.drawingNo}</h1>
-              <Button variant="secondary" className="shrink-0 px-3" onClick={() => { setSaved(false); setSheet({ kind: 'drawing' }) }}>
+              {access.can('edit') && <Button variant="secondary" className="shrink-0 px-3" onClick={() => { setSaved(false); setSheet({ kind: 'drawing' }) }}>
                 <Pencil className="size-4" aria-hidden />编辑图纸
-              </Button>
+              </Button>}
             </div>
             <p className="mt-2 w-fit max-w-full break-words rounded-lg bg-slate-100 px-2 py-1 text-sm text-slate-700">类型：{query.data.name || '未分类'}</p>
             {query.data.material && <p className="mt-1 break-words text-sm text-slate-500">{query.data.material}</p>}
@@ -129,17 +140,17 @@ export default function DrawingPage() {
           {saved && <p role="status" className="mb-4 rounded-xl bg-green-50 p-3 text-sm text-green-900">图纸已保存</p>}
           {ops.length === 0 ? (
             <EmptyState title="暂无工序">
-              <Button onClick={() => setSheet({ kind: 'op' })}>新增第一道工序</Button>
+              {access.can('create') && <Button onClick={() => setSheet({ kind: 'op' })}>新增第一道工序</Button>}
             </EmptyState>
           ) : (
             <div className="space-y-3">
               {ops.map((op) => (
                 <OperationCard key={op.id} drawingId={id} op={op} onDelete={() => setDeleting(op)} onEdit={() => setSheet({ kind: 'op', op })} onAddProgram={() => setSheet({ kind: 'program', operationId: op.id })} />
               ))}
-              <Button variant="secondary" className="w-full" onClick={() => setSheet({ kind: 'op' })}>
+              {access.can('create') && <Button variant="secondary" className="w-full" onClick={() => setSheet({ kind: 'op' })}>
                 <Plus className="size-5" aria-hidden />
                 新增工序
-              </Button>
+              </Button>}
             </div>
           )}
         </>

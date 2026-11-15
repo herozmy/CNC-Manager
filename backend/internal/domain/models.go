@@ -24,6 +24,8 @@ func FloatToMilli(v float64) int64 {
 // Drawing 图纸，模型最上层。
 type Drawing struct {
 	ID             int64   `db:"id" json:"id"`
+	OwnerUserID    int64   `db:"owner_user_id" json:"ownerUserId"`
+	OwnerName      string  `db:"owner_name" json:"ownerName"`
 	DrawingNo      string  `db:"drawing_no" json:"drawingNo"`
 	Name           string  `db:"name" json:"name"` // 产品类型；保留 name 以兼容已有数据和接口。
 	Customer       string  `db:"customer" json:"customer"`
@@ -64,6 +66,7 @@ type Operation struct {
 // Program 数控程序，挂在工序下。
 type Program struct {
 	ID               int64  `db:"id" json:"id"`
+	Revision         int64  `db:"revision" json:"revision"`
 	OperationID      int64  `db:"operation_id" json:"operationId"`
 	ProgramNo        string `db:"program_no" json:"programNo"`
 	ProgramName      string `db:"program_name" json:"programName"`
@@ -112,6 +115,7 @@ func checkLen(field, v string, max int) error {
 }
 
 type DrawingInput struct {
+	OwnerUserID    *int64     `json:"ownerUserId,omitempty"`
 	Price          PriceInput `json:"price,omitzero"`
 	DrawingNo      string     `json:"drawingNo"`
 	Name           string     `json:"name"`
@@ -188,10 +192,11 @@ func (in *OperationInput) Normalize() error {
 }
 
 type ProgramInput struct {
-	ProgramNo   string `json:"programNo"`
-	ProgramName string `json:"programName"`
-	Controller  string `json:"controller"`
-	Remark      string `json:"remark"`
+	ExpectedRevision *int64 `json:"expectedRevision,omitempty"`
+	ProgramNo        string `json:"programNo"`
+	ProgramName      string `json:"programName"`
+	Controller       string `json:"controller"`
+	Remark           string `json:"remark"`
 }
 
 func (in *ProgramInput) Normalize() error {

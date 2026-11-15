@@ -29,11 +29,14 @@ const fields: { key: keyof ProgramInput; label: string; max: number }[] = [
 export default function ProgramSheet({ drawingId, operationId, program, onClose, onSaved }: Props) {
   const qc = useQueryClient()
   const nav = useNavigate()
-  const [initial] = useState<ProgramInput>(() => ({
+  const [initial, setInitial] = useState<ProgramInput>(() => ({
     programNo: program?.programNo ?? '', programName: program?.programName ?? '',
     controller: program?.controller ?? '', remark: program?.remark ?? '',
   }))
   const [form, setForm] = useState(initial)
+  const [revision, setRevision] = useState(program?.revision ?? 1)
+  const [conflict, setConflict] = useState(false)
+  const [reloadConfirm, setReloadConfirm] = useState(false)
   const [errors, setErrors] = useState<Partial<Record<keyof ProgramInput, string>>>({})
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -70,7 +73,7 @@ export default function ProgramSheet({ drawingId, operationId, program, onClose,
     saving.current = true
     setBusy(true)
     try {
-      const p = program ? await api.updateProgram(program.id, input) : await api.createProgram(operationId, input)
+      const p = program ? await api.updateProgram(program.id, { ...input, expectedRevision: revision }) : await api.createProgram(operationId, input)
       if (program) {
         qc.setQueryData<DrawingDetail>(['drawing', drawingId], (previous) => previous ? {
           ...previous, operations: previous.operations.map((op) => ({
@@ -84,7 +87,7 @@ export default function ProgramSheet({ drawingId, operationId, program, onClose,
       else nav(`/drawings/${drawingId}/programs/${p.id}`)
     } catch (err) {
       const message = err instanceof ApiError ? err.message : '无法连接服务器，请重试'
-      if (err instanceof ApiError && err.status === 409) setErrors({ programNo: message.replace(/^.*?:\s*/, '') })
+      if (err instanceof ApiError && err.status === 409) { setConflict(true); setError(message) }
       else setError(message)
     } finally {
       saving.current = false
@@ -105,9 +108,15 @@ export default function ProgramSheet({ drawingId, operationId, program, onClose,
           <TextArea label="备注" value={form.remark} onChange={set('remark')} error={errors.remark} />
         </fieldset>
         {error && <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+        {conflict && <Button variant="secondary" disabled={busy} onClick={() => setReloadConfirm(true)}>重新载入程序信息</Button>}
+        {reloadConfirm && <div className="space-y-3 rounded-xl bg-amber-50 p-3"><p>重新载入将放弃当前未保存的修改，是否继续？</p><Button variant="secondary" onClick={() => setReloadConfirm(false)}>继续编辑</Button><Button disabled={busy} onClick={async () => {
+          if (!program) return
+          setBusy(true)
+          try { const latest = await api.getProgram(program.id); const values = { programNo: latest.programNo, programName: latest.programName, controller: latest.controller, remark: latest.remark }; setInitial(values); setForm(values); setRevision(latest.revision); setConflict(false); setError(''); setErrors({}); setReloadConfirm(false) } catch (e) { setError(e instanceof Error ? e.message : '载入失败') } finally { setBusy(false) }
+        }}>放弃并载入</Button></div>}
         <div className="grid grid-cols-2 gap-3">
           <Button variant="secondary" disabled={busy || discard} onClick={close}>取消</Button>
-          <Button type="submit" loading={busy} disabled={discard}>{program ? '保存修改' : '创建并上传文件'}</Button>
+          <Button type="submit" loading={busy} disabled={discard || conflict || reloadConfirm}>{program ? '保存修改' : '创建并上传文件'}</Button>
         </div>
       </form>
       {discard && <div className="mt-4 space-y-3 rounded-xl bg-amber-50 p-3">

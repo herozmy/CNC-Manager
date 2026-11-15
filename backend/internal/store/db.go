@@ -4,6 +4,7 @@ package store
 import (
 	"context"
 	"embed"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -78,23 +79,56 @@ func Migrate(ctx context.Context, db *sqlx.DB) error {
 		if err != nil {
 			return fmt.Errorf("读取迁移 %s 失败: %w", version, err)
 		}
-		tx, err := db.BeginTxx(ctx, nil)
-		if err != nil {
-			return fmt.Errorf("开启迁移事务失败: %w", err)
+		if err := applyMigration(ctx, db, version, string(content)); err != nil {
+			return err
 		}
-		if _, err := tx.ExecContext(ctx, string(content)); err != nil {
-			_ = tx.Rollback()
-			return fmt.Errorf("执行迁移 %s 失败: %w", version, err)
+	}
+	return nil
+}
+
+// applyMigration pins one connection so SQLite's per-connection foreign-key
+// setting cannot escape to another operation. Adding a non-null REFERENCES
+// column to populated tables requires this setting to be disabled outside the
+// transaction; all links are verified before committing the new schema.
+func applyMigration(ctx context.Context, db *sqlx.DB, version, content string) (result error) {
+	conn, err := db.Connx(ctx)
+	if err != nil {
+		return fmt.Errorf("取得迁移连接失败: %w", err)
+	}
+	defer conn.Close()
+	relaxed := version == "0005_roles"
+	if relaxed {
+		if _, err := conn.ExecContext(ctx, `PRAGMA foreign_keys=OFF`); err != nil {
+			return err
 		}
-		if _, err := tx.ExecContext(ctx,
-			`INSERT INTO schema_migration (version, applied_at) VALUES (?, ?)`,
-			version, time.Now().UTC().Format(time.RFC3339)); err != nil {
-			_ = tx.Rollback()
-			return fmt.Errorf("记录迁移 %s 失败: %w", version, err)
+		defer func() {
+			if _, err := conn.ExecContext(context.Background(), `PRAGMA foreign_keys=ON`); err != nil {
+				result = errors.Join(result, fmt.Errorf("恢复外键检查失败: %w", err))
+			}
+		}()
+	}
+	tx, err := conn.BeginTxx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("开启迁移事务失败: %w", err)
+	}
+	defer tx.Rollback()
+	if _, err := tx.ExecContext(ctx, content); err != nil {
+		return fmt.Errorf("执行迁移 %s 失败: %w", version, err)
+	}
+	if relaxed {
+		var broken int
+		if err := tx.GetContext(ctx, &broken, `SELECT COUNT(*) FROM pragma_foreign_key_check`); err != nil {
+			return err
 		}
-		if err := tx.Commit(); err != nil {
-			return fmt.Errorf("提交迁移 %s 失败: %w", version, err)
+		if broken != 0 {
+			return fmt.Errorf("迁移 %s 存在无效关联记录", version)
 		}
+	}
+	if _, err := tx.ExecContext(ctx, `INSERT INTO schema_migration (version, applied_at) VALUES (?, ?)`, version, time.Now().UTC().Format(time.RFC3339)); err != nil {
+		return fmt.Errorf("记录迁移 %s 失败: %w", version, err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("提交迁移 %s 失败: %w", version, err)
 	}
 	return nil
 }

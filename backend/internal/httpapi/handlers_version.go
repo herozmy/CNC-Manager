@@ -142,6 +142,10 @@ func (s *Server) handleDownloadVersion(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	if err := s.repo.LogDownload(r.Context(), id); err != nil {
+		s.fail(w, err)
+		return
+	}
 	name := f.FileName
 	if name == "" {
 		name = fmt.Sprintf("program_v%d.nc", f.VersionNo)

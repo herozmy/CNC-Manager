@@ -1,14 +1,14 @@
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, expect, test, vi } from 'vitest'
-import { drawing, mockApi, renderApp } from '../test-utils'
+import { drawing, mockApi, renderApp, user } from '../test-utils'
 import OverviewPage from './OverviewPage'
 
 afterEach(() => vi.unstubAllGlobals())
 
 test('显示图纸卡片、数量统计与相对时间', async () => {
   mockApi(() => ({ body: { items: [drawing({ drawingNo: 'D-1', name: '壳体' }), drawing({ id: 2, drawingNo: 'D-2', name: '', customer: '' })], total: 2, page: 1, size: 20 } }))
-  renderApp(<OverviewPage />)
+  renderApp(<OverviewPage />, '/', { ...user, role: 'editor' })
   expect(await screen.findByText('D-1')).toBeInTheDocument()
   expect(screen.getByText('共 2 张图纸')).toBeInTheDocument()
   expect(screen.getAllByText('2 道工序 · 3 个程序')).toHaveLength(2)
@@ -27,7 +27,7 @@ test('搜索类型后，结果显示产品类型并排除其他类型的图纸',
     const items = keyword === '壳体' ? [all[0]] : all
     return { body: { items, total: items.length, page: 1, size: 20 } }
   })
-  renderApp(<OverviewPage />)
+  renderApp(<OverviewPage />, '/', { ...user, role: 'editor' })
   await screen.findByText('D-2')
   await userEvent.setup().type(screen.getByPlaceholderText('图纸号、类型、材料、程序号'), '壳体')
   expect(await screen.findByText('找到 1 张图纸')).toBeInTheDocument()
@@ -45,7 +45,7 @@ test('从总览删除图纸：显示级联范围，取消不提交，确认后�
     }
     return { body: { items, total: items.length, page: 1, size: 20 } }
   })
-  renderApp(<OverviewPage />)
+  renderApp(<OverviewPage />, '/', { ...user, role: 'editor' })
   const u = userEvent.setup()
   await u.click(await screen.findByRole('button', { name: '删除图纸 D-1' }))
   expect(screen.getByRole('dialog', { name: '删除图纸' })).toHaveTextContent('2 道工序、3 个程序和全部版本')
@@ -59,7 +59,7 @@ test('从总览删除图纸：显示级联范围，取消不提交，确认后�
 
 test('搜索会防抖并带上转义后的关键字', async () => {
   const calls = mockApi(() => ({ body: { items: [], total: 0, page: 1, size: 20 } }))
-  renderApp(<OverviewPage />)
+  renderApp(<OverviewPage />, '/', { ...user, role: 'editor' })
   await screen.findByText('还没有图纸')
   const u = userEvent.setup()
   await u.type(screen.getByRole('searchbox'), 'O12 34&')
@@ -74,7 +74,7 @@ test('分页：点击加载更多追加下一页', async () => {
     const page = Number(new URL(r.path, 'http://x').searchParams.get('page'))
     return { body: { items: [drawing({ id: page, drawingNo: `D-P${page}` })], total: 2, page, size: 1 } }
   })
-  renderApp(<OverviewPage />)
+  renderApp(<OverviewPage />, '/', { ...user, role: 'editor' })
   expect(await screen.findByText('D-P1')).toBeInTheDocument()
   expect(screen.queryByText('D-P2')).not.toBeInTheDocument()
   await userEvent.setup().click(screen.getByRole('button', { name: '加载更多' }))
@@ -85,7 +85,7 @@ test('分页：点击加载更多追加下一页', async () => {
 test('加载失败可重试', async () => {
   let fail = true
   mockApi(() => (fail ? { status: 500, body: { error: 'x' } } : { body: { items: [drawing()], total: 1, page: 1, size: 20 } }))
-  renderApp(<OverviewPage />)
+  renderApp(<OverviewPage />, '/', { ...user, role: 'editor' })
   expect(await screen.findByText('图纸加载失败')).toBeInTheDocument()
   fail = false
   await userEvent.setup().click(screen.getByRole('button', { name: '重试' }))

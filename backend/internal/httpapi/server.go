@@ -11,6 +11,7 @@ import (
 
 	"cnc-manager/internal/backup"
 	"cnc-manager/internal/config"
+	"cnc-manager/internal/domain"
 	"cnc-manager/internal/ncstore"
 	"cnc-manager/internal/repo"
 )
@@ -74,11 +75,20 @@ func New(o Options) http.Handler {
 		api.Post("/auth/login", s.handleLogin)
 
 		api.Group(func(p chi.Router) {
-			p.Use(s.requireAuth)
+			p.Use(s.requireAuth, s.auditFailedRequests)
 			p.Get("/auth/me", s.handleMe)
 			p.Put("/auth/me", s.handleUpdateMe)
 			p.Put("/auth/password", s.handleChangePassword)
 			p.Post("/auth/logout", s.handleLogout)
+			p.Route("/admin", func(a chi.Router) {
+				a.Use(s.requireAdmin)
+				a.Get("/users", s.handleListUsers)
+				a.Post("/users", s.handleCreateUser)
+				a.Put("/users/{id}", s.handleUpdateUser)
+				a.Post("/users/{id}/reset-password", s.handleResetUserPassword)
+				a.Get("/audit-logs", s.handleAuditLogs)
+				a.Put("/drawings/{id}/owner", s.handleAssignDrawingOwner)
+			})
 			p.Route("/backup", func(b chi.Router) {
 				b.Use(s.requireBackupAdmin)
 				b.Get("/export", s.handleBackupExport)
@@ -91,35 +101,35 @@ func New(o Options) http.Handler {
 			})
 
 			p.Get("/drawings", s.handleListDrawings)
-			p.Post("/drawings", s.handleCreateDrawing)
+			p.With(s.requirePermission(domain.PermissionCreate)).Post("/drawings", s.handleCreateDrawing)
 			p.Get("/drawings/{id}/detail", s.handleDrawingDetail)
-			p.Put("/drawings/{id}", s.handleUpdateDrawing)
-			p.Delete("/drawings/{id}", s.handleDeleteDrawing)
-			p.Post("/drawings/{id}/operations", s.handleCreateOperation)
-			p.Put("/drawings/{id}/operations/order", s.handleReorderOperations)
+			p.With(s.requirePermission(domain.PermissionEdit)).Put("/drawings/{id}", s.handleUpdateDrawing)
+			p.With(s.requirePermission(domain.PermissionDelete)).Delete("/drawings/{id}", s.handleDeleteDrawing)
+			p.With(s.requirePermission(domain.PermissionCreate)).Post("/drawings/{id}/operations", s.handleCreateOperation)
+			p.With(s.requirePermission(domain.PermissionEdit)).Put("/drawings/{id}/operations/order", s.handleReorderOperations)
 
-			p.Put("/operations/{id}", s.handleUpdateOperation)
-			p.Delete("/operations/{id}", s.handleDeleteOperation)
-			p.Post("/operations/{id}/programs", s.handleCreateProgram)
-			p.Put("/operations/{id}/programs/order", s.handleReorderPrograms)
+			p.With(s.requirePermission(domain.PermissionEdit)).Put("/operations/{id}", s.handleUpdateOperation)
+			p.With(s.requirePermission(domain.PermissionDelete)).Delete("/operations/{id}", s.handleDeleteOperation)
+			p.With(s.requirePermission(domain.PermissionCreate)).Post("/operations/{id}/programs", s.handleCreateProgram)
+			p.With(s.requirePermission(domain.PermissionEdit)).Put("/operations/{id}/programs/order", s.handleReorderPrograms)
 
 			p.Get("/programs/{id}", s.handleGetProgram)
-			p.Put("/programs/{id}", s.handleUpdateProgram)
-			p.Delete("/programs/{id}", s.handleDeleteProgram)
+			p.With(s.requirePermission(domain.PermissionEdit)).Put("/programs/{id}", s.handleUpdateProgram)
+			p.With(s.requirePermission(domain.PermissionDelete)).Delete("/programs/{id}", s.handleDeleteProgram)
 			p.Get("/programs/{id}/versions", s.handleListVersions)
-			p.Post("/programs/{id}/versions", s.handleUploadVersion)
-			p.Post("/programs/{id}/versions/content", s.handleSaveContentAsNew)
-			p.Put("/programs/{id}/current-version", s.handleSetCurrentVersion)
+			p.With(s.requirePermission(domain.PermissionEdit)).Post("/programs/{id}/versions", s.handleUploadVersion)
+			p.With(s.requirePermission(domain.PermissionEdit)).Post("/programs/{id}/versions/content", s.handleSaveContentAsNew)
+			p.With(s.requirePermission(domain.PermissionEdit)).Put("/programs/{id}/current-version", s.handleSetCurrentVersion)
 
-			p.Get("/versions/{id}/download", s.handleDownloadVersion)
+			p.With(s.requirePermission(domain.PermissionDownload)).Get("/versions/{id}/download", s.handleDownloadVersion)
 			p.Get("/versions/{id}/content", s.handleGetVersionContent)
-			p.Put("/versions/{id}/content", s.handleOverwriteContent)
+			p.With(s.requirePermission(domain.PermissionEdit)).Put("/versions/{id}/content", s.handleOverwriteContent)
 			p.Get("/versions/{id}/diff", s.handleDiffVersions)
 			p.Get("/versions/{id}/tools", s.handleGetVersionTools)
-			p.Put("/versions/{id}/tools", s.handleReplaceVersionTools)
+			p.With(s.requirePermission(domain.PermissionEdit)).Put("/versions/{id}/tools", s.handleReplaceVersionTools)
 			p.Get("/versions/{id}/tools/recognize", s.handleRecognizeVersionTools)
 
-			p.Post("/nc/parse", s.handleParseText)
+			p.With(s.requirePermission(domain.PermissionRead)).Post("/nc/parse", s.handleParseText)
 		})
 	})
 	if o.Static != nil {

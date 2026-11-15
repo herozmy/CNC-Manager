@@ -90,3 +90,32 @@ func TestAccountEndpointsRequireSessionAndLimitPasswordAttempts(t *testing.T) {
 		t.Fatal("change-password rate limit must not block normal login")
 	}
 }
+
+func TestWrongCurrentPasswordAuditKeepsAuthenticatedActor(t *testing.T) {
+	h, _ := newTestServer(t)
+	cookie := setupAdmin(t, h)
+	rec := do(t, h, "PUT", "/api/auth/password", `{"currentPassword":"wrong-password","newPassword":"newpassword456"}`, cookie)
+	if rec.Code != 400 {
+		t.Fatalf("expected form error, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var logs domain.Page[domain.AuditEntry]
+	decode(t, do(t, h, "GET", "/api/admin/audit-logs?result=failed", "", cookie), &logs)
+	if logs.Total != 1 || len(logs.Items) != 1 {
+		t.Fatalf("expected one authenticated request failure, got %+v", logs)
+	}
+	event := logs.Items[0]
+	if event.Action != "request" || event.Actor != "admin" || event.ActorID == nil || *event.ActorID != 1 || !strings.Contains(event.Detail, "/auth/password") {
+		t.Fatalf("incorrect password-change audit: %+v", event)
+	}
+	decode(t, do(t, h, "GET", "/api/admin/audit-logs?action=login&result=failed", "", cookie), &logs)
+	if logs.Total != 0 {
+		t.Fatalf("password change must not produce a login failure: %+v", logs)
+	}
+	if rec := do(t, h, "POST", "/api/auth/login", `{"username":"admin","password":"wrong-password"}`); rec.Code != 401 {
+		t.Fatalf("wrong login password returned %d", rec.Code)
+	}
+	decode(t, do(t, h, "GET", "/api/admin/audit-logs?action=login&result=failed", "", cookie), &logs)
+	if logs.Total != 1 {
+		t.Fatalf("actual failed login must remain audited: %+v", logs)
+	}
+}

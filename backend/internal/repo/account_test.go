@@ -15,6 +15,7 @@ func TestPasswordChangeRollbackAndIsolation(t *testing.T) {
 	r := newTestRepo(t)
 	ctx := context.Background()
 	u, _ := r.CreateFirstUser(ctx, "admin", "Original", "password123")
+	ctx = domain.WithUser(ctx, u)
 	_, err := r.db.Exec(`INSERT INTO app_user (id, username, display_name, password_hash, role, enabled, created_at, updated_at)
 		SELECT 2, 'other', 'Other', password_hash, 'editor', 1, created_at, updated_at FROM app_user WHERE id = ?`, u.ID)
 	if err != nil {
@@ -53,6 +54,7 @@ func TestConcurrentPasswordChangesOnlyOneSucceeds(t *testing.T) {
 	r := newTestRepo(t)
 	ctx := context.Background()
 	u, _ := r.CreateFirstUser(ctx, "admin", "", "password123")
+	ctx = domain.WithUser(ctx, u)
 	var wg sync.WaitGroup
 	results := make(chan error, 2)
 	for _, next := range []string{"newpassword456", "newpassword789"} {
@@ -78,6 +80,7 @@ func TestNewPasswordCharacterBounds(t *testing.T) {
 	r := newTestRepo(t)
 	ctx := context.Background()
 	u, _ := r.CreateFirstUser(ctx, "admin", "", "password123")
+	ctx = domain.WithUser(ctx, u)
 	for _, next := range []string{strings.Repeat("密", 7), strings.Repeat("密", 129)} {
 		if !errors.Is(r.ChangePassword(ctx, u.ID, "password123", next), domain.ErrInvalid) {
 			t.Fatal("invalid password accepted")
@@ -97,6 +100,7 @@ func TestConcurrentOldPasswordLoginCannotSurviveChange(t *testing.T) {
 		r := newTestRepo(t)
 		ctx := context.Background()
 		u, _ := r.CreateFirstUser(ctx, "admin", "", "password123")
+		ctx = domain.WithUser(ctx, u)
 		start := make(chan struct{})
 		var wg sync.WaitGroup
 		var token string

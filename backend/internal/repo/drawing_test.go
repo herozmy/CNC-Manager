@@ -1,7 +1,6 @@
 package repo
 
 import (
-	"context"
 	"errors"
 	"testing"
 
@@ -10,7 +9,7 @@ import (
 
 func seedDrawing(t *testing.T, r *Repo, no string) *domain.Drawing {
 	t.Helper()
-	d, err := r.CreateDrawing(context.Background(), domain.DrawingInput{DrawingNo: no, Name: "零件" + no})
+	d, err := r.CreateDrawing(testActor(t, r, "tester"), domain.DrawingInput{DrawingNo: no, Name: "零件" + no})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -19,7 +18,7 @@ func seedDrawing(t *testing.T, r *Repo, no string) *domain.Drawing {
 
 func TestDrawingCRUDAndSearch(t *testing.T) {
 	r := newTestRepo(t)
-	ctx := domain.WithUser(context.Background(), domain.User{Username: "alice"})
+	ctx := testActor(t, r, "alice")
 
 	d, err := r.CreateDrawing(ctx, domain.DrawingInput{DrawingNo: " D-100 ", Name: "壳体", Customer: "客户A", Material: "6061"})
 	if err != nil || d.DrawingNo != "D-100" || d.ID == 0 {
@@ -94,7 +93,7 @@ func TestDrawingCRUDAndSearch(t *testing.T) {
 
 func TestOperationLifecycleAndReorder(t *testing.T) {
 	r := newTestRepo(t)
-	ctx := context.Background()
+	ctx := testActor(t, r, "tester")
 	d := seedDrawing(t, r, "D-1")
 
 	a, err := r.CreateOperation(ctx, d.ID, domain.OperationInput{OpNo: 10, OpName: "粗车", ZHeight: 25.5, Fixture: "三爪"})
@@ -143,7 +142,7 @@ func TestOperationLifecycleAndReorder(t *testing.T) {
 
 func TestProgramLifecycleAndDetail(t *testing.T) {
 	r := newTestRepo(t)
-	ctx := context.Background()
+	ctx := testActor(t, r, "tester")
 	d := seedDrawing(t, r, "D-1")
 	op, _ := r.CreateOperation(ctx, d.ID, domain.OperationInput{OpNo: 10})
 	empty, _ := r.CreateOperation(ctx, d.ID, domain.OperationInput{OpNo: 20})
@@ -174,7 +173,7 @@ func TestProgramLifecycleAndDetail(t *testing.T) {
 		t.Fatal("不存在的图纸详情应 NotFound")
 	}
 
-	upd, err := r.UpdateProgram(ctx, p1.ID, domain.ProgramInput{ProgramNo: "O1-new", Remark: "r"})
+	upd, err := r.UpdateProgram(ctx, p1.ID, domain.ProgramInput{ExpectedRevision: &p1.Revision, ProgramNo: "O1-new", Remark: "r"})
 	if err != nil || upd.ProgramNo != "O1-new" {
 		t.Fatal(err)
 	}

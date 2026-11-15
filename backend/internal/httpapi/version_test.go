@@ -20,6 +20,38 @@ type fixture struct {
 	path   string // /api/programs/{id}
 }
 
+func TestDownloadAuditRecordsAttemptBeforeStreaming(t *testing.T) {
+	f := newFixture(t, 1<<20)
+	v := f.uploadOK(t, "part.nc", []byte("O1\nM30\n"))
+	for _, tc := range []struct {
+		rangeHeader string
+		wantStatus  int
+	}{{"", 200}, {"bytes=999999999-", 416}} {
+		req := httptest.NewRequest("GET", fmt.Sprintf("/api/versions/%d/download", v.ID), nil)
+		req.AddCookie(f.ck)
+		req.Header.Set("Range", tc.rangeHeader)
+		rec := httptest.NewRecorder()
+		f.h.ServeHTTP(rec, req)
+		if rec.Code != tc.wantStatus {
+			t.Fatalf("range %q returned %d, want %d", tc.rangeHeader, rec.Code, tc.wantStatus)
+		}
+	}
+	var logs domain.Page[domain.AuditEntry]
+	decode(t, f.get(t, "/api/admin/audit-logs?action=download"), &logs)
+	if logs.Total != 2 || len(logs.Items) != 2 {
+		t.Fatalf("both download attempts must be audited: %+v", logs)
+	}
+	for _, event := range logs.Items {
+		if event.Result != "started" || event.EntityID != v.ID || event.EntityName != "part.nc" || event.Actor != "admin" {
+			t.Fatalf("download must not claim completed transfer: %+v", event)
+		}
+	}
+	decode(t, f.get(t, "/api/admin/audit-logs?result=failed"), &logs)
+	if logs.Total != 1 || !strings.Contains(logs.Items[0].Detail, "HTTP 416") {
+		t.Fatalf("rejected range must also be recorded as a failed request: %+v", logs)
+	}
+}
+
 func TestOverwriteContentRejectsStaleDraft(t *testing.T) {
 	f := newFixture(t, 1<<20)
 	v := f.uploadOK(t, "part.nc", []byte("O1\r\nM30\r\n"))

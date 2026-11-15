@@ -1,3 +1,4 @@
+import { useAccess } from '../auth/permissions'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { api } from '../api'
@@ -34,6 +35,7 @@ export default function NCEditorSheet(props: Props) {
 }
 
 function Editor({ initial: loaded, drawingId, programId, onClose, onSaved, onReload }: Props & { initial: VersionContent; onReload: () => Promise<void> }) {
+  const access = useAccess()
   // 固定本次打开的内容和校验值，后台刷新不能改变草稿的覆盖依据。
   const [initial] = useState(loaded)
   const qc = useQueryClient()
@@ -80,15 +82,15 @@ function Editor({ initial: loaded, drawingId, programId, onClose, onSaved, onRel
   return <Sheet open wide title={`NC 内容 · V${initial.versionNo}`} onClose={close}>
     <div className="space-y-4">
       <p className="break-all text-sm text-slate-600">{initial.fileName} · {initial.encoding.toUpperCase()} · {formatBytes(initial.sizeBytes)}</p>
-      <Suspense fallback={<Spinner />}><NCCodeEditor ref={editor} initialValue={initial.content} readOnly={!editing || save.isPending || reload.isPending} onDirtyChange={setContentDirty} /></Suspense>
-      {!editing ? <Button onClick={() => setEditing(true)}>编辑内容</Button> : <>
+      <Suspense fallback={<Spinner />}><NCCodeEditor ref={editor} initialValue={initial.content} readOnly={!access.can('edit') || !editing || save.isPending || reload.isPending} onDirtyChange={setContentDirty} /></Suspense>
+      {access.can('edit') && (!editing ? <Button onClick={() => setEditing(true)}>编辑内容</Button> : <>
         <Field label="变更说明（另存新版本时生效）" value={note} disabled={save.isPending || reload.isPending} onChange={(e) => setNote(e.target.value)} />
         <p className="text-sm text-slate-600">另存的新版本会自动设为当前版本。保存时沿用原文件名与编码。</p>
         <div className="grid gap-2 sm:grid-cols-2">
           <Button disabled={!dirty || save.isPending || reload.isPending || !!confirm} onClick={() => save.mutate(false)}>另存新版本</Button>
           <Button variant="secondary" disabled={!dirty || save.isPending || reload.isPending || !!confirm || conflict} onClick={() => setConfirm('overwrite')}>覆盖此版本</Button>
         </div>
-      </>}
+      </>)}
       {save.isPending && <p role="status">正在保存…</p>}
       {save.isError && <p role="alert" className="text-red-700">保存失败：{save.error.message}</p>}
       {conflict && <div className="space-y-2 rounded-xl bg-amber-50 p-3 text-sm">

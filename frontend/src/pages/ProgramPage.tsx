@@ -1,3 +1,4 @@
+import { useAccess } from '../auth/permissions'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Download, Pencil, Upload } from 'lucide-react'
 import { useRef, useState } from 'react'
@@ -18,6 +19,7 @@ import { formatBytes, relativeTime } from '../lib/format'
 import { VersionBadge } from './DrawingPage'
 
 function VersionDetails({ v, onActivate, onView, onCompare }: { v: Version; onActivate: () => void; onView: () => void; onCompare?: () => void }) {
+  const access = useAccess()
   return (
     <section aria-label={`V${v.versionNo} 版本详情`} className={`rounded-2xl border p-4 ${v.isCurrent ? 'border-amber-400 bg-amber-50' : 'border-slate-200 bg-white'}`}>
       <div className="flex items-center justify-between gap-2">
@@ -36,7 +38,7 @@ function VersionDetails({ v, onActivate, onView, onCompare }: { v: Version; onAc
       <Button variant="secondary" className="mt-3 w-full" onClick={onView} aria-label={`查看 V${v.versionNo} 内容`}>查看 / 编辑 NC</Button>
       {onCompare && <Button variant="secondary" className="mt-2 w-full" onClick={onCompare}>版本对比</Button>}
       <div className="mt-3 grid grid-cols-2 gap-2">
-        <a
+        {access.can('download') && <a
           href={api.downloadUrl(v.id)}
           download
           aria-label={`下载 V${v.versionNo}`}
@@ -44,8 +46,8 @@ function VersionDetails({ v, onActivate, onView, onCompare }: { v: Version; onAc
         >
           <Download className="size-5" aria-hidden />
           下载
-        </a>
-        {v.isCurrent ? (
+        </a>}
+        {v.isCurrent || !access.can('edit') ? (
           <span />
         ) : (
           <Button variant="secondary" onClick={onActivate} aria-label={`将 V${v.versionNo} 设为当前`}>
@@ -59,6 +61,7 @@ function VersionDetails({ v, onActivate, onView, onCompare }: { v: Version; onAc
 
 /** 程序页：当前版本一键下载、上传新版本、版本历史与回滚。 */
 export default function ProgramPage() {
+  const access = useAccess()
   const navigate = useNavigate()
   const [deleting, setDeleting] = useState(false)
   const [editing, setEditing] = useState(false)
@@ -68,8 +71,8 @@ export default function ProgramPage() {
   const valid = [drawingId, programId].every((n) => Number.isInteger(n) && n > 0)
   const qc = useQueryClient()
 
-  const drawing = useQuery({ queryKey: ['drawing', drawingId], queryFn: () => api.drawingDetail(drawingId), enabled: valid, retry: false })
-  const versions = useQuery({ queryKey: ['versions', programId], queryFn: () => api.listVersions(programId), enabled: valid, retry: false })
+  const drawing = useQuery({ queryKey: ['drawing', drawingId], queryFn: () => api.drawingDetail(drawingId), enabled: valid && access.can('read'), retry: false })
+  const versions = useQuery({ queryKey: ['versions', programId], queryFn: () => api.listVersions(programId), enabled: valid && access.can('read'), retry: false })
 
   const fileInput = useRef<HTMLInputElement>(null)
   const [file, setFile] = useState<File | null>(null)
@@ -94,6 +97,7 @@ export default function ProgramPage() {
   const current = versions.data?.find((v) => v.isCurrent)
   const selected = selection?.programId === programId ? versions.data?.find((v) => v.id === selection.versionId) : undefined
   const notFound = [drawing.error, versions.error].some((e) => e instanceof ApiError && e.status === 404) || (drawing.isSuccess && !program)
+  if (!access.can('read')) return <main className="p-6"><p>账号不可用，请联系管理员。</p><Link to="/" className="mt-4 inline-block">返回总览</Link></main>
 
   return (
     <main className="mx-auto max-w-3xl px-4 pt-4 pb-8">
@@ -117,8 +121,8 @@ export default function ProgramPage() {
             {(program.programName || program.controller) && <p className="text-slate-600">{[program.programName, program.controller].filter(Boolean).join(' · ')}</p>}
             {program.remark && <p className="mt-2 rounded-xl bg-amber-50 p-3 text-sm text-slate-700">{program.remark}</p>}
             <div className="mt-3 flex flex-wrap gap-2">
-              <Button variant="secondary" onClick={() => setEditing(true)}><Pencil className="size-5" aria-hidden />编辑程序信息</Button>
-              <Button variant="ghost" className="text-red-600" onClick={() => setDeleting(true)}>删除程序</Button>
+              {access.can('edit') && <Button variant="secondary" onClick={() => setEditing(true)}><Pencil className="size-5" aria-hidden />编辑程序信息</Button>}
+              {access.can('delete') && <Button variant="ghost" className="text-red-600" onClick={() => setDeleting(true)}>删除程序</Button>}
             </div>
           </header>
 
@@ -144,10 +148,10 @@ export default function ProgramPage() {
           <div className={`mb-6 grid gap-3 ${current ? 'grid-cols-2 sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
             {current ? (
               <>
-                <a href={api.downloadUrl(current.id)} download aria-label="下载当前版本" className="inline-flex min-h-14 items-center justify-center gap-2 rounded-xl bg-amber-500 font-semibold text-slate-900 active:bg-amber-600">
+                {access.can('download') && <a href={api.downloadUrl(current.id)} download aria-label="下载当前版本" className="inline-flex min-h-14 items-center justify-center gap-2 rounded-xl bg-amber-500 font-semibold text-slate-900 active:bg-amber-600">
                   <Download className="size-5" aria-hidden />
                   下载当前 V{current.versionNo}
-                </a>
+                </a>}
                 <Button variant="secondary" className="min-h-14" aria-label="查看 / 编辑当前版本" onClick={() => setViewVersion(current)}>
                   查看 / 编辑 V{current.versionNo}
                 </Button>
@@ -155,10 +159,10 @@ export default function ProgramPage() {
             ) : (
               <p className="flex min-h-14 items-center justify-center rounded-xl bg-slate-100 text-slate-500">还没有 NC 文件</p>
             )}
-            <Button variant="secondary" className={`min-h-14 ${current ? 'col-span-2 sm:col-span-1' : ''}`} onClick={() => fileInput.current?.click()}>
+            {access.can('edit') && <Button variant="secondary" className={`min-h-14 ${current ? 'col-span-2 sm:col-span-1' : ''}`} onClick={() => fileInput.current?.click()}>
               <Upload className="size-5" aria-hidden />
               上传新版本
-            </Button>
+            </Button>}
             <input
               ref={fileInput}
               type="file"

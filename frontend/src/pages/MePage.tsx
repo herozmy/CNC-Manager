@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Link } from 'react-router-dom'
 import { useState } from 'react'
 import { api } from '../api'
 import { setSession, useSession } from '../auth/session'
@@ -6,7 +7,6 @@ import { Button } from '../components/ui/Button'
 import AccountSheet from '../components/AccountSheet'
 import BackupSection from '../components/BackupSection'
 
-const roleName = { admin: '管理员', editor: '编辑', viewer: '只读' } as const
 
 export default function MePage() {
   const [sheet, setSheet] = useState<'name' | 'password' | null>(null)
@@ -27,7 +27,7 @@ export default function MePage() {
       <section className="rounded-2xl border border-slate-200 bg-white p-4">
         <p className="break-words text-lg font-bold">{user.displayName || user.username}</p>
         <p className="break-words text-sm text-slate-500">
-          {user.username} · {roleName[user.role]}
+          {user.username} · {user.role === 'admin' ? '管理员' : '普通账号'}
         </p>
         <div className="mt-4 grid grid-cols-2 gap-3">
           <Button variant="secondary" className="px-3" onClick={() => { setSaved(false); setSheet('name') }}>修改名称</Button>
@@ -35,6 +35,7 @@ export default function MePage() {
         </div>
       </section>
       {saved && <p role="status" className="rounded-xl bg-green-50 p-3 text-sm text-green-900">名称已保存</p>}
+      {user.role === 'admin' && <section className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4"><Link className="rounded-xl bg-slate-100 p-3 font-semibold" to="/admin">账号管理</Link><Link className="rounded-xl bg-slate-100 p-3 font-semibold" to="/admin/audit">操作审计</Link></section>}
       {user.role === 'admin' ? <BackupSection /> : <p className="text-sm text-slate-500">整站备份与导入请联系管理员。</p>}
       <Button variant="secondary" loading={logout.isPending} onClick={() => logout.mutate()} className="w-full">
         退出登录

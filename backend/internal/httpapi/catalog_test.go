@@ -292,7 +292,7 @@ func TestOperationAndProgramFlow(t *testing.T) {
 	}
 
 	progPath := fmt.Sprintf("/api/programs/%d", prog.ID)
-	decode(t, do(t, h, "PUT", progPath, `{"programNo":"O1000A"}`, ck), &prog)
+	decode(t, do(t, h, "PUT", progPath, fmt.Sprintf(`{"programNo":"O1000A","expectedRevision":%d}`, prog.Revision), ck), &prog)
 	if prog.ProgramNo != "O1000A" {
 		t.Fatal("程序修改失败")
 	}

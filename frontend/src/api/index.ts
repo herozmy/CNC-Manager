@@ -1,9 +1,19 @@
 import { http } from './client'
 import type {
-  BackupPreview, BackupRecovery, ToolTable, ProgramToolInput, ParseResult, ContentInput, VersionContent, VersionSaveResult, VersionDiff, Drawing, DrawingDetail, DrawingInput, Meta, Operation, OperationInput, Page, Program, ProgramInput, UploadResult, User, Version,
+  UserInput, UserUpdate, AuditEntry, AuditFilter, BackupPreview, BackupRecovery, ToolTable, ProgramToolInput, ParseResult, ContentInput, VersionContent, VersionSaveResult, VersionDiff, Drawing, DrawingDetail, DrawingInput, Meta, Operation, OperationInput, Page, Program, ProgramInput, UploadResult, User, Version,
 } from './types'
 
 export const api = {
+  users: () => http.get<User[]>('/admin/users'),
+  createUser: (input: UserInput) => http.post<User>('/admin/users', input),
+  updateUser: (id: number, input: UserUpdate) => http.put<User>(`/admin/users/${id}`, input),
+  resetPassword: (id: number, password: string) => http.post<void>(`/admin/users/${id}/reset-password`, { password }),
+  assignDrawingOwner: (id: number, ownerUserId: number) => http.put<Drawing>(`/admin/drawings/${id}/owner`, { ownerUserId }),
+  auditLogs: (filter: AuditFilter) => {
+    const params = new URLSearchParams()
+    Object.entries(filter).forEach(([key, value]) => { if (value !== undefined && value !== '') params.set(key, String(value)) })
+    return http.get<Page<AuditEntry>>(`/admin/audit-logs?${params}`)
+  },
   meta: () => http.get<Meta>('/meta'),
 
   authStatus: () => http.get<{ setupRequired: boolean }>('/auth/status'),
@@ -31,8 +41,8 @@ export const api = {
     return http.postForm<{ recoveryName: string }>('/backup/import', form)
   },
 
-  listDrawings: (q: string, page: number, size = 20) =>
-    http.get<Page<Drawing>>(`/drawings?q=${encodeURIComponent(q)}&page=${page}&size=${size}`),
+  listDrawings: (q: string, page: number, size = 20, ownerUserId?: number) =>
+    http.get<Page<Drawing>>(`/drawings?q=${encodeURIComponent(q)}&page=${page}&size=${size}${ownerUserId !== undefined ? `&ownerUserId=${ownerUserId}` : ''}`),
   drawingDetail: (id: number) => http.get<DrawingDetail>(`/drawings/${id}/detail`),
   deleteDrawing: (id: number) => http.del<void>(`/drawings/${id}`),
   createDrawing: (input: DrawingInput) => http.post<Drawing>('/drawings', input),
@@ -42,7 +52,8 @@ export const api = {
   updateOperation: (id: number, input: OperationInput) => http.put<Operation>(`/operations/${id}`, input),
   deleteOperation: (id: number) => http.del<void>(`/operations/${id}`),
 
-  updateProgram: (id: number, input: ProgramInput) => http.put<Program>(`/programs/${id}`, input),
+  getProgram: (id: number) => http.get<Program>(`/programs/${id}`),
+  updateProgram: (id: number, input: ProgramInput & { expectedRevision: number }) => http.put<Program>(`/programs/${id}`, input),
   deleteProgram: (id: number) => http.del<void>(`/programs/${id}`),
   createProgram: (operationId: number, input: ProgramInput) => http.post<Program>(`/operations/${operationId}/programs`, input),
 

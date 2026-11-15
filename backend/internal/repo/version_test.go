@@ -1,7 +1,6 @@
 package repo
 
 import (
-	"context"
 	"errors"
 	"strings"
 	"sync"
@@ -16,7 +15,7 @@ func blob(sha, enc string) domain.BlobInput {
 
 func TestOverwriteVersionConcurrentCheck(t *testing.T) {
 	r := newTestRepo(t)
-	ctx := context.Background()
+	ctx := testActor(t, r, "tester")
 	p := newProgram(t, r, "CONFLICT")
 	v, err := r.AddVersion(ctx, p.ID, blob("aa11", "utf-8"), "a.nc", "")
 	if err != nil {
@@ -62,7 +61,7 @@ func TestOverwriteVersionConcurrentCheck(t *testing.T) {
 
 func newProgram(t *testing.T, r *Repo, drawingNo string) *domain.Program {
 	t.Helper()
-	ctx := context.Background()
+	ctx := testActor(t, r, "tester")
 	d := seedDrawing(t, r, drawingNo)
 	op, err := r.CreateOperation(ctx, d.ID, domain.OperationInput{OpNo: 10})
 	if err != nil {
@@ -77,7 +76,7 @@ func newProgram(t *testing.T, r *Repo, drawingNo string) *domain.Program {
 
 func TestAddVersionIncrementsAndSetsCurrent(t *testing.T) {
 	r := newTestRepo(t)
-	ctx := domain.WithUser(context.Background(), domain.User{Username: "bob"})
+	ctx := testActor(t, r, "bob")
 	p := newProgram(t, r, "D-1")
 
 	v1, err := r.AddVersion(ctx, p.ID, blob("aa11", "utf-8"), "a.nc", " 首版 ")
@@ -111,7 +110,7 @@ func TestAddVersionIncrementsAndSetsCurrent(t *testing.T) {
 
 func TestSameContentSharesBlobButKeepsOwnFileName(t *testing.T) {
 	r := newTestRepo(t)
-	ctx := context.Background()
+	ctx := testActor(t, r, "tester")
 	p1 := newProgram(t, r, "D-1")
 	p2 := newProgram(t, r, "D-2")
 	a, _ := r.AddVersion(ctx, p1.ID, blob("ee55", "utf-8"), "first.nc", "")
@@ -131,7 +130,7 @@ func TestSameContentSharesBlobButKeepsOwnFileName(t *testing.T) {
 
 func TestSetCurrentVersionRollback(t *testing.T) {
 	r := newTestRepo(t)
-	ctx := context.Background()
+	ctx := testActor(t, r, "tester")
 	p := newProgram(t, r, "D-1")
 	other := newProgram(t, r, "D-2")
 	v1, _ := r.AddVersion(ctx, p.ID, blob("aa11", "utf-8"), "a.nc", "")
@@ -155,7 +154,7 @@ func TestSetCurrentVersionRollback(t *testing.T) {
 
 func TestOverwriteVersion(t *testing.T) {
 	r := newTestRepo(t)
-	ctx := context.Background()
+	ctx := testActor(t, r, "tester")
 	p := newProgram(t, r, "D-1")
 	v1, _ := r.AddVersion(ctx, p.ID, blob("aa11", "utf-8"), "a.nc", "")
 	v2, _ := r.AddVersion(ctx, p.ID, blob("bb22", "utf-8"), "b.nc", "")
@@ -179,7 +178,7 @@ func TestOverwriteVersion(t *testing.T) {
 
 func TestGetVersionFileAndDeleteCascade(t *testing.T) {
 	r := newTestRepo(t)
-	ctx := context.Background()
+	ctx := testActor(t, r, "tester")
 	p := newProgram(t, r, "D-1")
 	v, _ := r.AddVersion(ctx, p.ID, blob("aa11", "gbk"), "a.nc", "")
 	f, err := r.GetVersionFile(ctx, v.ID)
@@ -204,7 +203,7 @@ func TestCatalogDeleteCascadePreservesSharedBlob(t *testing.T) {
 	for _, level := range []string{"drawing", "operation", "program"} {
 		t.Run(level, func(t *testing.T) {
 			r := newTestRepo(t)
-			ctx := context.Background()
+			ctx := testActor(t, r, "tester")
 			p := newProgram(t, r, "DELETE")
 			keep := newProgram(t, r, "KEEP")
 			v, err := r.AddVersion(ctx, p.ID, blob("aa11", "gbk"), "delete.nc", "")

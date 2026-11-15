@@ -45,29 +45,21 @@ func readToolTable(ctx context.Context, tx *sqlx.Tx, versionID int64) (*domain.T
 	return table, programID, nil
 }
 
-func (r *Repo) GetVersionTools(ctx context.Context, versionID int64) (*domain.ToolTable, error) {
-	tx, err := r.db.BeginTxx(ctx, nil)
-	if err != nil {
-		return nil, wrap(err)
-	}
-	defer func() { _ = tx.Rollback() }()
+func (r *Repo) rawGetVersionTools(ctx context.Context, versionID int64) (*domain.ToolTable, error) {
+	tx := r.tx
 	table, _, err := readToolTable(ctx, tx, versionID)
 	if err != nil {
 		return nil, err
 	}
-	return table, wrap(tx.Commit())
+	return table, nil
 }
 
 // Compare and replace in one transaction so failures cannot leave a partial table.
-func (r *Repo) ReplaceVersionTools(ctx context.Context, versionID int64, in domain.ToolTableInput) (*domain.ToolTable, error) {
+func (r *Repo) rawReplaceVersionTools(ctx context.Context, versionID int64, in domain.ToolTableInput) (*domain.ToolTable, error) {
 	if err := in.Normalize(); err != nil {
 		return nil, err
 	}
-	tx, err := r.db.BeginTxx(ctx, nil)
-	if err != nil {
-		return nil, wrap(err)
-	}
-	defer func() { _ = tx.Rollback() }()
+	tx := r.tx
 	old, programID, err := readToolTable(ctx, tx, versionID)
 	if err != nil {
 		return nil, err
@@ -78,7 +70,14 @@ func (r *Repo) ReplaceVersionTools(ctx context.Context, versionID int64, in doma
 	if _, err := tx.ExecContext(ctx, `DELETE FROM program_tool WHERE version_id=?`, versionID); err != nil {
 		return nil, wrap(err)
 	}
+	ownerID, err := objectOwner(ctx, tx, "version", versionID)
+	if err != nil {
+		return nil, err
+	}
 	for _, row := range in.Items {
+		if err := checkRelatedOwner(ctx, tx, "tool", row.ToolID, ownerID); err != nil {
+			return nil, err
+		}
 		custom, err := json.Marshal(row.CustomParams)
 		if err != nil {
 			return nil, err
@@ -101,9 +100,6 @@ func (r *Repo) ReplaceVersionTools(ctx context.Context, versionID int64, in doma
 	result, _, err := readToolTable(ctx, tx, versionID)
 	if err != nil {
 		return nil, err
-	}
-	if err := tx.Commit(); err != nil {
-		return nil, wrap(err)
 	}
 	return result, nil
 }

@@ -12,7 +12,7 @@ import (
 )
 
 // The list is explicit: archive SQL is never executed against the live database.
-var backupTables = []string{"drawing", "machine", "machine_tool", "tool", "operation", "nc_blob", "nc_program", "nc_version", "program_tool", "app_user", "audit_log"}
+var backupTables = []string{"business_role", "drawing", "machine", "machine_tool", "tool", "operation", "nc_blob", "nc_program", "nc_version", "program_tool", "app_user", "audit_log"}
 
 type BackupSummary struct {
 	Users      int      `json:"users"`
@@ -105,6 +105,9 @@ func (r *Repo) CheckBackupDB(ctx context.Context, path string) (BackupSummary, [
 	if bad != 0 {
 		return summary, nil, fmt.Errorf("备份中程序与当前版本不匹配")
 	}
+	if err := checkOwnerLinks(ctx, db); err != nil {
+		return summary, nil, err
+	}
 	var blobs []BackupBlob
 	if err := db.SelectContext(ctx, &blobs, `SELECT sha256, rel_path, size_bytes FROM nc_blob ORDER BY sha256`); err != nil {
 		return summary, nil, err
@@ -161,6 +164,9 @@ func (r *Repo) RestoreSnapshot(ctx context.Context, path string) error {
 	if err := checkForeignKeys(ctx, tx); err != nil {
 		return err
 	}
+	if err := checkOwnerLinks(ctx, tx); err != nil {
+		return err
+	}
 	if err := r.log(ctx, tx, "restore", "system", 0, "从整站备份导入数据；所有登录会话已撤销"); err != nil {
 		return err
 	}
@@ -169,3 +175,24 @@ func (r *Repo) RestoreSnapshot(ctx context.Context, path string) error {
 
 // BackupError keeps archive validation failures readable at the HTTP boundary.
 func BackupError(err error) error { return fmt.Errorf("%w: %v", domain.ErrInvalid, err) }
+
+func checkOwnerLinks(ctx context.Context, q sqlx.QueryerContext) error {
+	var bad int
+	query := `SELECT (SELECT COUNT(*) FROM operation o JOIN drawing d ON d.id=o.drawing_id JOIN machine m ON m.id=o.machine_id WHERE COALESCE(d.owner_user_id,0)<>COALESCE(m.owner_user_id,0))
+ + (SELECT COUNT(*) FROM program_tool pt JOIN nc_version v ON v.id=pt.version_id WHERE pt.program_id<>v.program_id)
+ + (SELECT COUNT(*) FROM program_tool pt JOIN nc_program p ON p.id=pt.program_id JOIN operation o ON o.id=p.operation_id JOIN drawing d ON d.id=o.drawing_id JOIN tool t ON t.id=pt.tool_id WHERE COALESCE(d.owner_user_id,0)<>COALESCE(t.owner_user_id,0))`
+	if err := sqlx.GetContext(ctx, q, &bad, query); err != nil {
+		return err
+	}
+	if bad > 0 {
+		return fmt.Errorf("备份含有跨账号或不一致的业务关联")
+	}
+	var reserved int
+	if err := sqlx.GetContext(ctx, q, &reserved, `SELECT COUNT(*) FROM business_role WHERE id=1 AND is_system=1 AND enabled=0 AND permissions_json='[]'`); err != nil {
+		return err
+	}
+	if reserved != 1 {
+		return fmt.Errorf("备份的待分配角色无效")
+	}
+	return nil
+}

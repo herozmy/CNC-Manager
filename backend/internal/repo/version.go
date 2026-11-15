@@ -17,12 +17,12 @@ const versionCols = `v.id, v.program_id, v.version_no, v.sha256, v.file_name, b.
 const versionFrom = ` FROM nc_version v JOIN nc_blob b ON b.sha256 = v.sha256 JOIN nc_program p ON p.id = v.program_id `
 
 // ListVersions 取程序全部版本，新版本在前。
-func (r *Repo) ListVersions(ctx context.Context, programID int64) ([]domain.Version, error) {
+func (r *Repo) rawListVersions(ctx context.Context, programID int64) ([]domain.Version, error) {
 	if _, err := r.GetProgram(ctx, programID); err != nil {
 		return nil, err
 	}
 	items := []domain.Version{}
-	if err := r.db.SelectContext(ctx, &items,
+	if err := r.tx.SelectContext(ctx, &items,
 		`SELECT `+versionCols+versionFrom+`WHERE v.program_id = ? ORDER BY v.version_no DESC`, programID); err != nil {
 		return nil, wrap(err)
 	}
@@ -30,8 +30,8 @@ func (r *Repo) ListVersions(ctx context.Context, programID int64) ([]domain.Vers
 }
 
 // GetVersion 按 ID 取版本。
-func (r *Repo) GetVersion(ctx context.Context, id int64) (*domain.Version, error) {
-	return getVersion(ctx, r.db, id)
+func (r *Repo) rawGetVersion(ctx context.Context, id int64) (*domain.Version, error) {
+	return getVersion(ctx, r.tx, id)
 }
 
 func getVersion(ctx context.Context, q sqlx.QueryerContext, id int64) (*domain.Version, error) {
@@ -43,9 +43,9 @@ func getVersion(ctx context.Context, q sqlx.QueryerContext, id int64) (*domain.V
 }
 
 // GetVersionFile 取读取版本内容所需的信息。
-func (r *Repo) GetVersionFile(ctx context.Context, id int64) (*domain.VersionFile, error) {
+func (r *Repo) rawGetVersionFile(ctx context.Context, id int64) (*domain.VersionFile, error) {
 	var f domain.VersionFile
-	err := r.db.GetContext(ctx, &f,
+	err := r.tx.GetContext(ctx, &f,
 		`SELECT v.id, v.program_id, v.version_no, v.sha256, v.file_name, b.rel_path, b.encoding,
 		        CASE WHEN p.current_version_id = v.id THEN 1 ELSE 0 END AS is_current`+versionFrom+`WHERE v.id = ?`, id)
 	if err != nil {
@@ -63,15 +63,11 @@ func upsertBlob(ctx context.Context, tx *sqlx.Tx, b domain.BlobInput) error {
 }
 
 // AddVersion 新增版本并设为当前版本。整个过程在一个事务里，要么全成功要么全回滚。
-func (r *Repo) AddVersion(ctx context.Context, programID int64, blob domain.BlobInput, fileName, changeNote string) (*domain.Version, error) {
+func (r *Repo) rawAddVersion(ctx context.Context, programID int64, blob domain.BlobInput, fileName, changeNote string) (*domain.Version, error) {
 	if len(changeNote) > maxNote {
 		return nil, fmt.Errorf("%w: 变更说明不能超过 %d 字节", domain.ErrInvalid, maxNote)
 	}
-	tx, err := r.db.BeginTxx(ctx, nil)
-	if err != nil {
-		return nil, wrap(err)
-	}
-	defer func() { _ = tx.Rollback() }()
+	tx := r.tx
 
 	var programNo string
 	if err := tx.GetContext(ctx, &programNo, `SELECT program_no FROM nc_program WHERE id = ?`, programID); err != nil {
@@ -103,20 +99,13 @@ func (r *Repo) AddVersion(ctx context.Context, programID int64, blob domain.Blob
 	if err := r.log(ctx, tx, "upload", "program", programID, fmt.Sprintf("%s 上传第 %d 版（%s）", programNo, v.VersionNo, fileName)); err != nil {
 		return nil, err
 	}
-	if err := tx.Commit(); err != nil {
-		return nil, wrap(err)
-	}
 	return v, nil
 }
 
 // OverwriteVersion 用新内容覆盖某个版本（不新增版本号）。
 // 只改这个版本指向的内容；原内容若不再被引用，由孤儿回收任务清理。
-func (r *Repo) OverwriteVersion(ctx context.Context, versionID int64, blob domain.BlobInput, expectedSHA256 *string) (*domain.Version, error) {
-	tx, err := r.db.BeginTxx(ctx, nil)
-	if err != nil {
-		return nil, wrap(err)
-	}
-	defer func() { _ = tx.Rollback() }()
+func (r *Repo) rawOverwriteVersion(ctx context.Context, versionID int64, blob domain.BlobInput, expectedSHA256 *string) (*domain.Version, error) {
+	tx := r.tx
 	old, err := getVersion(ctx, tx, versionID)
 	if err != nil {
 		return nil, err
@@ -140,15 +129,15 @@ func (r *Repo) OverwriteVersion(ctx context.Context, versionID int64, blob domai
 	if err != nil {
 		return nil, err
 	}
-	if err := tx.Commit(); err != nil {
-		return nil, wrap(err)
-	}
 	return v, nil
 }
 
 // SetCurrentVersion 指定当前生效版本（回滚就用它）。
-func (r *Repo) SetCurrentVersion(ctx context.Context, programID, versionID int64) (*domain.Program, error) {
+func (r *Repo) rawSetCurrentVersion(ctx context.Context, programID, versionID int64) (*domain.Program, error) {
 	if _, err := r.GetProgram(ctx, programID); err != nil {
+		return nil, err
+	}
+	if err := authorizeObject(ctx, r.tx, "read", "version", versionID); err != nil {
 		return nil, err
 	}
 	v, err := r.GetVersion(ctx, versionID)
@@ -158,10 +147,10 @@ func (r *Repo) SetCurrentVersion(ctx context.Context, programID, versionID int64
 	if v.ProgramID != programID {
 		return nil, fmt.Errorf("%w: 该版本不属于这个程序", domain.ErrInvalid)
 	}
-	if _, err := r.db.ExecContext(ctx, `UPDATE nc_program SET current_version_id = ?, updated_at = ? WHERE id = ?`, versionID, domain.Now(), programID); err != nil {
+	if _, err := r.tx.ExecContext(ctx, `UPDATE nc_program SET current_version_id = ?, updated_at = ? WHERE id = ?`, versionID, domain.Now(), programID); err != nil {
 		return nil, wrap(err)
 	}
-	if err := r.log(ctx, r.db, "switch", "program", programID, fmt.Sprintf("切换当前版本为第 %d 版", v.VersionNo)); err != nil {
+	if err := r.log(ctx, r.tx, "switch", "program", programID, fmt.Sprintf("切换当前版本为第 %d 版", v.VersionNo)); err != nil {
 		return nil, err
 	}
 	return r.GetProgram(ctx, programID)

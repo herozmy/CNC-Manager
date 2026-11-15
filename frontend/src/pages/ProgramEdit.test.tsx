@@ -60,7 +60,7 @@ test('回填并保存四个字段，刷新详情与图纸列表、搜索缓存�
   expect(screen.getByRole('link', { name: '下载当前版本' })).toHaveAttribute('href', '/api/versions/5/download')
   expect(screen.getByRole('link', { name: '下载 V2' })).toHaveAttribute('href', '/api/versions/4/download')
   expect(client.getQueryState(['drawings', 'O1234', 1])?.isInvalidated).toBe(true)
-  expect(calls.filter((r) => r.method !== 'GET')).toEqual([{ method: 'PUT', path: '/programs/1', body: { programNo: 'O9999', programName: '精加工', controller: 'SIEMENS', remark: '注意装夹' } }])
+  expect(calls.filter((r) => r.method !== 'GET')).toEqual([{ method: 'PUT', path: '/programs/1', body: { expectedRevision: 1, programNo: 'O9999', programName: '精加工', controller: 'SIEMENS', remark: '注意装夹' } }])
   await u.click(screen.getByRole('link', { name: '返回图纸' }))
   await u.click(await screen.findByRole('button', { name: '展开工序 10' }))
   expect(screen.getByText('O9999')).toBeInTheDocument()
@@ -84,10 +84,10 @@ test('空程序号及 UTF-8 字节超长提交前拒绝，允许清空选填字�
   for (const label of ['程序名称', '数控系统', '备注']) await u.clear(screen.getByLabelText(label))
   await u.click(screen.getByRole('button', { name: '保存修改' }))
   await screen.findByText('程序信息已保存')
-  expect(calls.find((r) => r.method === 'PUT')?.body).toEqual({ programNo: 'O1234', programName: '', controller: '', remark: '' })
+  expect(calls.find((r) => r.method === 'PUT')?.body).toEqual({ expectedRevision: 1, programNo: 'O1234', programName: '', controller: '', remark: '' })
 })
 
-test.each([409, 500])('保存失败 %i 保留输入，可重试', async (status) => {
+test.each([500])('保存失败 %i 保留输入，可重试', async (status) => {
   let fail = true
   const calls = server((r) => fail && r.method === 'PUT' ? { status, body: { error: status === 409 ? '数据冲突: 程序号重复' : '保存失败' } } : undefined)
   renderPage()

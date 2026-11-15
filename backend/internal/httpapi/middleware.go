@@ -21,14 +21,17 @@ func (s *Server) sessionCookie(r *http.Request, token string, maxAge int) *http.
 // requireAuth 校验会话 Cookie，并把用户放入上下文。
 func (s *Server) requireAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
 		c, err := r.Cookie(authCookieName)
 		if err != nil || c.Value == "" {
+			s.recordUnauthenticated(r)
 			writeError(w, http.StatusUnauthorized, "请先登录")
 			return
 		}
 		user, err := s.repo.UserBySession(r.Context(), c.Value)
 		if err != nil {
 			http.SetCookie(w, s.sessionCookie(r, "", -1))
+			s.recordUnauthenticated(r)
 			writeError(w, http.StatusUnauthorized, "登录已失效，请重新登录")
 			return
 		}
@@ -117,4 +120,10 @@ func trimTrailingSlash(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+func (s *Server) recordUnauthenticated(r *http.Request) {
+	if err := s.repo.RecordEvent(r.Context(), domain.AuditEntry{Action: "request", EntityType: "http", Result: "failed", Detail: "未登录或会话失效"}); err != nil {
+		s.log.Error("未登录访问日志写入失败", "err", err)
+	}
 }

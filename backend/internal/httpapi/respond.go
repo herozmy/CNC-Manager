@@ -32,6 +32,8 @@ func writeError(w http.ResponseWriter, status int, msg string) {
 // fail 把领域错误映射成 HTTP 状态码；映射只在这一处发生。
 func (s *Server) fail(w http.ResponseWriter, err error) {
 	switch {
+	case errors.Is(err, domain.ErrForbidden):
+		writeError(w, http.StatusForbidden, "没有此操作的权限")
 	case errors.Is(err, domain.ErrNotFound):
 		writeError(w, http.StatusNotFound, err.Error())
 	case errors.Is(err, domain.ErrConflict):

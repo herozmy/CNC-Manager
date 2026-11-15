@@ -18,7 +18,11 @@ import (
 // a snapshot or observe a mixture of databases and NC files.
 func (s *Server) guardMaintenance(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		exclusive := (r.Method == http.MethodDelete && strings.HasPrefix(r.URL.Path, "/api/backup/recoveries/")) || r.URL.Path == "/api/backup/create" || r.URL.Path == "/api/backup/export" || r.URL.Path == "/api/backup/import"
+		// Role/account changes and initial ownership assignment must finish before
+		// subsequent business requests authenticate. In-flight file operations finish
+		// before a revocation takes effect, never midway through an authorized write.
+		adminWrite := strings.HasPrefix(r.URL.Path, "/api/admin/") && r.Method != http.MethodGet && r.Method != http.MethodHead
+		exclusive := adminWrite || (r.Method == http.MethodDelete && strings.HasPrefix(r.URL.Path, "/api/backup/recoveries/")) || r.URL.Path == "/api/backup/create" || r.URL.Path == "/api/backup/export" || r.URL.Path == "/api/backup/import"
 		if exclusive {
 			s.maintenance.Lock()
 			defer s.maintenance.Unlock()
@@ -33,7 +37,7 @@ func (s *Server) guardMaintenance(next http.Handler) http.Handler {
 func (s *Server) requireBackupAdmin(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		user, _ := domain.UserFromContext(r.Context())
-		if user.Role != "admin" {
+		if !user.IsAdmin() {
 			writeError(w, 403, "仅管理员可以备份或导入整站数据")
 			return
 		}
@@ -70,6 +74,9 @@ func (s *Server) serveBackup(w http.ResponseWriter, r *http.Request, path, name 
 	info, err := f.Stat()
 	if err != nil {
 		s.fail(w, err)
+		return
+	}
+	if !s.recordBackupEvent(w, r, "download", "started", "服务端开始返回备份文件 "+name) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/zip")
@@ -165,8 +172,14 @@ func (s *Server) handleBackupRecoveryDelete(w http.ResponseWriter, r *http.Reque
 		writeError(w, 400, "只能删除备份文件")
 		return
 	}
+	if !s.recordBackupEvent(w, r, "delete", "started", "开始删除备份 "+filepath.Base(path)) {
+		return
+	}
 	if err := os.Remove(path); err != nil {
 		s.fail(w, err)
+		return
+	}
+	if !s.recordBackupEvent(w, r, "delete", "success", "已删除备份 "+filepath.Base(path)) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -179,5 +192,19 @@ func (s *Server) handleBackupCreate(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 500, "备份失败，请检查服务器空间及数据完整性；超过 512 MB 请使用数据目录迁移")
 		return
 	}
+	if !s.recordBackupEvent(w, r, "create", "success", "已创建完整备份 "+filepath.Base(path)) {
+		return
+	}
 	writeJSON(w, http.StatusCreated, map[string]string{"name": filepath.Base(path)})
+}
+
+// File operations report their actual phase; they cannot share a SQL transaction.
+func (s *Server) recordBackupEvent(w http.ResponseWriter, r *http.Request, action, result, detail string) bool {
+	u, _ := domain.UserFromContext(r.Context())
+	err := s.repo.RecordEvent(r.Context(), domain.AuditEntry{Action: action, EntityType: "backup", Result: result, Detail: detail, Actor: u.Username, ActorID: &u.ID, ActorRoleName: u.Role})
+	if err != nil {
+		s.fail(w, err)
+		return false
+	}
+	return true
 }

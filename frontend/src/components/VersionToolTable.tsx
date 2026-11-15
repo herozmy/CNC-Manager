@@ -1,3 +1,4 @@
+import { useAccess } from '../auth/permissions'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
 import { api } from '../api'
@@ -37,6 +38,7 @@ export default function VersionToolTable(props: Props) {
 }
 
 function ToolEditor({ version, initial }: Props & { initial: ToolTable }) {
+  const access = useAccess()
   const qc = useQueryClient()
   const draftKey = ['version-tools-draft', version.id] as const
   const [restored] = useState(() => qc.getQueryData<ToolDraft>(draftKey))
@@ -100,18 +102,18 @@ function ToolEditor({ version, initial }: Props & { initial: ToolTable }) {
   })
   return <form className="space-y-4" onInvalid={() => setError('请检查刀具号和刀补范围（小数最多 3 位）')} onSubmit={(e) => {
       e.preventDefault()
-      if (!dirty || busy || conflict || confirm) return
+      if (!access.can('edit') || !dirty || busy || conflict || confirm) return
       if (rows.some((row) => !Number.isFinite(Number(row.compAmount)))) { setError('刀补应为有效数字'); return }
       setError(''); setMessage(''); save.mutate()
     }}>
-      <div className="flex flex-wrap items-center gap-2">
+      {access.can('edit') && <div className="flex flex-wrap items-center gap-2">
         <Button variant="secondary" disabled={busy || !!confirm} onClick={() => { setError(''); recognize.mutate() }}>从 NC 识别</Button>
         <Button variant="secondary" disabled={busy || !!confirm || rows.length >= 500} onClick={() => { setRows([...rows, draft(blank, seed.current++)]); setMessage('') }}>手动添加</Button>
         <Button type="submit" disabled={!dirty || busy || conflict || !!confirm} loading={save.isPending}>保存刀具表</Button>
         {dirty && <Button variant="ghost" disabled={busy || !!confirm} onClick={() => setConfirm('discard')}>撤销修改</Button>}
         <span className="text-sm text-slate-500">{rows.length} 把刀具</span>
         {dirty && <span className="text-sm font-semibold text-amber-700">未保存</span>}
-      </div>
+      </div>}
       {message && <p role="status" className="rounded-xl bg-emerald-50 p-3 text-sm text-emerald-800">{message}</p>}
       {error && <p role="alert" className="text-red-700">{error}</p>}
       {conflict && <div className="space-y-2 rounded-xl bg-amber-50 p-3">
@@ -126,7 +128,7 @@ function ToolEditor({ version, initial }: Props & { initial: ToolTable }) {
         </div>
       </div>}
       {rows.length === 0 && <p className="py-8 text-center text-slate-500">暂无刀具，可从 NC 识别或手动添加。</p>}
-      <fieldset disabled={busy || !!confirm} className="min-w-0 space-y-3">
+      <fieldset disabled={!access.can('edit') || busy || !!confirm} className="min-w-0 space-y-3">
         {rows.map((row, index) => <section key={row.key} aria-label={`第 ${index + 1} 把刀具`} className="min-w-0 space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h3 className="font-bold">{index + 1}. {row.toolNo || '新刀具'}</h3>

@@ -2,6 +2,7 @@ package domain
 
 import (
 	"context"
+	"reflect"
 	"testing"
 	"time"
 )
@@ -19,7 +20,7 @@ func TestUserContextRoundTrip(t *testing.T) {
 	}
 	u := User{ID: 3, Username: "a"}
 	got, ok := UserFromContext(WithUser(context.Background(), u))
-	if !ok || got != u {
+	if !ok || !reflect.DeepEqual(got, u) {
 		t.Fatalf("取回用户不一致: %+v", got)
 	}
 }

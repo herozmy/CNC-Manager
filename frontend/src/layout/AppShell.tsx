@@ -1,3 +1,4 @@
+import { useAccess } from '../auth/permissions'
 import clsx from 'clsx'
 import { Home, Plus, User } from 'lucide-react'
 import { NavLink, Outlet } from 'react-router-dom'
@@ -13,11 +14,13 @@ const items = [
  * 平板/桌面（md 以上）：左侧导航。
  */
 export default function AppShell() {
+  const access = useAccess()
+  const visibleItems = items.filter((item) => item.to !== '/drawings/new' || access.can('create'))
   return (
     <div className="min-h-dvh bg-slate-50 text-slate-900 md:flex">
       <aside className="hidden w-56 shrink-0 flex-col gap-2 bg-slate-900 p-4 md:flex">
         <p className="mb-4 px-3 text-lg font-bold text-amber-400">CNC-Manager</p>
-        {items.map(({ to, label, icon: Icon, ...rest }) => (
+        {visibleItems.map(({ to, label, icon: Icon, ...rest }) => (
           <NavLink
             key={to}
             to={to}
@@ -43,7 +46,7 @@ export default function AppShell() {
         aria-label="主导航"
         className="fixed inset-x-0 bottom-0 z-10 flex items-end justify-around border-t border-slate-200 bg-white px-2 pt-1 pb-[max(0.25rem,env(safe-area-inset-bottom))] md:hidden"
       >
-        {items.map(({ to, label, icon: Icon, ...rest }) => (
+        {visibleItems.map(({ to, label, icon: Icon, ...rest }) => (
           <NavLink key={to} to={to} end={'end' in rest} aria-label={label} className="flex flex-1 flex-col items-center gap-0.5 py-1 text-xs">
             {({ isActive }) =>
               'primary' in rest ? (

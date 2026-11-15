@@ -1,5 +1,5 @@
 import { afterEach, expect, test, vi } from 'vitest'
-import { ApiError, UNAUTHORIZED_EVENT, http } from './client'
+import { ApiError, cancelAuthRequests, UNAUTHORIZED_EVENT, http } from './client'
 import { mockApi } from '../test-utils'
 
 afterEach(() => vi.unstubAllGlobals())
@@ -45,4 +45,30 @@ test('登录接口自己的 401（密码错误）不触发全局登出', async (
   await expect(http.post('/auth/login', {})).rejects.toThrow('用户名或密码错误')
   window.removeEventListener(UNAUTHORIZED_EVENT, handler)
   expect(handler).not.toHaveBeenCalled()
+})
+
+test('权限切换拒绝不遵守 AbortSignal 的迟到响应', async () => {
+  const { cancelBusinessRequests } = await import('./client')
+  let finish!: (response: Response) => void
+  vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>((resolve) => { finish = resolve })))
+  const pending = http.get('/drawings')
+  const rejected = expect(pending).rejects.toMatchObject({ name: 'AbortError' })
+  cancelBusinessRequests()
+  finish(new Response(JSON.stringify({ items: ['previous-role-private-data'] }), { status: 200 }))
+  await rejected
+})
+
+test.each([200, 401])('身份切换后拒绝迟到的 auth %i 响应且不触发登出', async (status) => {
+  let finish!: (response: Response) => void
+  vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>((resolve) => { finish = resolve })))
+  const handler = vi.fn()
+  window.addEventListener(UNAUTHORIZED_EVENT, handler)
+  try {
+    const pending = http.get('/auth/me')
+    const rejected = expect(pending).rejects.toMatchObject({ name: 'AbortError' })
+    cancelAuthRequests()
+    finish(new Response(JSON.stringify({ error: 'old session' }), { status }))
+    await rejected
+    expect(handler).not.toHaveBeenCalled()
+  } finally { window.removeEventListener(UNAUTHORIZED_EVENT, handler) }
 })

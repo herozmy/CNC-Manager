@@ -53,6 +53,9 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if errors.Is(err, domain.ErrUnauthorized) {
 			s.recordLoginFailure(key)
+			if logErr := s.repo.RecordEvent(r.Context(), domain.AuditEntry{Action: "login", EntityType: "app_user", Result: "failed", Detail: "用户名或密码错误"}); logErr != nil {
+				s.log.Error("登录失败日志写入失败", "err", logErr)
+			}
 		}
 		s.fail(w, err)
 		return

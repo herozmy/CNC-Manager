@@ -3,6 +3,9 @@ import { render } from '@testing-library/react'
 import type { ReactElement } from 'react'
 import { MemoryRouter } from 'react-router-dom'
 import { vi } from 'vitest'
+import App from './App'
+import type { User } from './api/types'
+import { SESSION_KEY } from './auth/session'
 
 export interface MockReq {
   method: string
@@ -36,8 +39,10 @@ export function mockApi(handler: (req: MockReq) => MockRes | undefined) {
   return calls
 }
 
-export function renderApp(ui: ReactElement, route = '/') {
+export function renderApp(ui: ReactElement, route = '/', currentUser: User | null = user) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } })
+  client.setQueryDefaults(SESSION_KEY, { gcTime: Infinity })
+  if (ui.type !== App && currentUser) client.setQueryData(SESSION_KEY, { state: 'in', user: currentUser })
   const utils = render(
     <QueryClientProvider client={client}>
       <MemoryRouter initialEntries={[route]}>{ui}</MemoryRouter>
@@ -46,17 +51,17 @@ export function renderApp(ui: ReactElement, route = '/') {
   return { ...utils, client }
 }
 
-export const user = { id: 1, username: 'admin', displayName: '管理员', role: 'admin', enabled: true }
+export const user: User = { id: 1, username: 'admin', displayName: '管理员', role: 'admin', enabled: true }
 
 export function drawing(over: Partial<Record<string, unknown>> = {}) {
   return {
-    id: 1, drawingNo: 'D-1001', name: '壳体', customer: '客户A', material: '6061', drawingVersion: 'B',
+    ownerUserId: 2, ownerName: '加工员', id: 1, drawingNo: 'D-1001', name: '壳体', customer: '客户A', material: '6061', drawingVersion: 'B',
     price: null as string | null, remark: '', createdAt: '2026-01-01T00:00:00Z', updatedAt: new Date().toISOString(), operationCount: 2, programCount: 3, ...over,
   }
 }
 
 export const program = (over: Partial<Record<string, unknown>> = {}) => ({
-  id: 1, operationId: 1, programNo: 'O1234', programName: '粗车', controller: 'FANUC',
+  revision: 1, id: 1, operationId: 1, programNo: 'O1234', programName: '粗车', controller: 'FANUC',
   currentVersionId: 5, currentVersionNo: 3, versionCount: 3, remark: '', ...over,
 })
 

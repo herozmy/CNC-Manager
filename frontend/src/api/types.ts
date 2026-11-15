@@ -2,11 +2,13 @@ export interface User {
   id: number
   username: string
   displayName: string
-  role: 'admin' | 'editor' | 'viewer'
+  role: 'admin' | 'editor'
   enabled: boolean
 }
 
 export interface Drawing {
+  ownerUserId: number
+  ownerName: string
   id: number
   drawingNo: string
   /** 产品类型；沿用 name 字段以兼容已有数据。 */
@@ -24,6 +26,7 @@ export interface Drawing {
 }
 
 export interface DrawingInput {
+  ownerUserId?: number
   drawingNo: string
   /** 产品类型。 */
   name: string
@@ -43,6 +46,7 @@ export interface Page<T> {
 }
 
 export interface Program {
+  revision: number
   id: number
   operationId: number
   programNo: string
@@ -207,3 +211,13 @@ export interface BackupPreview {
 }
 
 export interface BackupRecovery { name: string; createdAt: string; sizeBytes: number }
+
+export type Permission = 'read' | 'download' | 'create' | 'edit' | 'delete'
+export interface UserInput { username: string; displayName: string; password: string; role: 'admin' | 'editor' }
+export type UserUpdate = Pick<User, 'displayName' | 'role' | 'enabled'>
+export interface AuditEntry {
+  id: number; action: string; entityType: string; entityId: number | null; entityName: string; detail: string
+  actor: string; actorId: number | null; actorRoleId: number | null; actorRoleName: string
+  roleId: number | null; roleName: string; ownerUserId: number | null; ownerName: string; result: string; createdAt: string
+}
+export interface AuditFilter { userId?: number; action?: string; result?: string; entityType?: string; from?: string; to?: string; page: number; size: number }

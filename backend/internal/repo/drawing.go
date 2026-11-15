@@ -9,7 +9,7 @@ import (
 	"cnc-manager/internal/domain"
 )
 
-const drawingCols = `d.id, d.drawing_no, d.name, d.customer, d.material, d.price_cents, d.drawing_version, d.remark,
+const drawingCols = `d.id, COALESCE(d.owner_user_id,0) AS owner_user_id, COALESCE((SELECT display_name FROM app_user WHERE id=d.owner_user_id),'待分配') AS owner_name, d.drawing_no, d.name, d.customer, d.material, d.price_cents, d.drawing_version, d.remark,
 	d.created_at, d.updated_at,
 	(SELECT COUNT(*) FROM operation o WHERE o.drawing_id = d.id) AS operation_count,
 	(SELECT COUNT(*) FROM nc_program p JOIN operation o ON o.id = p.operation_id WHERE o.drawing_id = d.id) AS program_count`
@@ -22,7 +22,7 @@ const drawingFilter = `WHERE (
 	        WHERE o.drawing_id = d.id AND (p.program_no LIKE ? ESCAPE '\' OR p.program_name LIKE ? ESCAPE '\')))`
 
 // ListDrawings 分页查询图纸。
-func (r *Repo) ListDrawings(ctx context.Context, keyword string, page, size int) (domain.Page[domain.Drawing], error) {
+func (r *Repo) rawListDrawings(ctx context.Context, keyword string, page, size int) (domain.Page[domain.Drawing], error) {
 	if page < 1 {
 		page = 1
 	}
@@ -32,11 +32,18 @@ func (r *Repo) ListDrawings(ctx context.Context, keyword string, page, size int)
 	out := domain.Page[domain.Drawing]{Items: []domain.Drawing{}, Page: page, Size: size}
 	pat := likePattern(keyword)
 	args := []any{pat, pat, pat, pat, pat}
-	if err := r.db.GetContext(ctx, &out.Total, `SELECT COUNT(*) FROM drawing d `+drawingFilter, args...); err != nil {
+	access, err := businessScope(ctx, r.tx, domain.PermissionRead)
+	if err != nil {
+		return out, err
+	}
+	predicate, scopeArgs := access.predicate("d.owner_user_id")
+	args = append(args, scopeArgs...)
+	filter := drawingFilter + predicate
+	if err := r.tx.GetContext(ctx, &out.Total, `SELECT COUNT(*) FROM drawing d `+filter, args...); err != nil {
 		return out, wrap(err)
 	}
-	q := `SELECT ` + drawingCols + ` FROM drawing d ` + drawingFilter + ` ORDER BY d.updated_at DESC, d.id DESC LIMIT ? OFFSET ?`
-	if err := r.db.SelectContext(ctx, &out.Items, q, append(args, size, (page-1)*size)...); err != nil {
+	q := `SELECT ` + drawingCols + ` FROM drawing d ` + filter + ` ORDER BY d.updated_at DESC, d.id DESC LIMIT ? OFFSET ?`
+	if err := r.tx.SelectContext(ctx, &out.Items, q, append(args, size, (page-1)*size)...); err != nil {
 		return out, wrap(err)
 	}
 	for i := range out.Items {
@@ -46,9 +53,9 @@ func (r *Repo) ListDrawings(ctx context.Context, keyword string, page, size int)
 }
 
 // GetDrawing 按 ID 取图纸。
-func (r *Repo) GetDrawing(ctx context.Context, id int64) (*domain.Drawing, error) {
+func (r *Repo) rawGetDrawing(ctx context.Context, id int64) (*domain.Drawing, error) {
 	var d domain.Drawing
-	if err := r.db.GetContext(ctx, &d, `SELECT `+drawingCols+` FROM drawing d WHERE d.id = ?`, id); err != nil {
+	if err := r.tx.GetContext(ctx, &d, `SELECT `+drawingCols+` FROM drawing d WHERE d.id = ?`, id); err != nil {
 		return nil, wrap(err)
 	}
 	d.Price = domain.PriceText(d.PriceCents)
@@ -56,7 +63,7 @@ func (r *Repo) GetDrawing(ctx context.Context, id int64) (*domain.Drawing, error
 }
 
 // DrawingDetail 返回图纸及其全部工序和程序（3 条 SQL，内存组装）。
-func (r *Repo) DrawingDetail(ctx context.Context, id int64) (*domain.DrawingDetail, error) {
+func (r *Repo) rawDrawingDetail(ctx context.Context, id int64) (*domain.DrawingDetail, error) {
 	d, err := r.GetDrawing(ctx, id)
 	if err != nil {
 		return nil, err
@@ -78,7 +85,7 @@ func (r *Repo) DrawingDetail(ctx context.Context, id int64) (*domain.DrawingDeta
 		return nil, err
 	}
 	progs := []domain.Program{}
-	if err := r.db.SelectContext(ctx, &progs, r.db.Rebind(q), args...); err != nil {
+	if err := r.tx.SelectContext(ctx, &progs, r.tx.Rebind(q), args...); err != nil {
 		return nil, wrap(err)
 	}
 	byOp := map[int64][]domain.Program{}
@@ -96,54 +103,65 @@ func (r *Repo) DrawingDetail(ctx context.Context, id int64) (*domain.DrawingDeta
 }
 
 // CreateDrawing 新建图纸。
-func (r *Repo) CreateDrawing(ctx context.Context, in domain.DrawingInput) (*domain.Drawing, error) {
+func (r *Repo) rawCreateDrawing(ctx context.Context, in domain.DrawingInput) (*domain.Drawing, error) {
 	if err := in.Normalize(); err != nil {
 		return nil, err
 	}
+	ownerID, err := drawingCreateOwner(ctx, r.tx, in.OwnerUserID)
+	if err != nil {
+		return nil, err
+	}
 	now := domain.Now()
-	res, err := r.db.ExecContext(ctx,
-		`INSERT INTO drawing (drawing_no, name, customer, material, price_cents, drawing_version, remark, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		in.DrawingNo, in.Name, in.Customer, in.Material, in.Price.Cents, in.DrawingVersion, in.Remark, now, now)
+	res, err := r.tx.ExecContext(ctx,
+		`INSERT INTO drawing (owner_user_id, drawing_no, name, customer, material, price_cents, drawing_version, remark, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		ownerID, in.DrawingNo, in.Name, in.Customer, in.Material, in.Price.Cents, in.DrawingVersion, in.Remark, now, now)
 	if err != nil {
 		return nil, wrap(err)
 	}
 	id, _ := res.LastInsertId()
-	if err := r.log(ctx, r.db, "create", "drawing", id, "新建图纸 "+in.DrawingNo); err != nil {
+	if err := r.log(ctx, r.tx, "create", "drawing", id, "新建图纸 "+in.DrawingNo); err != nil {
 		return nil, err
 	}
 	return r.GetDrawing(ctx, id)
 }
 
 // UpdateDrawing 修改图纸。
-func (r *Repo) UpdateDrawing(ctx context.Context, id int64, in domain.DrawingInput) (*domain.Drawing, error) {
+func (r *Repo) rawUpdateDrawing(ctx context.Context, id int64, in domain.DrawingInput) (*domain.Drawing, error) {
 	if err := in.Normalize(); err != nil {
 		return nil, err
 	}
-	if _, err := r.GetDrawing(ctx, id); err != nil {
+	old, err := r.GetDrawing(ctx, id)
+	if err != nil {
 		return nil, err
 	}
-	if _, err := r.db.ExecContext(ctx,
+	if in.OwnerUserID != nil && *in.OwnerUserID != old.OwnerUserID {
+		return nil, domain.ErrForbidden
+	}
+	if _, err := r.tx.ExecContext(ctx,
 		`UPDATE drawing SET drawing_no = ?, name = ?, customer = ?, material = ?, price_cents = CASE WHEN ? THEN ? ELSE price_cents END, drawing_version = ?, remark = ?, updated_at = ? WHERE id = ?`,
 		in.DrawingNo, in.Name, in.Customer, in.Material, in.Price.Set, in.Price.Cents, in.DrawingVersion, in.Remark, domain.Now(), id); err != nil {
 		return nil, wrap(err)
 	}
-	if err := r.log(ctx, r.db, "update", "drawing", id, "修改图纸 "+in.DrawingNo); err != nil {
+	if err := r.log(ctx, r.tx, "update", "drawing", id, "修改图纸 "+in.DrawingNo); err != nil {
 		return nil, err
 	}
 	return r.GetDrawing(ctx, id)
 }
 
 // DeleteDrawing 删除图纸，级联删除工序、程序、版本与刀具表；物理文件留给回收任务。
-func (r *Repo) DeleteDrawing(ctx context.Context, id int64) error {
+func (r *Repo) rawDeleteDrawing(ctx context.Context, id int64) error {
 	d, err := r.GetDrawing(ctx, id)
 	if err != nil {
 		return err
 	}
-	if _, err := r.db.ExecContext(ctx, `DELETE FROM drawing WHERE id = ?`, id); err != nil {
+	if err := r.log(ctx, r.tx, "delete", "drawing", id, "删除图纸 "+d.DrawingNo); err != nil {
+		return err
+	}
+	if _, err := r.tx.ExecContext(ctx, `DELETE FROM drawing WHERE id = ?`, id); err != nil {
 		return wrap(err)
 	}
-	return r.log(ctx, r.db, "delete", "drawing", id, "删除图纸 "+d.DrawingNo)
+	return nil
 }
 
 // ---- 工序 ----
@@ -155,9 +173,9 @@ const operationCols = `o.id, o.drawing_id, o.op_no, o.op_name, o.sort_order, o.m
 const operationFrom = ` FROM operation o LEFT JOIN machine m ON m.id = o.machine_id `
 
 // ListOperations 取图纸下全部工序，按人工排序。
-func (r *Repo) ListOperations(ctx context.Context, drawingID int64) ([]domain.Operation, error) {
+func (r *Repo) rawListOperations(ctx context.Context, drawingID int64) ([]domain.Operation, error) {
 	items := []domain.Operation{}
-	if err := r.db.SelectContext(ctx, &items,
+	if err := r.tx.SelectContext(ctx, &items,
 		`SELECT `+operationCols+operationFrom+`WHERE o.drawing_id = ? ORDER BY o.sort_order, o.id`, drawingID); err != nil {
 		return nil, wrap(err)
 	}
@@ -170,9 +188,9 @@ func (r *Repo) ListOperations(ctx context.Context, drawingID int64) ([]domain.Op
 }
 
 // GetOperation 按 ID 取工序。
-func (r *Repo) GetOperation(ctx context.Context, id int64) (*domain.Operation, error) {
+func (r *Repo) rawGetOperation(ctx context.Context, id int64) (*domain.Operation, error) {
 	var o domain.Operation
-	if err := r.db.GetContext(ctx, &o, `SELECT `+operationCols+operationFrom+`WHERE o.id = ?`, id); err != nil {
+	if err := r.tx.GetContext(ctx, &o, `SELECT `+operationCols+operationFrom+`WHERE o.id = ?`, id); err != nil {
 		return nil, wrap(err)
 	}
 	o.XCoordinate = domain.MilliToFloat(o.XCoordinateMilli)
@@ -189,15 +207,19 @@ func coordinateMilli(value *float64, fallback int64) int64 {
 }
 
 // CreateOperation 在图纸下新增工序，排在最后。
-func (r *Repo) CreateOperation(ctx context.Context, drawingID int64, in domain.OperationInput) (*domain.Operation, error) {
+func (r *Repo) rawCreateOperation(ctx context.Context, drawingID int64, in domain.OperationInput) (*domain.Operation, error) {
 	if err := in.Normalize(); err != nil {
 		return nil, err
 	}
-	if _, err := r.GetDrawing(ctx, drawingID); err != nil {
+	d, err := r.GetDrawing(ctx, drawingID)
+	if err != nil {
+		return nil, err
+	}
+	if err := checkRelatedOwner(ctx, r.tx, "machine", in.MachineID, d.OwnerUserID); err != nil {
 		return nil, err
 	}
 	now := domain.Now()
-	res, err := r.db.ExecContext(ctx,
+	res, err := r.tx.ExecContext(ctx,
 		`INSERT INTO operation (drawing_id, op_no, op_name, machine_id, sort_order, fixture, centering_method, x_coordinate_milli, y_coordinate_milli, z_height_milli, remark, created_at, updated_at)
 		 VALUES (?, ?, ?, ?, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM operation WHERE drawing_id = ?), ?, COALESCE(?, ''), ?, ?, ?, ?, ?, ?)`,
 		drawingID, in.OpNo, in.OpName, in.MachineID, drawingID, in.Fixture, in.CenteringMethod, coordinateMilli(in.XCoordinate, 0), coordinateMilli(in.YCoordinate, 0), domain.FloatToMilli(in.ZHeight), in.Remark, now, now)
@@ -205,14 +227,14 @@ func (r *Repo) CreateOperation(ctx context.Context, drawingID int64, in domain.O
 		return nil, wrap(err)
 	}
 	id, _ := res.LastInsertId()
-	if err := r.log(ctx, r.db, "create", "operation", id, fmt.Sprintf("新增工序 %d %s", in.OpNo, in.OpName)); err != nil {
+	if err := r.log(ctx, r.tx, "create", "operation", id, fmt.Sprintf("新增工序 %d %s", in.OpNo, in.OpName)); err != nil {
 		return nil, err
 	}
 	return r.GetOperation(ctx, id)
 }
 
 // UpdateOperation 修改工序。
-func (r *Repo) UpdateOperation(ctx context.Context, id int64, in domain.OperationInput) (*domain.Operation, error) {
+func (r *Repo) rawUpdateOperation(ctx context.Context, id int64, in domain.OperationInput) (*domain.Operation, error) {
 	if err := in.Normalize(); err != nil {
 		return nil, err
 	}
@@ -220,31 +242,41 @@ func (r *Repo) UpdateOperation(ctx context.Context, id int64, in domain.Operatio
 	if err != nil {
 		return nil, err
 	}
-	if _, err := r.db.ExecContext(ctx,
+	ownerID, err := objectOwner(ctx, r.tx, "operation", id)
+	if err != nil {
+		return nil, err
+	}
+	if err := checkRelatedOwner(ctx, r.tx, "machine", in.MachineID, ownerID); err != nil {
+		return nil, err
+	}
+	if _, err := r.tx.ExecContext(ctx,
 		`UPDATE operation SET op_no = ?, op_name = ?, machine_id = ?, fixture = ?, centering_method = COALESCE(?, centering_method), x_coordinate_milli = ?, y_coordinate_milli = ?, z_height_milli = ?, remark = ?, updated_at = ? WHERE id = ?`,
 		in.OpNo, in.OpName, in.MachineID, in.Fixture, in.CenteringMethod, coordinateMilli(in.XCoordinate, previous.XCoordinateMilli), coordinateMilli(in.YCoordinate, previous.YCoordinateMilli), domain.FloatToMilli(in.ZHeight), in.Remark, domain.Now(), id); err != nil {
 		return nil, wrap(err)
 	}
-	if err := r.log(ctx, r.db, "update", "operation", id, fmt.Sprintf("修改工序 %d %s", in.OpNo, in.OpName)); err != nil {
+	if err := r.log(ctx, r.tx, "update", "operation", id, fmt.Sprintf("修改工序 %d %s", in.OpNo, in.OpName)); err != nil {
 		return nil, err
 	}
 	return r.GetOperation(ctx, id)
 }
 
 // DeleteOperation 删除工序及其程序。
-func (r *Repo) DeleteOperation(ctx context.Context, id int64) error {
+func (r *Repo) rawDeleteOperation(ctx context.Context, id int64) error {
 	o, err := r.GetOperation(ctx, id)
 	if err != nil {
 		return err
 	}
-	if _, err := r.db.ExecContext(ctx, `DELETE FROM operation WHERE id = ?`, id); err != nil {
+	if err := r.log(ctx, r.tx, "delete", "operation", id, fmt.Sprintf("删除工序 %d %s", o.OpNo, o.OpName)); err != nil {
+		return err
+	}
+	if _, err := r.tx.ExecContext(ctx, `DELETE FROM operation WHERE id = ?`, id); err != nil {
 		return wrap(err)
 	}
-	return r.log(ctx, r.db, "delete", "operation", id, fmt.Sprintf("删除工序 %d %s", o.OpNo, o.OpName))
+	return nil
 }
 
 // ReorderOperations 按完整 ID 顺序重排图纸下的工序。
-func (r *Repo) ReorderOperations(ctx context.Context, drawingID int64, ids []int64) error {
+func (r *Repo) rawReorderOperations(ctx context.Context, drawingID int64, ids []int64) error {
 	existing, err := r.ListOperations(ctx, drawingID)
 	if err != nil {
 		return err
@@ -274,11 +306,7 @@ func checkReorder[T any](existing []T, idOf func(T) int64, ids []int64, name str
 }
 
 func (r *Repo) reorder(ctx context.Context, sql string, parentID int64, ids []int64, entity, detail string) error {
-	tx, err := r.db.BeginTxx(ctx, nil)
-	if err != nil {
-		return wrap(err)
-	}
-	defer func() { _ = tx.Rollback() }()
+	tx := r.tx
 	now := domain.Now()
 	for i, id := range ids {
 		if _, err := tx.ExecContext(ctx, sql, i+1, now, id, parentID); err != nil {
@@ -288,5 +316,5 @@ func (r *Repo) reorder(ctx context.Context, sql string, parentID int64, ids []in
 	if err := r.log(ctx, tx, "reorder", entity, parentID, detail); err != nil {
 		return err
 	}
-	return tx.Commit()
+	return nil
 }

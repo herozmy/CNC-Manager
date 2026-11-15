@@ -16,10 +16,25 @@ func (r *Repo) UpdateDisplayName(ctx context.Context, id int64, name string) (do
 	if name == "" || utf8.RuneCountInString(name) > 64 {
 		return domain.User{}, fmt.Errorf("%w: 显示名称应为 1~64 个字符", domain.ErrInvalid)
 	}
-	var user domain.User
-	err := r.db.GetContext(ctx, &user, `UPDATE app_user SET display_name = ?, updated_at = ?
-		WHERE id = ? AND enabled = 1 RETURNING `+userColumns, name, domain.Now(), id)
-	return user, wrap(err)
+	tx, err := r.db.BeginTxx(ctx, nil)
+	if err != nil {
+		return domain.User{}, err
+	}
+	defer tx.Rollback()
+	if err := requireSelf(ctx, tx, id); err != nil {
+		return domain.User{}, err
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE app_user SET display_name=?,updated_at=? WHERE id=?`, name, domain.Now(), id); err != nil {
+		return domain.User{}, wrap(err)
+	}
+	if err := r.log(ctx, tx, "update_profile", "app_user", id, "修改个人显示名称"); err != nil {
+		return domain.User{}, err
+	}
+	user, err := loadUser(ctx, tx, id)
+	if err != nil {
+		return domain.User{}, err
+	}
+	return user, tx.Commit()
 }
 
 // ChangePassword verifies the current password and revokes all sessions in the
@@ -39,6 +54,9 @@ func (r *Repo) ChangePassword(ctx context.Context, id int64, current, next strin
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
+	if err := requireSelf(ctx, tx, id); err != nil {
+		return err
+	}
 	var oldHash string
 	if err := tx.GetContext(ctx, &oldHash, `SELECT password_hash FROM app_user WHERE id = ? AND enabled = 1`, id); err != nil {
 		return wrap(err)
@@ -54,6 +72,9 @@ func (r *Repo) ChangePassword(ctx context.Context, id int64, current, next strin
 		return err
 	}
 	if _, err := tx.ExecContext(ctx, `DELETE FROM user_session WHERE user_id = ?`, id); err != nil {
+		return err
+	}
+	if err := r.log(ctx, tx, "change_password", "app_user", id, "修改个人密码；全部会话已撤销"); err != nil {
 		return err
 	}
 	return tx.Commit()

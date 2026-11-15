@@ -13,16 +13,16 @@ var (
 	ErrConflict     = errors.New("记录已存在，或与现有数据冲突")
 	ErrInvalid      = errors.New("参数不合法")
 	ErrUnauthorized = errors.New("用户名或密码错误")
+	ErrForbidden    = errors.New("没有执行此操作的权限")
 )
 
 // Now 返回全库统一的时间文本：UTC RFC3339。
 func Now() string { return time.Now().UTC().Format(time.RFC3339) }
 
-// 用户角色。本轮不做权限区分，字段先行，后续加 RBAC 不改表。
+// 管理员访问全部数据；普通账号仅管理自己的数据。
 const (
 	RoleAdmin  = "admin"
 	RoleEditor = "editor"
-	RoleViewer = "viewer"
 )
 
 // User 是登录用户，不含密码哈希。

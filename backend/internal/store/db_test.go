@@ -71,7 +71,7 @@ func TestMigrateCreatesSchemaAndIsIdempotent(t *testing.T) {
 	if n != 7 {
 		t.Fatalf("核心表数量 = %d，期望 7", n)
 	}
-	if err := db.Get(&n, `SELECT COUNT(*) FROM schema_migration`); err != nil || n != 4 {
+	if err := db.Get(&n, `SELECT COUNT(*) FROM schema_migration`); err != nil || n != 6 {
 		t.Fatalf("迁移记录 = %d, err=%v", n, err)
 	}
 }
@@ -183,5 +183,130 @@ func TestRejectsInvalidRoleAndEncoding(t *testing.T) {
 	var role string
 	if err := db.Get(&role, `SELECT role FROM app_user WHERE username='b'`); err != nil || role != "admin" {
 		t.Fatalf("默认角色 = %q, err=%v", role, err)
+	}
+}
+
+func TestRoleMigrationPreservesDataAndRevokesLegacySessions(t *testing.T) {
+	db, err := Open(filepath.Join(t.TempDir(), "legacy-roles.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	ctx := context.Background()
+	if _, err := db.Exec(`CREATE TABLE schema_migration(version TEXT PRIMARY KEY,applied_at TEXT NOT NULL)`); err != nil {
+		t.Fatal(err)
+	}
+	for _, version := range []string{"0001_init", "0002_operation_coordinates", "0003_operation_centering", "0004_drawing_price"} {
+		raw, err := migrationsFS.ReadFile("migrations/" + version + ".sql")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := applyMigration(ctx, db, version, string(raw)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	queries := []string{
+		`INSERT INTO app_user(id,username,display_name,password_hash,role,enabled,created_at,updated_at) VALUES(7,'legacy','Original','preserved-hash','admin',1,'before','before'),(8,'reader','Reader','reader-hash','viewer',1,'before','before')`,
+		`INSERT INTO user_session(token_hash,user_id,expires_at,created_at) VALUES('old-session',7,'2099-01-01T00:00:00Z','before')`,
+		`INSERT INTO drawing(id,drawing_no,price_cents,created_at,updated_at) VALUES(42,'EXISTING',12345,'before','before')`,
+		`INSERT INTO operation(id,drawing_id,op_no,created_at,updated_at) VALUES(43,42,10,'before','before')`,
+		`INSERT INTO nc_program(id,operation_id,program_no,created_at,updated_at) VALUES(44,43,'O7777','before','before')`,
+		`INSERT INTO nc_blob(sha256,size_bytes,rel_path,created_at) VALUES('oldsha',9,'old.nc','before')`,
+		`INSERT INTO nc_version(id,program_id,version_no,sha256,file_name,created_by,created_at) VALUES(45,44,1,'oldsha','original.nc','legacy','before')`,
+		`UPDATE nc_program SET current_version_id=45 WHERE id=44`,
+		`INSERT INTO audit_log(action,entity_type,entity_id,actor,detail,created_at) VALUES('create','drawing',42,'old-user','historical','before')`,
+	}
+	for _, q := range queries {
+		if _, err := db.Exec(q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for range 2 {
+		if err := Migrate(ctx, db); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var n int
+	for _, q := range []string{`SELECT COUNT(*) FROM user_session`, `SELECT COUNT(*) FROM pragma_foreign_key_check`, `SELECT COUNT(*) FROM app_user WHERE business_role_id IS NOT NULL`, `SELECT COUNT(*) FROM audit_log WHERE actor_id IS NOT NULL OR role_id IS NOT NULL`} {
+		if err := db.Get(&n, q); err != nil || n != 0 {
+			t.Fatal(q, n, err)
+		}
+	}
+	var stored string
+	if err := db.Get(&stored, `SELECT drawing_no||':'||price_cents||':'||role_id FROM drawing WHERE id=42`); err != nil || stored != "EXISTING:12345:1" {
+		t.Fatal(stored, err)
+	}
+	if err := db.Get(&stored, `SELECT password_hash||':'||role FROM app_user WHERE id=7`); err != nil || stored != "preserved-hash:admin" {
+		t.Fatal(stored, err)
+	}
+	if err := db.Get(&stored, `SELECT p.program_no||':'||p.current_version_id||':'||p.revision||':'||v.file_name FROM nc_program p JOIN nc_version v ON v.id=p.current_version_id WHERE p.id=44`); err != nil || stored != "O7777:45:1:original.nc" {
+		t.Fatal(stored, err)
+	}
+	if _, err := db.Exec(`UPDATE drawing SET role_id=999 WHERE id=42`); err == nil {
+		t.Fatal("foreign keys not restored")
+	}
+}
+
+func TestPersonalOwnershipMigrationKeepsSharedDataAndDuplicateNumbers(t *testing.T) {
+	db, err := Open(filepath.Join(t.TempDir(), "shared.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if _, err = db.Exec(`CREATE TABLE schema_migration(version TEXT PRIMARY KEY,applied_at TEXT NOT NULL)`); err != nil {
+		t.Fatal(err)
+	}
+	for _, version := range []string{"0001_init", "0002_operation_coordinates", "0003_operation_centering", "0004_drawing_price", "0005_roles"} {
+		raw, err := migrationsFS.ReadFile("migrations/" + version + ".sql")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err = db.Exec(string(raw)); err != nil {
+			t.Fatal(err)
+		}
+		if _, err = db.Exec(`INSERT INTO schema_migration VALUES(?,'before')`, version); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, query := range []string{
+		`INSERT INTO business_role(id,name,created_at,updated_at) VALUES(2,'Shared','',''),(3,'Other','','')`,
+		`INSERT INTO app_user(id,username,password_hash,role,business_role_id,created_at,updated_at) VALUES(1,'admin','hash','admin',NULL,'',''),(2,'a','hash','editor',2,'',''),(3,'b','hash','viewer',2,'','')`,
+		`INSERT INTO drawing(id,role_id,drawing_no,created_at,updated_at) VALUES(10,2,'DUP','',''),(11,3,'DUP','','')`,
+		`INSERT INTO machine(id,role_id,code,name,created_at,updated_at) VALUES(1,2,'M','M','','')`,
+		`INSERT INTO operation(id,drawing_id,op_no,machine_id,created_at,updated_at) VALUES(1,10,10,1,'','')`,
+		`INSERT INTO user_session(token_hash,user_id,expires_at,created_at) VALUES('old',2,'2099-01-01','')`,
+		`INSERT INTO audit_log(action,entity_type,entity_id,actor,actor_role_id,actor_role_name,role_id,role_name,created_at) VALUES('create','drawing',10,'a',2,'Shared',2,'Shared','before')`,
+	} {
+		if _, err = db.Exec(query); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for range 2 {
+		if err = Migrate(context.Background(), db); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, query := range []string{`SELECT COUNT(*) FROM user_session`, `SELECT COUNT(*) FROM drawing WHERE owner_user_id IS NOT NULL`, `SELECT COUNT(*) FROM machine WHERE owner_user_id IS NOT NULL`, `SELECT COUNT(*) FROM app_user WHERE business_role_id IS NOT NULL OR role NOT IN ('admin','editor')`, `SELECT COUNT(*) FROM pragma_foreign_key_check`} {
+		var n int
+		if err = db.Get(&n, query); err != nil || n != 0 {
+			t.Fatal(query, n, err)
+		}
+	}
+	var n int
+	if err = db.Get(&n, `SELECT COUNT(*) FROM drawing WHERE drawing_no='DUP'`); err != nil || n != 2 {
+		t.Fatal(n, err)
+	}
+	var name string
+	if err = db.Get(&name, `SELECT actor_role_name||':'||role_name FROM audit_log`); err != nil || name != "Shared:Shared" {
+		t.Fatal(name, err)
+	}
+	if _, err = db.Exec(`UPDATE drawing SET owner_user_id=2 WHERE id=10`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = db.Exec(`UPDATE drawing SET owner_user_id=2 WHERE id=11`); err == nil {
+		t.Fatal("duplicate ownership accepted")
+	}
+	if _, err = db.Exec(`UPDATE drawing SET owner_user_id=3 WHERE id=11`); err != nil {
+		t.Fatal(err)
 	}
 }

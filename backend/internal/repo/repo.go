@@ -16,6 +16,7 @@ import (
 // Repo 聚合所有数据访问方法。
 type Repo struct {
 	db *sqlx.DB
+	tx *sqlx.Tx
 }
 
 // New 创建数据访问层。

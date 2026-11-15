@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"cnc-manager/internal/domain"
+	"cnc-manager/internal/repo"
 )
 
 func queryInt(r *http.Request, name string, def int) int {
@@ -19,6 +20,18 @@ func queryInt(r *http.Request, name string, def int) int {
 // ---- 图纸 ----
 
 func (s *Server) handleListDrawings(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Query().Has("ownerUserId") {
+		id, ok := ownerQueryID(w, r)
+		if !ok {
+			return
+		}
+		u, _ := domain.UserFromContext(r.Context())
+		if !u.IsAdmin() && u.ID != *id {
+			s.fail(w, domain.ErrForbidden)
+			return
+		}
+		r = r.WithContext(repo.WithOwnerFilter(r.Context(), id))
+	}
 	page, err := s.repo.ListDrawings(r.Context(), r.URL.Query().Get("q"), queryInt(r, "page", 1), queryInt(r, "size", 50))
 	if err != nil {
 		s.fail(w, err)
@@ -221,4 +234,12 @@ func (s *Server) handleReorderPrograms(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func ownerQueryID(w http.ResponseWriter, r *http.Request) (*int64, bool) {
+	if r.URL.Query().Get("ownerUserId") == "0" {
+		id := int64(0)
+		return &id, true
+	}
+	return positiveQueryID(w, r, "ownerUserId")
 }

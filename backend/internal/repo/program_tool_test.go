@@ -2,7 +2,6 @@ package repo
 
 import (
 	"cnc-manager/internal/domain"
-	"context"
 	"errors"
 	"reflect"
 	"sync"
@@ -11,7 +10,7 @@ import (
 
 func TestVersionToolsRoundTripIsolationAndRollback(t *testing.T) {
 	r := newTestRepo(t)
-	ctx := context.Background()
+	ctx := testActor(t, r, "tester")
 	p := newProgram(t, r, "TOOLS")
 	a, _ := r.AddVersion(ctx, p.ID, blob("aa11", "utf-8"), "a.nc", "")
 	b, _ := r.AddVersion(ctx, p.ID, blob("bb22", "utf-8"), "b.nc", "")
@@ -91,7 +90,7 @@ func TestVersionToolsRoundTripIsolationAndRollback(t *testing.T) {
 
 func TestVersionToolsConcurrentSave(t *testing.T) {
 	r := newTestRepo(t)
-	ctx := context.Background()
+	ctx := testActor(t, r, "tester")
 	p := newProgram(t, r, "CONCURRENT-TOOLS")
 	v, _ := r.AddVersion(ctx, p.ID, blob("aa11", "utf-8"), "a.nc", "")
 	initial, _ := r.GetVersionTools(ctx, v.ID)
