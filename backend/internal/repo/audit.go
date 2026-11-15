@@ -24,13 +24,13 @@ func (r *Repo) logResult(ctx context.Context, q sqlx.ExtContext, action, entity 
 			e.ActorRoleName = "普通账号"
 		}
 	}
-	names := map[string]string{"drawing": `SELECT drawing_no FROM drawing WHERE id=?`, "operation": `SELECT op_name FROM operation WHERE id=?`, "program": `SELECT program_no FROM nc_program WHERE id=?`, "version": `SELECT file_name FROM nc_version WHERE id=?`, "app_user": `SELECT username FROM app_user WHERE id=?`}
+	names := map[string]string{"machine": `SELECT code FROM machine WHERE id=?`, "drawing": `SELECT drawing_no FROM drawing WHERE id=?`, "operation": `SELECT op_name FROM operation WHERE id=?`, "program": `SELECT program_no FROM nc_program WHERE id=?`, "version": `SELECT file_name FROM nc_version WHERE id=?`, "app_user": `SELECT username FROM app_user WHERE id=?`}
 	if query := names[entity]; query != "" {
 		if err := sqlx.GetContext(ctx, q, &e.EntityName, query, id); err != nil {
 			return wrap(err)
 		}
 	}
-	if entity == "drawing" || entity == "operation" || entity == "program" || entity == "version" {
+	if entity == "drawing" || entity == "operation" || entity == "program" || entity == "version" || entity == "machine" {
 		ownerID, err := objectOwner(ctx, q, entity, id)
 		if err != nil {
 			return err

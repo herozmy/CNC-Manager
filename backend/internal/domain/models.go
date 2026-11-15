@@ -48,6 +48,7 @@ type Operation struct {
 	OpName           string  `db:"op_name" json:"opName"`
 	SortOrder        int     `db:"sort_order" json:"sortOrder"`
 	MachineID        *int64  `db:"machine_id" json:"machineId"`
+	MachineCode      string  `db:"machine_code" json:"machineCode"`
 	MachineName      string  `db:"machine_name" json:"machineName"`
 	Fixture          string  `db:"fixture" json:"fixture"`
 	CenteringMethod  string  `db:"centering_method" json:"centeringMethod"`

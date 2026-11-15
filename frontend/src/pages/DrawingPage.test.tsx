@@ -38,7 +38,7 @@ test('工序默认收起，按需独立展开详情和操作，可再次收起',
   expect(screen.getAllByText('X（mm）')).toHaveLength(1)
   expect(screen.queryByText('无版本')).not.toBeInTheDocument()
   await u.click(screen.getByRole('button', { name: '展开工序 20' }))
-  expect(screen.getByText('CK6150 · 装夹 三爪')).toBeInTheDocument()
+  expect(screen.getByText('机台：CK6150 · 装夹 三爪')).toBeInTheDocument()
   expect(screen.getAllByText('X（mm）')).toHaveLength(2)
   expect(screen.getAllByText('Y（mm）')).toHaveLength(2)
   expect(screen.getAllByText('Z（mm）')).toHaveLength(2)

@@ -167,7 +167,7 @@ func (r *Repo) rawDeleteDrawing(ctx context.Context, id int64) error {
 // ---- 工序 ----
 
 const operationCols = `o.id, o.drawing_id, o.op_no, o.op_name, o.sort_order, o.machine_id,
-	COALESCE(m.name, '') AS machine_name, o.fixture, o.centering_method, o.x_coordinate_milli, o.y_coordinate_milli, o.z_height_milli, o.remark, o.created_at, o.updated_at,
+	COALESCE(m.code, '') AS machine_code, COALESCE(m.name, '') AS machine_name, o.fixture, o.centering_method, o.x_coordinate_milli, o.y_coordinate_milli, o.z_height_milli, o.remark, o.created_at, o.updated_at,
 	(SELECT COUNT(*) FROM nc_program p WHERE p.operation_id = o.id) AS program_count`
 
 const operationFrom = ` FROM operation o LEFT JOIN machine m ON m.id = o.machine_id `

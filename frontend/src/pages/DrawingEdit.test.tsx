@@ -28,6 +28,7 @@ test('图纸详情显示产品类型，未填写时显示未分类', async () =>
 function server(initial: unknown[]) {
   let ops = initial
   const calls = mockApi((r) => {
+    if (r.path === '/drawings/1/machines' && r.method === 'GET') return { body: [] }
     if (r.method === 'GET' && r.path === '/drawings/1/detail') return { body: detail(ops) }
     if (r.method === 'GET' && r.path.startsWith('/drawings?')) return { body: { items: [], total: 0, page: 1, size: 20 } }
     if (r.method === 'POST' && r.path === '/drawings/1/operations') {
@@ -67,6 +68,7 @@ test('分中方式创建后展示，编辑回填，失败保留草稿，可修�
   let saved: ReturnType<typeof operation> | undefined
   let fail = false
   const calls = mockApi((r) => {
+    if (r.path === '/drawings/1/machines' && r.method === 'GET') return { body: [] }
     if (r.path === '/drawings/1/detail') return { body: detail(saved ? [saved] : []) }
     if (r.method === 'POST' || r.method === 'PUT') {
       if (fail) return { status: 500, body: { error: '保存失败' } }
@@ -159,6 +161,7 @@ test('工序表单校验：工序号与坐标非法时不提交', async () => {
 
 test('工序号重复时标在输入框上，弹层保持打开', async () => {
   mockApi((r) => {
+    if (r.path === '/drawings/1/machines' && r.method === 'GET') return { body: [] }
     if (r.path === '/drawings/1/detail') return { body: detail([]) }
     if (r.method === 'POST') return { status: 409, body: { error: '记录已存在，或与现有数据冲突: 该图纸下已存在相同工序号' } }
   })
@@ -222,6 +225,7 @@ test('旧工序未含 X/Y 时默认 0，三个坐标清空后保存为 0', async
 test('保存失败保留三个坐标，可重试保存', async () => {
   let fail = true
   const calls = mockApi((r) => {
+    if (r.path === '/drawings/1/machines' && r.method === 'GET') return { body: [] }
     if (r.method === 'GET') return { body: detail([operation()]) }
     if (r.method === 'PUT') return fail ? { status: 500, body: { error: '保存失败' } } : { body: operation(r.body as Record<string, unknown>) }
   })

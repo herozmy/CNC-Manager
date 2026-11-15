@@ -131,6 +131,7 @@ func inTransaction[T any](ctx context.Context, r *Repo, fn func(*sqlx.Tx) (T, er
 
 func objectOwner(ctx context.Context, q sqlx.QueryerContext, entity string, id int64) (int64, error) {
 	queries := map[string]string{
+		"machine":   `SELECT COALESCE(owner_user_id,0) FROM machine WHERE id=?`,
 		"drawing":   `SELECT COALESCE(owner_user_id,0) FROM drawing WHERE id=?`,
 		"operation": `SELECT COALESCE(d.owner_user_id,0) FROM operation o JOIN drawing d ON d.id=o.drawing_id WHERE o.id=?`,
 		"program":   `SELECT COALESCE(d.owner_user_id,0) FROM nc_program p JOIN operation o ON o.id=p.operation_id JOIN drawing d ON d.id=o.drawing_id WHERE p.id=?`,

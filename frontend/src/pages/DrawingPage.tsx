@@ -43,7 +43,8 @@ function OperationCard({ drawingId, op, onEdit, onDelete, onAddProgram }: { draw
   const access = useAccess()
   const [expanded, setExpanded] = useState(false)
   const panelId = useId()
-  const facts = [op.machineName, op.fixture && `装夹 ${op.fixture}`].filter(Boolean)
+  const machine = [op.machineCode, op.machineName].filter(Boolean).join(' · ')
+  const facts = [machine && `机台：${machine}`, op.fixture && `装夹 ${op.fixture}`].filter(Boolean)
   return (
     <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
       <h2 aria-label={`${op.opNo}# ${op.opName}`} className="text-lg font-bold">
@@ -162,7 +163,7 @@ export default function DrawingPage() {
         onDeleted={() => setDeleting(null)}
         onClose={() => setDeleting(null)}
       />}
-      {sheet?.kind === 'op'  && <OperationSheet drawingId={id} operation={sheet.op} suggestedNo={nextNo} onClose={() => setSheet(null)} />}
+      {sheet?.kind === 'op'  && <OperationSheet drawingId={id} ownerUserId={query.data?.ownerUserId} operation={sheet.op} suggestedNo={nextNo} onClose={() => setSheet(null)} />}
       {sheet?.kind === 'program' && <ProgramSheet drawingId={id} operationId={sheet.operationId} onClose={() => setSheet(null)} />}
       {sheet?.kind === 'drawing' && query.data && <DrawingEditSheet key={id} drawing={query.data} onClose={() => setSheet(null)} onSaved={() => { setSheet(null); setSaved(true) }} />}
     </main>

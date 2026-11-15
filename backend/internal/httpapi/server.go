@@ -103,6 +103,8 @@ func New(o Options) http.Handler {
 			p.Get("/drawings", s.handleListDrawings)
 			p.With(s.requirePermission(domain.PermissionCreate)).Post("/drawings", s.handleCreateDrawing)
 			p.Get("/drawings/{id}/detail", s.handleDrawingDetail)
+			p.Get("/drawings/{id}/machines", s.handleDrawingMachines)
+			p.With(s.requirePermission(domain.PermissionCreate)).Post("/drawings/{id}/machines", s.handleCreateDrawingMachine)
 			p.With(s.requirePermission(domain.PermissionEdit)).Put("/drawings/{id}", s.handleUpdateDrawing)
 			p.With(s.requirePermission(domain.PermissionDelete)).Delete("/drawings/{id}", s.handleDeleteDrawing)
 			p.With(s.requirePermission(domain.PermissionCreate)).Post("/drawings/{id}/operations", s.handleCreateOperation)

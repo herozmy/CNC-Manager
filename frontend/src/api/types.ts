@@ -64,6 +64,7 @@ export interface Operation {
   opNo: number
   opName: string
   machineId: number | null
+  machineCode?: string
   machineName: string
   fixture: string
   centeringMethod: string
@@ -221,3 +222,9 @@ export interface AuditEntry {
   roleId: number | null; roleName: string; ownerUserId: number | null; ownerName: string; result: string; createdAt: string
 }
 export interface AuditFilter { userId?: number; action?: string; result?: string; entityType?: string; from?: string; to?: string; page: number; size: number }
+
+export interface MachineOption {
+  id: number
+  code: string
+  name: string
+}

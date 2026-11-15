@@ -1,6 +1,6 @@
 import { http } from './client'
 import type {
-  UserInput, UserUpdate, AuditEntry, AuditFilter, BackupPreview, BackupRecovery, ToolTable, ProgramToolInput, ParseResult, ContentInput, VersionContent, VersionSaveResult, VersionDiff, Drawing, DrawingDetail, DrawingInput, Meta, Operation, OperationInput, Page, Program, ProgramInput, UploadResult, User, Version,
+  MachineOption, UserInput, UserUpdate, AuditEntry, AuditFilter, BackupPreview, BackupRecovery, ToolTable, ProgramToolInput, ParseResult, ContentInput, VersionContent, VersionSaveResult, VersionDiff, Drawing, DrawingDetail, DrawingInput, Meta, Operation, OperationInput, Page, Program, ProgramInput, UploadResult, User, Version,
 } from './types'
 
 export const api = {
@@ -47,6 +47,9 @@ export const api = {
   deleteDrawing: (id: number) => http.del<void>(`/drawings/${id}`),
   createDrawing: (input: DrawingInput) => http.post<Drawing>('/drawings', input),
   updateDrawing: (id: number, input: DrawingInput) => http.put<Drawing>(`/drawings/${id}`, input),
+
+  drawingMachines: (id: number) => http.get<MachineOption[]>(`/drawings/${id}/machines`),
+  createDrawingMachine: (id: number, input: { code: string; name: string }) => http.post<MachineOption>(`/drawings/${id}/machines`, input),
 
   createOperation: (drawingId: number, input: OperationInput) => http.post<Operation>(`/drawings/${drawingId}/operations`, input),
   updateOperation: (id: number, input: OperationInput) => http.put<Operation>(`/operations/${id}`, input),
