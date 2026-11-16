@@ -12,11 +12,12 @@ import DrawingEditSheet from '../components/DrawingEditSheet'
 import OperationSheet from '../components/OperationSheet'
 import ProgramSheet from '../components/ProgramSheet'
 import { Button } from '../components/ui/Button'
+import { Breadcrumbs } from '../components/ui/Breadcrumbs'
 import { EmptyState, ErrorState, Spinner } from '../components/ui/State'
 
 export function VersionBadge({ no }: { no: number | null }) {
   return (
-    <span className={no ? 'shrink-0 rounded-full bg-warning-soft px-3 py-1 text-sm font-semibold text-warning' : 'shrink-0 rounded-full bg-hover px-3 py-1 text-sm text-muted'}>
+    <span className={no ? 'shrink-0 rounded-md bg-success-soft px-2.5 py-1 font-mono text-xs font-semibold text-success' : 'shrink-0 rounded-md bg-inset px-2.5 py-1 text-xs text-muted'}>
       {no ? `V${no}` : '无版本'}
     </span>
   )
@@ -25,9 +26,9 @@ export function VersionBadge({ no }: { no: number | null }) {
 function ProgramRow({ drawingId, p }: { drawingId: number; p: Program }) {
   return (
     <li>
-      <Link to={`/drawings/${drawingId}/programs/${p.id}`} className="flex min-h-14 items-center justify-between gap-3 rounded-md bg-canvas px-3 py-2 active:bg-hover">
+      <Link to={`/drawings/${drawingId}/programs/${p.id}`} className="flex min-h-14 items-center justify-between gap-3 rounded-md border border-line bg-canvas px-3 py-3 hover:border-accent active:bg-hover">
         <div className="min-w-0">
-          <p className="font-semibold">{p.programNo}</p>
+          <p className="font-mono text-sm font-semibold text-accent">{p.programNo}</p>
           <p className="truncate text-sm text-muted">程序机台：{[p.machineCode, p.machineName].filter(Boolean).join(' · ') || '未关联机台'}</p>
           {(p.programName || p.controller) && <p className="truncate text-sm text-muted">{[p.programName, p.controller].filter(Boolean).join(' · ')}</p>}
         </div>
@@ -49,9 +50,9 @@ function OperationCard({ drawingId, op, onEdit, onDelete, onAddProgram }: { draw
   return (
     <section className="rounded-lg border border-line bg-surface shadow-sm">
       <div className="flex items-center gap-1 px-2">
-        <h2 aria-label={`${op.opNo}# ${op.opName}`} className="min-w-0 flex-1 text-lg font-bold">
+        <h2 aria-label={`${op.opNo}# ${op.opName}`} className="min-w-0 flex-1 text-base font-semibold">
           <button type="button" aria-label={`${expanded ? '收起' : '展开'}工序 ${op.opNo}`} aria-expanded={expanded} aria-controls={panelId} onClick={() => setExpanded(!expanded)} className="flex min-h-16 w-full items-center gap-2 rounded-md px-2 py-3 text-left hover:bg-canvas focus-visible:outline-2 focus-visible:outline-accent">
-            <span className="min-w-0 flex-1 truncate" title={`${op.opNo}# ${op.opName}`}>{op.opNo}# {op.opName}</span>
+            <span className="min-w-0 flex-1 truncate text-accent" title={`${op.opNo}# ${op.opName}`}>{op.opNo}# {op.opName}</span>
             <span className="shrink-0 text-xs font-normal text-muted sm:text-sm">{op.programs.length} 个程序</span>
             <ChevronDown aria-hidden className={`size-5 shrink-0 text-muted ${expanded ? 'rotate-180' : ''}`} />
           </button>
@@ -79,7 +80,7 @@ function OperationCard({ drawingId, op, onEdit, onDelete, onAddProgram }: { draw
             ))}
           </dl>
           {op.programs.length > 0 ? (
-            <ul className="mt-3 space-y-2">
+            <ul className="mt-4 grid grid-cols-1 gap-2 md:grid-cols-2">
               {op.programs.map((p) => (
                 <ProgramRow key={p.id} drawingId={drawingId} p={p} />
               ))}
@@ -118,20 +119,21 @@ export default function DrawingPage() {
   if (!access.can('read')) return <main className="p-6"><p>账号不可用，请联系管理员。</p><Link to="/" className="mt-4 inline-block">返回总览</Link></main>
 
   return (
-    <main className="mx-auto max-w-3xl px-4 pt-4 pb-8">
+    <main className="page-width min-w-0 px-4 pt-4 pb-8 md:px-6">
       <Link to="/" aria-label="返回总览" className="mb-2 inline-flex size-12 items-center justify-center rounded-md hover:bg-hover">
         <ArrowLeft className="size-6" aria-hidden />
       </Link>
+      {query.data && <Breadcrumbs items={[{ label: '总览', to: '/' }, { label: query.data.drawingNo, mono: true }]} />}
       {valid && query.isPending && <Spinner />}
       {(notFound || !valid) && <EmptyState title="图纸不存在或已被删除" />}
       {query.isError && !notFound && <ErrorState message="图纸加载失败" onRetry={() => query.refetch()} />}
       {query.data && (
         <>
-          <header className="mb-4">
+          <header className="panel mb-5 p-4 md:p-5">
             <p className="mb-2 text-sm text-muted">所属账号：{query.data.ownerName || '待分配'}</p>
             {access.admin && query.data.ownerUserId === 0 && <form className="mb-4 space-y-3 rounded-md bg-warning-soft p-3" onSubmit={async (e) => { e.preventDefault(); if (!assignOwner || assignBusy) return; setAssignBusy(true); setAssignError(''); try { await api.assignDrawingOwner(id, assignOwner); await Promise.all([qc.invalidateQueries({ queryKey: ['drawing', id] }), qc.invalidateQueries({ queryKey: ['drawings'] }), qc.invalidateQueries({ queryKey: ['admin-users'] })]) } catch (err) { setAssignError(err instanceof Error ? err.message : '分配失败') } finally { setAssignBusy(false) } }}><p>此图纸仅管理员可见。分配后，其工序、程序和版本将由目标账号管理。</p><OwnerSelect required value={assignOwner} onChange={setAssignOwner} /><Button type="submit" loading={assignBusy}>确认分配图纸</Button>{assignError && <p role="alert" className="text-danger">{assignError}</p>}</form>}
             <div className="flex items-start justify-between gap-3">
-              <h1 className="min-w-0 break-words text-2xl font-bold">{query.data.drawingNo}</h1>
+              <h1 className="min-w-0 break-words font-mono text-xl font-semibold text-accent">{query.data.drawingNo}</h1>
               {access.can('edit') && <Button variant="secondary" className="shrink-0 px-3" onClick={() => { setSaved(false); setSheet({ kind: 'drawing' }) }}>
                 <Pencil className="size-4" aria-hidden />编辑图纸
               </Button>}

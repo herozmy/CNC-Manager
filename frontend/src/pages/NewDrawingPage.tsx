@@ -53,14 +53,14 @@ export default function NewDrawingPage() {
   if (!access.can('create')) return <main className="p-6">没有新建权限，请联系管理员。</main>
 
   return (
-    <main className="mx-auto max-w-xl px-4 pt-4 pb-8">
+    <main className="mx-auto max-w-3xl px-4 pt-4 pb-8">
       <header className="mb-4 flex items-center gap-2">
         <Link to="/" aria-label="返回总览" className="flex size-12 items-center justify-center rounded-md hover:bg-hover">
           <ArrowLeft className="size-6" aria-hidden />
         </Link>
-        <h1 className="text-2xl font-bold">新建图纸</h1>
+        <h1 className="text-xl font-semibold">新建图纸</h1>
       </header>
-      <form onSubmit={submit} className="space-y-4" noValidate>
+      <form onSubmit={submit} className="panel space-y-4 p-4 sm:p-6" noValidate>
         <fieldset disabled={busy} className="space-y-4">
           {access.admin && <OwnerSelect value={form.ownerUserId ?? ''} onChange={(ownerUserId) => setForm({ ...form, ownerUserId: ownerUserId || undefined })} required />}
           <DrawingFields value={form} onChange={setForm} noError={noError} priceError={priceError} />

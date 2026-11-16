@@ -46,14 +46,14 @@ export default function MachinePage() {
   if (!access.can('read')) return <main className="p-6">账号不可用，请联系管理员。</main>
   const missing = !valid || (query.error instanceof ApiError && query.error.status === 404)
   const machine = query.data
-  return <main className="mx-auto max-w-3xl space-y-4 px-4 pt-4 pb-8">
+  return <main className="mx-auto max-w-5xl space-y-4 px-4 pt-4 pb-8">
     <Link to="/machines" className="inline-flex min-h-12 items-center text-sm text-muted underline">返回机台管理</Link>
     {valid && query.isPending && <Spinner />}
     {missing && <EmptyState title="机台不存在或无权访问" />}
     {query.isError && !missing && <ErrorState message="机台加载失败" onRetry={() => query.refetch()} />}
     {machine && !missing && <>
       <header className="space-y-3 rounded-lg border border-line bg-surface p-4">
-        <div className="flex items-start justify-between gap-3"><h1 className="min-w-0 break-words text-2xl font-bold">{machine.code}</h1><span className="shrink-0 rounded-full bg-inset px-3 py-1 text-sm">{machine.enabled ? '启用' : '已停用'}</span></div>
+        <div className="flex items-start justify-between gap-3"><h1 className="min-w-0 break-words text-xl font-semibold">{machine.code}</h1><span className="shrink-0 rounded-full bg-inset px-3 py-1 text-sm">{machine.enabled ? '启用' : '已停用'}</span></div>
         {machine.name && <p className="break-words text-lg">{machine.name}</p>}
         <p className="text-sm text-muted">所属账号：{machine.ownerName}</p>
         {machine.controller && <p className="text-sm">控制系统：{machine.controller}</p>}
