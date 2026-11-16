@@ -129,8 +129,8 @@ function ToolEditor({ version, initial }: Props & { initial: ToolTable }) {
       </div>}
       {rows.length === 0 && <p className="py-8 text-center text-muted">暂无刀具，可从 NC 识别或手动添加。</p>}
       <fieldset disabled={!access.can('edit') || busy || !!confirm} className="min-w-0 space-y-3">
-        {rows.map((row, index) => <section key={row.key} aria-label={`第 ${index + 1} 把刀具`} className="min-w-0 space-y-3 rounded-lg border border-line bg-canvas p-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
+        {rows.map((row, index) => <section key={row.key} aria-label={`第 ${index + 1} 把刀具`} className="min-w-0 space-y-3 rounded-lg border border-line bg-canvas p-3 xl:grid xl:grid-cols-[170px_minmax(0,1fr)] xl:items-start xl:gap-4 xl:space-y-0">
+          <div className="flex flex-wrap items-center justify-between gap-2 xl:flex-col xl:items-start">
             <h3 className="font-bold">{index + 1}. {row.toolNo || '新刀具'}</h3>
             <div className="flex gap-1">
               <Button variant="ghost" className="px-3" aria-label={`上移第 ${index + 1} 把刀具`} disabled={index === 0} onClick={() => move(index, -1)}>↑</Button>

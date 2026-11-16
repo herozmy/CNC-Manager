@@ -12,7 +12,7 @@ function Row({ label, no, text, same, added }: { label: string; no: string | num
   </tr>
 }
 
-export default function VersionDiffSheet({ programId, versionId, onClose }: { programId: number; versionId: number; onClose: () => void }) {
+export function VersionDiffPanel({ programId, versionId }: { programId: number; versionId: number }) {
   const versions = useQuery({ queryKey: ['versions', programId], queryFn: () => api.listVersions(programId), retry: false })
   const [leftId, setLeftId] = useState<number | null>(null)
   const [rightId, setRightId] = useState(versionId)
@@ -23,8 +23,7 @@ export default function VersionDiffSheet({ programId, versionId, onClose }: { pr
   const enabled = !!left && !!right && left.id !== right.id
   const diff = useQuery({ queryKey: ['version-diff', left?.id, rightId, page, changesOnly], queryFn: () => api.versionDiff(left!.id, rightId, page * 200, changesOnly), enabled, retry: false })
   const selectClass = 'h-12 w-full min-w-0 rounded-md border border-line-strong bg-surface px-3'
-  return <Sheet open wide title="版本对比" onClose={onClose}>
-    <div className="space-y-4">
+  return <div className="space-y-4">
       {versions.isPending && <Spinner />}
       {versions.isError && <ErrorState message="版本列表加载失败" onRetry={() => void versions.refetch()} />}
       {versions.data && <>
@@ -68,5 +67,8 @@ export default function VersionDiffSheet({ programId, versionId, onClose }: { pr
         </>}
       </>}
     </div>
-  </Sheet>
+}
+
+export default function VersionDiffSheet({ programId, versionId, onClose }: { programId: number; versionId: number; onClose: () => void }) {
+  return <Sheet open wide title="版本对比" onClose={onClose}><VersionDiffPanel programId={programId} versionId={versionId} /></Sheet>
 }

@@ -120,10 +120,12 @@ export default function DrawingPage() {
 
   return (
     <main className="page-width min-w-0 px-4 pt-4 pb-8 md:px-6">
-      <Link to="/" aria-label="返回总览" className="mb-2 inline-flex size-12 items-center justify-center rounded-md hover:bg-hover">
+      <div className="mb-3 flex min-w-0 items-center gap-1">
+      <Link to="/" aria-label="返回总览" className="inline-flex size-12 shrink-0 items-center justify-center rounded-md hover:bg-hover">
         <ArrowLeft className="size-6" aria-hidden />
       </Link>
-      {query.data && <Breadcrumbs items={[{ label: '总览', to: '/' }, { label: query.data.drawingNo, mono: true }]} />}
+      {query.data && <Breadcrumbs className="mb-0 flex-1" items={[{ label: '总览', to: '/' }, { label: query.data.drawingNo, mono: true }]} />}
+      </div>
       {valid && query.isPending && <Spinner />}
       {(notFound || !valid) && <EmptyState title="图纸不存在或已被删除" />}
       {query.isError && !notFound && <ErrorState message="图纸加载失败" onRetry={() => query.refetch()} />}

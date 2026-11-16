@@ -10,12 +10,13 @@ import { Button } from './ui/Button'
 export interface NCCodeEditorHandle { getValue: () => string }
 export interface NCCodeEditorProps {
   initialValue: string
+  label?: string
   readOnly: boolean
   onDirtyChange: (dirty: boolean) => void
   ref?: Ref<NCCodeEditorHandle>
 }
 
-export default function NCCodeEditor({ initialValue, readOnly, onDirtyChange, ref }: NCCodeEditorProps) {
+export default function NCCodeEditor({ initialValue, label = 'NC 程序内容', readOnly, onDirtyChange, ref }: NCCodeEditorProps) {
   const host = useRef<HTMLDivElement>(null)
   const view = useRef<EditorView | null>(null)
   const access = useRef(new Compartment())
@@ -32,7 +33,7 @@ export default function NCCodeEditor({ initialValue, readOnly, onDirtyChange, re
       ncLanguage, ncHighlight, search({ top: true }),
       keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap]),
       access.current.of([EditorState.readOnly.of(true), EditorView.editable.of(false)]),
-      EditorView.contentAttributes.of({ 'aria-label': 'NC 程序内容', 'aria-multiline': 'true', spellcheck: 'false', autocapitalize: 'off', autocorrect: 'off', tabindex: '0' }),
+      EditorView.contentAttributes.of({ 'aria-label': label, 'aria-multiline': 'true', spellcheck: 'false', autocapitalize: 'off', autocorrect: 'off', tabindex: '0' }),
       EditorState.phrases.of({ 'Find': '查找', 'Replace': '替换', 'next': '下一个', 'previous': '上一个', 'all': '全部', 'match case': '区分大小写', 'regexp': '正则表达式', 'by word': '全词匹配', 'replace': '替换', 'replace all': '全部替换', 'close': '关闭查找' }),
       EditorView.theme({
         '&': { fontSize: '14px', color: 'var(--ui-ink)', backgroundColor: 'var(--ui-canvas)', borderRadius: '0.375rem', border: '1px solid var(--ui-line-strong)', overflow: 'hidden' },
@@ -64,7 +65,7 @@ export default function NCCodeEditor({ initialValue, readOnly, onDirtyChange, re
     view.current = editor
     setLineCount(state.doc.lines)
     return () => { editor.destroy(); view.current = null }
-  }, [initialValue, onDirtyChange])
+  }, [initialValue, label, onDirtyChange])
 
   useEffect(() => {
     view.current?.dispatch({ effects: access.current.reconfigure([

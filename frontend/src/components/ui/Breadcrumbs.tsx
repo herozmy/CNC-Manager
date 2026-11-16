@@ -3,8 +3,8 @@ import { Link } from 'react-router-dom'
 
 export interface Crumb { label: string; to?: string; mono?: boolean }
 
-export function Breadcrumbs({ items }: { items: Crumb[] }) {
-  return <nav aria-label="页面路径" className="mb-4 min-w-0 text-sm text-muted">
+export function Breadcrumbs({ items, className = 'mb-4' }: { items: Crumb[]; className?: string }) {
+  return <nav aria-label="页面路径" className={`min-w-0 text-sm text-muted ${className}`}>
     <ol className="flex min-w-0 flex-wrap items-center gap-x-1 gap-y-0.5">
       {items.map((item, index) => <li key={`${index}-${item.label}`} className="flex min-w-0 items-center gap-1">
         {index > 0 && <ChevronRight className="size-3.5 shrink-0" aria-hidden />}
