@@ -25,6 +25,28 @@ function server() {
   return calls
 }
 
+test('未设置显示名称时回退用户名，取消名称编辑不提交也不改变账号信息', async () => {
+  const calls = mockApi(r => {
+    if (r.path === '/auth/status') return { body: { setupRequired: false } }
+    if (r.path === '/auth/me') return { body: { ...user, displayName: '' } }
+    if (r.path === '/meta') return { body: { version: 'local-test' } }
+  })
+  renderApp(<App />, '/me')
+  const u = userEvent.setup()
+  const account = await screen.findByRole('region', { name: '当前账号' })
+  expect(account).toHaveTextContent('admin · 管理员')
+  await u.click(screen.getByRole('button', { name: '修改名称' }))
+  expect(screen.getByLabelText('显示名称')).toHaveValue('admin')
+  await u.clear(screen.getByLabelText('显示名称'))
+  await u.type(screen.getByLabelText('显示名称'), '未保存的名称')
+  await u.click(screen.getByRole('button', { name: '取消' }))
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  expect(account).toHaveTextContent('admin')
+  expect(account).not.toHaveTextContent('未保存的名称')
+  expect(screen.queryByText('名称已保存')).not.toBeInTheDocument()
+  expect(calls.filter(r => r.method === 'PUT')).toHaveLength(0)
+})
+
 test('名称回填、非空校验、失败保留后重试，保存只更新显示名称并保留草稿', async () => {
   const calls = server()
   const { client } = renderApp(<App />, '/me')
