@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import type { ReactNode } from 'react'
-import { Archive, ChevronRight, Factory, UserRound, Users } from 'lucide-react'
+import { Archive, ChevronRight, Factory, UserRound } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { api } from '../api'
 import { useAccess } from '../auth/permissions'
@@ -42,12 +42,11 @@ export default function MePage() {
         </div>
         {meta.data && <p className="rounded-md border border-line bg-surface px-3 py-2 text-xs text-muted">版本 {meta.data.version}</p>}
       </header>
-      <div className={`grid min-w-0 gap-4 ${access.admin ? 'sm:grid-cols-2' : ''}`}>
+      <div className="grid min-w-0 gap-4">
         <ManagementCard to="/me/account" label="当前账号" title="当前账号" icon={UserRound} description={<>
           <span className="block font-medium text-body">{user.displayName || user.username}</span>
           <span className="block">{user.username} · {user.role === 'admin' ? '管理员' : '普通账号'}</span>
         </>} />
-        {access.admin && <ManagementCard to="/admin" label="账号管理" title="账号管理" description="管理账号，查看操作审计" icon={Users} />}
       </div>
       <section aria-labelledby="management-heading" className="min-w-0 space-y-3">
         <h2 id="management-heading" className="text-sm font-semibold text-body">管理入口</h2>

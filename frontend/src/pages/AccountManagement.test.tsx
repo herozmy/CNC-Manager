@@ -1,4 +1,4 @@
-import { act, screen, waitFor } from '@testing-library/react'
+import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { Route, Routes } from 'react-router-dom'
 import { afterEach, expect, test, vi } from 'vitest'
@@ -29,12 +29,16 @@ function navigationServer(currentUser: User = user, failUsers = false) {
   })
 }
 
-test('我的只显示账号管理独立卡片，点击后加载账号，操作日志在管理页进入并可逐级返回', async () => {
+test('账号管理移到顶部头像，点击后加载账号，操作日志在管理页进入并可逐级返回', async () => {
   const calls = navigationServer()
   renderApp(<App />, '/me')
   const u = userEvent.setup()
   const card = await screen.findByRole('link', { name: '账号管理' })
   expect(card).toHaveAttribute('href', '/admin')
+  expect(within(screen.getByRole('banner', { name: '顶部工具栏' })).getByRole('link', { name: '账号管理' })).toBe(card)
+  expect(within(screen.getByRole('main')).queryByRole('link', { name: '账号管理' })).not.toBeInTheDocument()
+  expect(screen.queryByText('数控程序台账')).not.toBeInTheDocument()
+  expect(screen.queryByText('图纸 · 工序 · 程序 · 版本')).not.toBeInTheDocument()
   expect(screen.queryByRole('link', { name: '操作审计' })).not.toBeInTheDocument()
   expect(screen.queryByRole('button', { name: '新增账号' })).not.toBeInTheDocument()
   expect(calls.filter(r => r.path.startsWith('/admin'))).toHaveLength(0)
@@ -77,6 +81,10 @@ test.each([member, { ...user, enabled: false }])('$username启用状态$enabled�
   await screen.findByText('版本 local-test')
   expect(screen.queryByRole('link', { name: '账号管理' })).not.toBeInTheDocument()
   expect(screen.queryByRole('link', { name: '操作审计' })).not.toBeInTheDocument()
+  const avatar = within(screen.getByRole('banner', { name: '顶部工具栏' })).getByRole('link', { name: '个人账号设置' })
+  expect(avatar).toHaveAttribute('href', '/me/account')
+  await userEvent.setup().click(avatar)
+  expect(await screen.findByRole('heading', { name: '当前账号', level: 1 })).toBeVisible()
   view.unmount()
   renderApp(<App />, '/admin')
   expect(await screen.findByText('仅系统管理员可访问账号管理。')).toBeVisible()
