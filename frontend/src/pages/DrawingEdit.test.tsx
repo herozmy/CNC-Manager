@@ -173,11 +173,10 @@ test('工序号重复时标在输入框上，弹层保持打开', async () => {
   expect(screen.getByRole('dialog')).toBeInTheDocument()
 })
 
-test('编辑工序时原样带回机台，避免被后端清空', async () => {
+test('收起工序可直接编辑且不展开，原样带回机台和坐标', async () => {
   const calls = server([operation({ machineId: 5, machineName: 'CK6150', fixture: '三爪', xCoordinate: -10.5, yCoordinate: 20.125, zHeight: -25.5 })])
   renderApp(view(), '/drawings/1')
   const u = userEvent.setup()
-  await u.click(await screen.findByRole('button', { name: '展开工序 10' }))
   await u.click(await screen.findByRole('button', { name: '编辑工序 10' }))
   const dialog = screen.getByRole('dialog', { name: '编辑工序' })
   expect(within(dialog).getByLabelText('工序名称')).toHaveValue('粗车')
@@ -190,6 +189,8 @@ test('编辑工序时原样带回机台，避免被后端清空', async () => {
   await u.type(within(dialog).getByLabelText('工序名称'), '精车')
   await u.click(within(dialog).getByRole('button', { name: '保存' }))
   await waitFor(() => expect(calls.some((c) => c.method === 'PUT')).toBe(true))
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  expect(screen.getByRole('button', { name: '展开工序 10' })).toHaveAttribute('aria-expanded', 'false')
   expect(calls.find((c) => c.method === 'PUT')).toMatchObject({ path: '/operations/1', body: { opNo: 10, opName: '精车', machineId: 5, fixture: '三爪', xCoordinate: -10.5, yCoordinate: 20.125, zHeight: -25.5 } })
 })
 

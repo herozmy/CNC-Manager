@@ -48,23 +48,25 @@ function OperationCard({ drawingId, op, onEdit, onDelete, onAddProgram }: { draw
   const facts = [machine && `机台：${machine}`, op.fixture && `装夹 ${op.fixture}`].filter(Boolean)
   return (
     <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <h2 aria-label={`${op.opNo}# ${op.opName}`} className="text-lg font-bold">
-        <button type="button" aria-label={`${expanded ? '收起' : '展开'}工序 ${op.opNo}`} aria-expanded={expanded} aria-controls={panelId} onClick={() => setExpanded(!expanded)} className="flex min-h-16 w-full items-center gap-3 rounded-2xl px-4 py-3 text-left hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-amber-500">
-          <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">{op.opNo}# {op.opName}</span>
-          <span className="shrink-0 text-sm font-normal text-slate-500">{op.programs.length} 个程序</span>
-          <ChevronDown aria-hidden className={`size-5 shrink-0 text-slate-500 ${expanded ? 'rotate-180' : ''}`} />
-        </button>
-      </h2>
+      <div className="flex items-center gap-1 px-2">
+        <h2 aria-label={`${op.opNo}# ${op.opName}`} className="min-w-0 flex-1 text-lg font-bold">
+          <button type="button" aria-label={`${expanded ? '收起' : '展开'}工序 ${op.opNo}`} aria-expanded={expanded} aria-controls={panelId} onClick={() => setExpanded(!expanded)} className="flex min-h-16 w-full items-center gap-2 rounded-xl px-2 py-3 text-left hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-amber-500">
+            <span className="min-w-0 flex-1 truncate" title={`${op.opNo}# ${op.opName}`}>{op.opNo}# {op.opName}</span>
+            <span className="shrink-0 text-xs font-normal text-slate-500 sm:text-sm">{op.programs.length} 个程序</span>
+            <ChevronDown aria-hidden className={`size-5 shrink-0 text-slate-500 ${expanded ? 'rotate-180' : ''}`} />
+          </button>
+        </h2>
+        <div className="flex shrink-0 items-center gap-1">
+          {access.can('edit') && <Button variant="ghost" onClick={onEdit} aria-label={`编辑工序 ${op.opNo}`} title="编辑工序" className="min-w-12 px-3">
+            <Pencil className="size-4" aria-hidden /><span className="hidden sm:inline">编辑</span>
+          </Button>}
+          {access.can('delete') && <Button variant="ghost" onClick={onDelete} aria-label={`删除工序 ${op.opNo}`} title="删除工序" className="min-w-12 px-3 text-red-600">
+            <Trash2 className="size-4" aria-hidden /><span className="hidden sm:inline">删除</span>
+          </Button>}
+        </div>
+      </div>
       <div id={panelId} role="region" aria-label={`工序 ${op.opNo} 详情`} hidden={!expanded}>
         {expanded && <div className="border-t border-slate-100 p-4">
-          <div className="flex flex-wrap justify-end gap-1">
-            {access.can('edit') && <Button variant="ghost" onClick={onEdit} aria-label={`编辑工序 ${op.opNo}`} className="px-3">
-              <Pencil className="size-4" aria-hidden />编辑
-            </Button>}
-            {access.can('delete') && <Button variant="ghost" onClick={onDelete} aria-label={`删除工序 ${op.opNo}`} className="px-3 text-red-600">
-              <Trash2 className="size-4" aria-hidden />删除
-            </Button>}
-          </div>
           {facts.length > 0 && <p className="text-sm text-slate-600 [overflow-wrap:anywhere]">{facts.join(' · ')}</p>}
           {op.centeringMethod && <p className="mt-1 text-sm text-slate-600 [overflow-wrap:anywhere]">分中方式：{op.centeringMethod}</p>}
           {op.remark && <p className="mt-1 text-sm text-slate-500 [overflow-wrap:anywhere]">{op.remark}</p>}

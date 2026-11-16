@@ -14,7 +14,7 @@ const view = () => (
   </Routes>
 )
 
-test('工序默认收起，按需独立展开详情和操作，可再次收起', async () => {
+test('工序默认收起且可编辑删除，按需独立展开详情，可再次收起', async () => {
   mockApi(() => ({ body: detail([op({ machineId: 5, machineName: 'CK6150', centeringMethod: '四面分中' }), op({ id: 2, opNo: 20, opName: '精车', zHeight: 0, programs: [program({ id: 2, programNo: 'O2', currentVersionNo: null })] })], { remark: '注意变形' }) }))
   renderApp(view(), '/drawings/1')
   const u = userEvent.setup()
@@ -26,7 +26,8 @@ test('工序默认收起，按需独立展开详情和操作，可再次收起',
   expect(screen.queryByRole('region', { name: '工序 10 详情' })).not.toBeInTheDocument()
   expect(screen.queryByText('X（mm）')).not.toBeInTheDocument()
   expect(screen.queryByText('分中方式：四面分中')).not.toBeInTheDocument()
-  expect(screen.queryByRole('button', { name: '编辑工序 10' })).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: '编辑工序 10' })).toBeVisible()
+  expect(screen.getByRole('button', { name: '删除工序 10' })).toBeVisible()
   expect(screen.queryByRole('link', { name: /O1234/ })).not.toBeInTheDocument()
   await u.click(screen.getByRole('button', { name: '展开工序 10' }))
   expect(screen.getByRole('button', { name: '收起工序 10' })).toHaveAttribute('aria-expanded', 'true')
