@@ -46,6 +46,9 @@ export interface Page<T> {
 }
 
 export interface Program {
+  machineId: number | null
+  machineCode: string
+  machineName: string
   revision: number
   id: number
   operationId: number
@@ -97,6 +100,7 @@ export interface OperationInput {
 }
 
 export interface ProgramInput {
+  machineId?: number | null
   programNo: string
   programName: string
   controller: string

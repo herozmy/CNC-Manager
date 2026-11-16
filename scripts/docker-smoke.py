@@ -34,9 +34,9 @@ def main():
     checks = []
     base = ""
 
-    def request(path, body=None, expected=200, content_type="application/json"):
+    def request(path, body=None, expected=200, content_type="application/json", method=None):
         payload = json.dumps(body).encode() if isinstance(body, dict) else body
-        req = urllib.request.Request(base + path, data=payload,
+        req = urllib.request.Request(base + path, data=payload, method=method,
                                      headers={"Origin": base, "Content-Type": content_type})
         try:
             response = client.open(req, timeout=10)
@@ -100,6 +100,38 @@ def main():
         version = json.loads(request(f'/api/programs/{program["id"]}/versions', body, 201,
                                      "multipart/form-data; boundary=" + boundary))
         assert request(f'/api/versions/{version["id"]}/download') == content
+        machine_a = json.loads(request('/api/machines', {'code': 'CNC-A', 'name': 'Machine A'}, 201))
+        machine_b = json.loads(request('/api/machines', {'code': 'CNC-B', 'name': 'Machine B'}, 201))
+        current = json.loads(request(f'/api/programs/{program["id"]}'))
+        current = json.loads(request(f'/api/programs/{program["id"]}', {
+            'programNo': 'O9001', 'expectedRevision': current['revision'], 'machineId': machine_a['id']}, method='PUT'))
+        sibling = json.loads(request(f'/api/operations/{operation["id"]}/programs', {
+            'programNo': 'O9002', 'machineId': machine_b['id']}, 201))
+        assert current['machineId'] == machine_a['id'] and sibling['machineId'] == machine_b['id']
+        linked = json.loads(request(f'/api/machines/{machine_a["id"]}/drawings?q=O9001'))
+        assert linked['total'] == 1 and linked['items'][0]['programCount'] == 1
+        assert json.loads(request(f'/api/machines/{machine_a["id"]}/drawings?q=O9002'))['total'] == 0
+        request(f'/api/machines/{machine_a["id"]}/enabled', {'enabled': False}, method='PUT')
+        request(f'/api/operations/{operation["id"]}/programs', {'programNo': 'DISABLED', 'machineId': machine_a['id']}, 400)
+        current = json.loads(request(f'/api/programs/{program["id"]}', {
+            'programNo': 'O9001', 'expectedRevision': current['revision'], 'machineId': machine_a['id']}, method='PUT'))
+        versions_before = json.loads(request(f'/api/programs/{program["id"]}/versions'))
+        tools_before = json.loads(request(f'/api/versions/{version["id"]}/tools'))
+        request(f'/api/machines/{machine_a["id"]}', expected=204, method='DELETE')
+        after_delete = json.loads(request(f'/api/programs/{program["id"]}'))
+        assert after_delete['machineId'] is None and after_delete['revision'] == current['revision'] + 1
+        assert json.loads(request(f'/api/programs/{sibling["id"]}'))['machineId'] == machine_b['id']
+        assert json.loads(request(f'/api/programs/{program["id"]}/versions')) == versions_before
+        assert json.loads(request(f'/api/versions/{version["id"]}/tools')) == tools_before
+        assert request(f'/api/versions/{version["id"]}/download') == content
+        request(f'/api/programs/{program["id"]}', {
+            'programNo': 'STALE', 'expectedRevision': current['revision'], 'machineId': machine_a['id']}, 409, method='PUT')
+        new_machine = json.loads(request('/api/machines', {'code': 'CNC-NEW'}, 201))
+        assert new_machine['id'] > machine_b['id']
+        request(f'/api/operations/{operation["id"]}/programs', {'programNo': 'DELETED', 'machineId': machine_a['id']}, 400)
+        checks.extend(['machine-create', 'independent-program-machines', 'machine-related-program-search',
+                       'disabled-machine-preserves-existing', 'machine-delete-preserves-history',
+                       'deleted-machine-stale-form-conflict', 'deleted-machine-id-not-reused'])
         backup = json.loads(request("/api/backup/create", {}, 201))
         archive = request("/api/backup/recoveries/" + backup["name"])
         with zipfile.ZipFile(io.BytesIO(archive)) as bundle:
@@ -124,6 +156,7 @@ def main():
         assert request(f'/api/versions/{version["id"]}/download') == content
         assert docker("exec", name, "sha256sum", "/data/nc.key").split()[0] == key_hash
         assert request("/api/backup/recoveries/" + backup["name"]) == archive
+        assert json.loads(request(f'/api/programs/{sibling["id"]}'))['machineId'] == machine_b['id']
         checks.extend(["graceful-stop", "container-recreation", "account-session-persistence",
                        "business-data-persistence", "nc-key-persistence", "backup-persistence"])
         invalid = subprocess.run(["docker", "run", "--rm", "-e", "CNC_MAX_UPLOAD_MB=0", args.image],

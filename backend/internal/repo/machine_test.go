@@ -83,6 +83,7 @@ func TestMachineLifecyclePreservesHistoryAndBackup(t *testing.T) {
 	afterP, _ := r.GetProgram(ctx, p.ID)
 	afterV, _ := r.ListVersions(ctx, p.ID)
 	afterTools, _ := r.GetVersionTools(ctx, v.ID)
+	beforeP.MachineCode, beforeP.MachineName = afterP.MachineCode, afterP.MachineName
 	if !reflect.DeepEqual(beforeP, afterP) || !reflect.DeepEqual(beforeV, afterV) || !reflect.DeepEqual(beforeTools, afterTools) {
 		t.Fatal("machine changes altered program history/tools")
 	}

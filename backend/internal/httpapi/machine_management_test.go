@@ -53,7 +53,7 @@ func TestMachineManagementIsolationAndValidation(t *testing.T) {
 	for _, tc := range []struct {
 		method, suffix string
 		body           any
-	}{{"GET", "", nil}, {"GET", "/drawings", nil}, {"PUT", "", domain.MachineInput{Code: "steal"}}, {"PUT", "/enabled", map[string]bool{"enabled": false}}} {
+	}{{"DELETE", "", nil}, {"GET", "", nil}, {"GET", "/drawings", nil}, {"PUT", "", domain.MachineInput{Code: "steal"}}, {"PUT", "/enabled", map[string]bool{"enabled": false}}} {
 		request(tc.method, path+tc.suffix, tc.body, b, 404)
 	}
 	request("PUT", path, domain.MachineInput{Code: "M", OwnerUserID: &ub.ID}, admin, 403)
@@ -106,4 +106,9 @@ func TestMachineManagementIsolationAndValidation(t *testing.T) {
 	}
 	request("PUT", fmt.Sprintf("/api/admin/users/%d", ub.ID), domain.UpdateUserInput{DisplayName: ub.DisplayName, Role: "editor", Enabled: false}, admin, 200)
 	request("POST", "/api/machines", domain.MachineInput{Code: "disabled owner", OwnerUserID: &ub.ID}, admin, 400)
+	request("DELETE", path, nil, nil, 401)
+	request("DELETE", path, nil, a, 204)
+	request("GET", path, nil, a, 404)
+	request("DELETE", path, nil, a, 404)
+
 }

@@ -143,3 +143,29 @@ test('不存在或无权访问的机台不请求关联记录', async () => {
   expect(await screen.findByText('机台不存在或无权访问')).toBeInTheDocument()
   expect(calls).toHaveLength(1)
 })
+
+test('删除机台需要确认，取消无请求，失败可重试，成功返回列表并清理关联缓存', async () => {
+  let fail = true
+  const calls = mockApi((r) => {
+    if (r.path === '/machines/1' && r.method === 'GET') return { body: machine() }
+    if (r.path.startsWith('/machines/1/drawings')) return { body: page([]) }
+    if (r.path.startsWith('/machines?')) return { body: page([]) }
+    if (r.method === 'DELETE') return fail ? { status: 503, body: { error: '暂时不可用' } } : { status: 204 }
+  })
+  const { client } = renderApp(<Routes><Route path="/machines/:id" element={<MachinePage />} /><Route path="/machines" element={<MachinesPage />} /></Routes>, '/machines/1', member)
+  client.setQueryDefaults(['drawing-machines'], { gcTime: Infinity })
+  client.setQueryData(['drawing-machines', 1], [machine()])
+  const u = userEvent.setup()
+  await u.click(await screen.findByRole('button', { name: '删除机台' }))
+  expect(screen.getByRole('dialog')).toHaveTextContent('NC 文件、全部版本及版本刀具表保留')
+  await u.click(screen.getByRole('button', { name: '取消' }))
+  expect(calls.some((r) => r.method === 'DELETE')).toBe(false)
+  await u.click(screen.getByRole('button', { name: '删除机台' }))
+  await u.click(screen.getByRole('button', { name: '确认删除' }))
+  expect(await screen.findByRole('alert')).toHaveTextContent('删除失败')
+  fail = false
+  await u.click(screen.getByRole('button', { name: '确认删除' }))
+  await screen.findByRole('heading', { name: '机台管理' })
+  expect(calls.filter((r) => r.method === 'DELETE')).toHaveLength(2)
+  expect(client.getQueryState(['drawing-machines', 1])?.isInvalidated).toBe(true)
+})

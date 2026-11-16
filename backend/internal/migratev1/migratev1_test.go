@@ -173,6 +173,10 @@ func TestRunMigratesAllDataLosslessly(t *testing.T) {
 	if err := db.Get(&cur, `SELECT current_version_id FROM nc_program WHERE id = 21`); err != nil || cur != 102 {
 		t.Fatalf("current_version_id = %d err=%v", cur, err)
 	}
+	var machineID int
+	if err := db.Get(&machineID, `SELECT machine_id FROM nc_program WHERE id=21`); err != nil || machineID != 3 {
+		t.Fatal("program did not inherit migrated machine", machineID, err)
+	}
 	var tool struct {
 		Dia    int    `db:"tool_dia_milli"`
 		Comp   int    `db:"comp_amount_milli"`

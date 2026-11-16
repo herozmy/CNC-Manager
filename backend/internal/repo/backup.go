@@ -108,6 +108,10 @@ func (r *Repo) CheckBackupDB(ctx context.Context, path string) (BackupSummary, [
 	if err := checkOwnerLinks(ctx, db); err != nil {
 		return summary, nil, err
 	}
+	var sequenceValid int
+	if err := db.GetContext(ctx, &sequenceValid, `SELECT COUNT(*) FROM machine_id_sequence WHERE singleton=1 AND last_id>=(SELECT COALESCE(MAX(id),0) FROM machine)`); err != nil || sequenceValid != 1 {
+		return summary, nil, fmt.Errorf("备份的机台编号序列无效")
+	}
 	var blobs []BackupBlob
 	if err := db.SelectContext(ctx, &blobs, `SELECT sha256, rel_path, size_bytes FROM nc_blob ORDER BY sha256`); err != nil {
 		return summary, nil, err
@@ -161,6 +165,10 @@ func (r *Repo) RestoreSnapshot(ctx context.Context, path string) error {
 			return err
 		}
 	}
+	// Preserve both high-water marks, including machines deleted before backup.
+	if _, err := tx.ExecContext(ctx, `UPDATE main.machine_id_sequence SET last_id=MAX(last_id,(SELECT last_id FROM incoming.machine_id_sequence WHERE singleton=1)) WHERE singleton=1`); err != nil {
+		return err
+	}
 	if err := checkForeignKeys(ctx, tx); err != nil {
 		return err
 	}
@@ -179,6 +187,7 @@ func BackupError(err error) error { return fmt.Errorf("%w: %v", domain.ErrInvali
 func checkOwnerLinks(ctx context.Context, q sqlx.QueryerContext) error {
 	var bad int
 	query := `SELECT (SELECT COUNT(*) FROM operation o JOIN drawing d ON d.id=o.drawing_id JOIN machine m ON m.id=o.machine_id WHERE COALESCE(d.owner_user_id,0)<>COALESCE(m.owner_user_id,0))
+ + (SELECT COUNT(*) FROM nc_program p JOIN operation o ON o.id=p.operation_id JOIN drawing d ON d.id=o.drawing_id JOIN machine m ON m.id=p.machine_id WHERE COALESCE(d.owner_user_id,0)<>COALESCE(m.owner_user_id,0))
  + (SELECT COUNT(*) FROM program_tool pt JOIN nc_version v ON v.id=pt.version_id WHERE pt.program_id<>v.program_id)
  + (SELECT COUNT(*) FROM program_tool pt JOIN nc_program p ON p.id=pt.program_id JOIN operation o ON o.id=p.operation_id JOIN drawing d ON d.id=o.drawing_id JOIN tool t ON t.id=pt.tool_id WHERE COALESCE(d.owner_user_id,0)<>COALESCE(t.owner_user_id,0))`
 	if err := sqlx.GetContext(ctx, q, &bad, query); err != nil {

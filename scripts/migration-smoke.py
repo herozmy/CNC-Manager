@@ -50,7 +50,8 @@ def seed(root):
 
     timestamps = dict(created_at=ts, updated_at=ts)
     insert("drawing", id=7, drawing_no="D-7", name="迁移样件", **timestamps)
-    insert("operation", id=11, drawing_id=7, op_no=10, z_height_milli=25500, sort_order=2, **timestamps)
+    insert("machine", id=3, code="CNC-V1", name="迁移机台", **timestamps)
+    insert("operation", id=11, drawing_id=7, op_no=10, machine_id=3, z_height_milli=25500, sort_order=2, **timestamps)
     insert("nc_program", id=21, operation_id=11, program_no="O1000", current_version_id=102, **timestamps)
     for i, plain in enumerate(CONTENTS):
         sha = hashlib.sha256(plain).hexdigest()
@@ -172,6 +173,7 @@ def main():
                 drawings = request("/api/drawings?ownerUserId=0")["items"]
                 assert len(drawings) == 1 and drawings[0]["id"] == 7 and drawings[0]["ownerUserId"] == 0
                 assert request("/api/programs/21")["currentVersionId"] == 102
+                assert request("/api/programs/21")["machineId"] == 3
                 checks.append("unassigned-data-and-current-version")
                 tools = request("/api/versions/102/tools")["items"]
                 assert tools[0]["toolDia"] == 12.5 and tools[0]["compAmount"] == .15

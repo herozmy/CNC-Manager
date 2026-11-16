@@ -104,6 +104,7 @@ def scenario(client, raw, checks):
     drawings = client.request("/api/drawings?ownerUserId=0")["items"]
     assert len(drawings) == 1 and drawings[0]["id"] == 7 and drawings[0]["ownerUserId"] == 0
     assert client.request("/api/programs/21")["currentVersionId"] == 102
+    assert client.request("/api/programs/21")["machineId"] == 3
     tools = client.request("/api/versions/102/tools")["items"]
     assert tools[0]["toolDia"] == 12.5 and tools[0]["compAmount"] == .15
     checks.append("business-current-version-and-tool-parameters")

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -93,7 +94,7 @@ func TestDrawingMachineAssociation(t *testing.T) {
 	}
 	var after domain.Program
 	decode(t, request("GET", fmt.Sprintf("/api/programs/%d", program.ID), nil, a, 200), &after)
-	if after != program {
+	if !reflect.DeepEqual(after, program) {
 		t.Fatal("machine association changed program", program, after)
 	}
 	var logs domain.Page[domain.AuditEntry]

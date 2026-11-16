@@ -30,9 +30,9 @@ export default function DeleteSheet({ title, message, remove, onDeleted, onClose
         if (!(err instanceof ApiError && err.status === 404)) throw err
       }
       // Mark descendant caches stale too, so browser Back cannot revive deleted records.
-      await qc.invalidateQueries({ predicate: (q) => ['drawings', 'drawing', 'versions', 'version-content'].includes(String(q.queryKey[0])), refetchType: 'none' })
+      await qc.invalidateQueries({ predicate: (q) => ['drawings', 'drawing', 'versions', 'version-content', 'machines', 'machine', 'drawing-machines', 'machine-drawings'].includes(String(q.queryKey[0])), refetchType: 'none' })
       onDeleted()
-      void qc.refetchQueries({ predicate: (q) => ['drawings', 'drawing'].includes(String(q.queryKey[0])), type: 'active' })
+      void qc.refetchQueries({ predicate: (q) => ['drawings', 'drawing', 'machines', 'drawing-machines', 'machine-drawings'].includes(String(q.queryKey[0])), type: 'active' })
     } catch (err) {
       setError(err instanceof Error ? err.message : '无法连接服务器')
     } finally {

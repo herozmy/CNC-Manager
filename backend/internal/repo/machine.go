@@ -36,7 +36,7 @@ func (r *Repo) CreateDrawingMachine(ctx context.Context, drawingID int64, in dom
 			return nil, domain.ErrForbidden
 		}
 		now := domain.Now()
-		res, err := t.tx.ExecContext(ctx, `INSERT INTO machine(code,name,controller,remark,owner_user_id,created_at,updated_at) VALUES(?,?,?,?,?,?,?)`, in.Code, in.Name, in.Controller, in.Remark, owner, now, now)
+		res, err := t.tx.ExecContext(ctx, `INSERT INTO machine(id,code,name,controller,remark,owner_user_id,created_at,updated_at) VALUES((SELECT last_id+1 FROM machine_id_sequence WHERE singleton=1),?,?,?,?,?,?,?)`, in.Code, in.Name, in.Controller, in.Remark, owner, now, now)
 		if err != nil {
 			return nil, wrap(err)
 		}
@@ -53,9 +53,9 @@ func (r *Repo) CreateDrawingMachine(ctx context.Context, drawingID int64, in dom
 
 const machineCols = `m.id,m.code,m.name,m.enabled,m.controller,m.remark,m.created_at,m.updated_at,
  COALESCE(m.owner_user_id,0) AS owner_user_id,COALESCE(u.display_name,'待分配') AS owner_name,
- (SELECT COUNT(DISTINCT o.drawing_id) FROM operation o WHERE o.machine_id=m.id) AS drawing_count,
- (SELECT COUNT(*) FROM operation o WHERE o.machine_id=m.id) AS operation_count,
- (SELECT COUNT(*) FROM nc_program p JOIN operation o ON o.id=p.operation_id WHERE o.machine_id=m.id) AS program_count`
+ (SELECT COUNT(DISTINCT o.drawing_id) FROM operation o WHERE o.machine_id=m.id OR EXISTS(SELECT 1 FROM nc_program p WHERE p.operation_id=o.id AND p.machine_id=m.id)) AS drawing_count,
+ (SELECT COUNT(*) FROM operation o WHERE o.machine_id=m.id OR EXISTS(SELECT 1 FROM nc_program p WHERE p.operation_id=o.id AND p.machine_id=m.id)) AS operation_count,
+ (SELECT COUNT(*) FROM nc_program p WHERE p.machine_id=m.id) AS program_count`
 const machineFrom = ` FROM machine m LEFT JOIN app_user u ON u.id=m.owner_user_id `
 
 func pageBounds(page, size int) (int, int) {
@@ -118,7 +118,7 @@ func (r *Repo) CreateMachine(ctx context.Context, in domain.MachineInput) (*doma
 			return nil, fmt.Errorf("%w: 请选择机台所属账号", domain.ErrInvalid)
 		}
 		now := domain.Now()
-		res, err := t.tx.ExecContext(ctx, `INSERT INTO machine(code,name,controller,remark,owner_user_id,created_at,updated_at) VALUES(?,?,?,?,?,?,?)`, in.Code, in.Name, in.Controller, in.Remark, *owner, now, now)
+		res, err := t.tx.ExecContext(ctx, `INSERT INTO machine(id,code,name,controller,remark,owner_user_id,created_at,updated_at) VALUES((SELECT last_id+1 FROM machine_id_sequence WHERE singleton=1),?,?,?,?,?,?,?)`, in.Code, in.Name, in.Controller, in.Remark, *owner, now, now)
 		if err != nil {
 			return nil, wrap(err)
 		}
@@ -192,6 +192,28 @@ func (r *Repo) checkOperationMachine(ctx context.Context, id, previous *int64, o
 	return nil
 }
 
+func (r *Repo) DeleteMachine(ctx context.Context, id int64) error {
+	_, err := businessTransaction(ctx, r, domain.PermissionDelete, "machine", id, func(t *Repo) (struct{}, error) {
+		old, err := t.GetMachine(ctx, id)
+		if err != nil {
+			return struct{}{}, err
+		}
+		if err = t.log(ctx, t.tx, "delete", "machine", id, "删除机台 "+old.Code+"；解除工序及程序关联，删除机台刀库，保留程序及版本历史"); err != nil {
+			return struct{}{}, err
+		}
+		// Revision conflicts protect open program forms from reattaching a removed machine.
+		if _, err = t.tx.ExecContext(ctx, `UPDATE nc_program SET machine_id=NULL,revision=revision+1,updated_at=? WHERE machine_id=?`, domain.Now(), id); err != nil {
+			return struct{}{}, wrap(err)
+		}
+		if _, err = t.tx.ExecContext(ctx, `UPDATE operation SET updated_at=? WHERE machine_id=?`, domain.Now(), id); err != nil {
+			return struct{}{}, wrap(err)
+		}
+		_, err = t.tx.ExecContext(ctx, `DELETE FROM machine WHERE id=?`, id)
+		return struct{}{}, wrap(err)
+	})
+	return err
+}
+
 // Only return operations belonging to this machine, even when a drawing is shared
 // by multiple machines. Program matches never pull in another machine's drawing.
 func (r *Repo) MachineDrawings(ctx context.Context, id int64, keyword string, page, size int) (domain.Page[domain.DrawingDetail], error) {
@@ -204,11 +226,11 @@ func (r *Repo) MachineDrawings(ctx context.Context, id int64, keyword string, pa
 		}
 		pat := likePattern(keyword)
 		filter := ` WHERE COALESCE(d.owner_user_id,0)=? AND EXISTS (
-   SELECT 1 FROM operation o WHERE o.drawing_id=d.id AND o.machine_id=? AND (
+   SELECT 1 FROM operation o WHERE o.drawing_id=d.id AND (o.machine_id=? OR EXISTS(SELECT 1 FROM nc_program p WHERE p.operation_id=o.id AND p.machine_id=?)) AND (
     d.drawing_no LIKE ? ESCAPE '\' OR d.name LIKE ? ESCAPE '\' OR d.material LIKE ? ESCAPE '\' OR
     CAST(o.op_no AS TEXT) LIKE ? ESCAPE '\' OR o.op_name LIKE ? ESCAPE '\' OR
-    EXISTS(SELECT 1 FROM nc_program p WHERE p.operation_id=o.id AND (p.program_no LIKE ? ESCAPE '\' OR p.program_name LIKE ? ESCAPE '\'))))`
-		args := []any{owner, id, pat, pat, pat, pat, pat, pat, pat}
+    EXISTS(SELECT 1 FROM nc_program p WHERE p.operation_id=o.id AND p.machine_id=? AND (p.program_no LIKE ? ESCAPE '\' OR p.program_name LIKE ? ESCAPE '\'))))`
+		args := []any{owner, id, id, pat, pat, pat, pat, pat, id, pat, pat}
 		if err := t.tx.GetContext(ctx, &out.Total, `SELECT COUNT(*) FROM drawing d`+filter, args...); err != nil {
 			return out, wrap(err)
 		}
@@ -224,7 +246,14 @@ func (r *Repo) MachineDrawings(ctx context.Context, id int64, keyword string, pa
 			ops := make([]domain.OperationWithPrograms, 0, len(d.Operations))
 			programs := 0
 			for _, op := range d.Operations {
-				if op.MachineID != nil && *op.MachineID == id {
+				selected := make([]domain.Program, 0, len(op.Programs))
+				for _, p := range op.Programs {
+					if p.MachineID != nil && *p.MachineID == id {
+						selected = append(selected, p)
+					}
+				}
+				op.Programs = selected
+				if (op.MachineID != nil && *op.MachineID == id) || len(selected) > 0 {
 					ops = append(ops, op)
 					programs += len(op.Programs)
 				}

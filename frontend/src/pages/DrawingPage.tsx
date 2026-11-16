@@ -28,6 +28,7 @@ function ProgramRow({ drawingId, p }: { drawingId: number; p: Program }) {
       <Link to={`/drawings/${drawingId}/programs/${p.id}`} className="flex min-h-14 items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2 active:bg-slate-200">
         <div className="min-w-0">
           <p className="font-semibold">{p.programNo}</p>
+          <p className="truncate text-sm text-slate-500">程序机台：{[p.machineCode, p.machineName].filter(Boolean).join(' · ') || '未关联机台'}</p>
           {(p.programName || p.controller) && <p className="truncate text-sm text-slate-500">{[p.programName, p.controller].filter(Boolean).join(' · ')}</p>}
         </div>
         <div className="flex shrink-0 items-center gap-1">
@@ -164,7 +165,7 @@ export default function DrawingPage() {
         onClose={() => setDeleting(null)}
       />}
       {sheet?.kind === 'op'  && <OperationSheet drawingId={id} ownerUserId={query.data?.ownerUserId} operation={sheet.op} suggestedNo={nextNo} onClose={() => setSheet(null)} />}
-      {sheet?.kind === 'program' && <ProgramSheet drawingId={id} operationId={sheet.operationId} onClose={() => setSheet(null)} />}
+      {sheet?.kind === 'program' && <ProgramSheet drawingId={id} operationId={sheet.operationId} ownerUserId={query.data?.ownerUserId} onClose={() => setSheet(null)} />}
       {sheet?.kind === 'drawing' && query.data && <DrawingEditSheet key={id} drawing={query.data} onClose={() => setSheet(null)} onSaved={() => { setSheet(null); setSaved(true) }} />}
     </main>
   )

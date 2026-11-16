@@ -9,6 +9,7 @@ export const api = {
     Object.entries(filter).forEach(([key, value]) => { if (value !== undefined) params.set(key, String(value)) })
     return http.get<Page<Machine>>(`/machines?${params}`)
   },
+  deleteMachine: (id: number) => http.del<void>(`/machines/${id}`),
   machine: (id: number) => http.get<Machine>(`/machines/${id}`),
   createMachine: (input: MachineInput) => http.post<Machine>('/machines', input),
   updateMachine: (id: number, input: MachineInput) => http.put<Machine>(`/machines/${id}`, input),

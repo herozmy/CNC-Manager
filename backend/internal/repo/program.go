@@ -8,6 +8,8 @@ import (
 )
 
 const programCols = `p.id, p.revision, p.operation_id, p.program_no, p.program_name, p.controller, p.sort_order,
+	p.machine_id, COALESCE((SELECT m.code FROM machine m WHERE m.id=p.machine_id),'') AS machine_code,
+	COALESCE((SELECT m.name FROM machine m WHERE m.id=p.machine_id),'') AS machine_name,
 	p.current_version_id, p.remark, p.created_at, p.updated_at,
 	(SELECT v.version_no FROM nc_version v WHERE v.id = p.current_version_id) AS current_version_no,
 	(SELECT COUNT(*) FROM nc_version v WHERE v.program_id = p.id) AS version_count`
@@ -36,14 +38,26 @@ func (r *Repo) rawCreateProgram(ctx context.Context, operationID int64, in domai
 	if err := in.Normalize(); err != nil {
 		return nil, err
 	}
-	if _, err := r.GetOperation(ctx, operationID); err != nil {
+	op, err := r.GetOperation(ctx, operationID)
+	if err != nil {
+		return nil, err
+	}
+	machineID := in.MachineID.ID
+	if !in.MachineID.Set {
+		machineID = op.MachineID
+	}
+	owner, err := objectOwner(ctx, r.tx, "operation", operationID)
+	if err != nil {
+		return nil, err
+	}
+	if err := r.checkOperationMachine(ctx, machineID, nil, owner); err != nil {
 		return nil, err
 	}
 	now := domain.Now()
 	res, err := r.tx.ExecContext(ctx,
-		`INSERT INTO nc_program (operation_id, program_no, program_name, controller, sort_order, remark, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM nc_program WHERE operation_id = ?), ?, ?, ?)`,
-		operationID, in.ProgramNo, in.ProgramName, in.Controller, operationID, in.Remark, now, now)
+		`INSERT INTO nc_program (operation_id, program_no, program_name, controller, sort_order, remark, created_at, updated_at, machine_id)
+		 VALUES (?, ?, ?, ?, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM nc_program WHERE operation_id = ?), ?, ?, ?, ?)`,
+		operationID, in.ProgramNo, in.ProgramName, in.Controller, operationID, in.Remark, now, now, machineID)
 	if err != nil {
 		return nil, wrap(err)
 	}
@@ -69,9 +83,20 @@ func (r *Repo) rawUpdateProgram(ctx context.Context, id int64, in domain.Program
 	if *in.ExpectedRevision != old.Revision {
 		return nil, fmt.Errorf("%w: 程序信息已被修改，请重新载入后再保存", domain.ErrConflict)
 	}
+	machineID := old.MachineID
+	if in.MachineID.Set {
+		machineID = in.MachineID.ID
+	}
+	owner, err := objectOwner(ctx, r.tx, "program", id)
+	if err != nil {
+		return nil, err
+	}
+	if err := r.checkOperationMachine(ctx, machineID, old.MachineID, owner); err != nil {
+		return nil, err
+	}
 	if _, err := r.tx.ExecContext(ctx,
-		`UPDATE nc_program SET revision = revision + 1, program_no = ?, program_name = ?, controller = ?, remark = ?, updated_at = ? WHERE id = ?`,
-		in.ProgramNo, in.ProgramName, in.Controller, in.Remark, domain.Now(), id); err != nil {
+		`UPDATE nc_program SET revision = revision + 1, program_no = ?, program_name = ?, controller = ?, remark = ?, machine_id=?, updated_at = ? WHERE id = ?`,
+		in.ProgramNo, in.ProgramName, in.Controller, in.Remark, machineID, domain.Now(), id); err != nil {
 		return nil, wrap(err)
 	}
 	if err := r.log(ctx, r.tx, "update", "program", id, "修改程序 "+in.ProgramNo); err != nil {

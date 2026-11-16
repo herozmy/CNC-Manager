@@ -119,6 +119,7 @@ export default function ProgramPage() {
               <VersionBadge no={current?.versionNo ?? null} />
             </div>
             {(program.programName || program.controller) && <p className="text-slate-600">{[program.programName, program.controller].filter(Boolean).join(' · ')}</p>}
+            <p className="text-sm text-slate-600">程序机台：{program.machineId ? <Link className="underline text-amber-800" to={`/machines/${program.machineId}`}>{[program.machineCode, program.machineName].filter(Boolean).join(' · ') || `机台 #${program.machineId}`}</Link> : '未关联机台'}</p>
             {program.remark && <p className="mt-2 rounded-xl bg-amber-50 p-3 text-sm text-slate-700">{program.remark}</p>}
             <div className="mt-3 flex flex-wrap gap-2">
               {access.can('edit') && <Button variant="secondary" onClick={() => setEditing(true)}><Pencil className="size-5" aria-hidden />编辑程序信息</Button>}
@@ -202,7 +203,7 @@ export default function ProgramPage() {
         </>
       )}
 
-      {editing && program && <ProgramSheet key={program.id} drawingId={drawingId} operationId={program.operationId} program={program} onClose={() => setEditing(false)} onSaved={() => setSaved('程序信息已保存')} />}
+      {editing && program && <ProgramSheet key={program.id} drawingId={drawingId} operationId={program.operationId} ownerUserId={drawing.data?.ownerUserId} program={program} onClose={() => setEditing(false)} onSaved={() => setSaved('程序信息已保存')} />}
       {deleting && program && <DeleteSheet title="删除程序" message={`将删除程序「${program.programNo}」及其全部 ${versions.data?.length ?? 0} 个版本，无法恢复。`} remove={() => api.deleteProgram(programId)} onDeleted={() => {
         for (const v of versions.data ?? []) qc.removeQueries({ queryKey: ['version-tools-draft', v.id], exact: true })
         navigate(`/drawings/${drawingId}`, { replace: true })

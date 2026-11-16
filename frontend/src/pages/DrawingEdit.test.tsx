@@ -288,7 +288,7 @@ test('新增程序：校验程序号，成功后进入程序页', async () => {
   await u.type(screen.getByLabelText('数控系统'), 'FANUC')
   await u.click(screen.getByRole('button', { name: '创建并上传文件' }))
   expect(await screen.findByText('程序页')).toBeInTheDocument()
-  expect(calls.find((c) => c.method === 'POST')?.body).toEqual({ programNo: 'O1234', programName: '', controller: 'FANUC', remark: '' })
+  expect(calls.find((c) => c.method === 'POST')?.body).toEqual({ machineId: null, programNo: 'O1234', programName: '', controller: 'FANUC', remark: '' })
 })
 
 test('Esc 关闭弹层', async () => {

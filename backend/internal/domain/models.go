@@ -66,6 +66,9 @@ type Operation struct {
 
 // Program 数控程序，挂在工序下。
 type Program struct {
+	MachineID        *int64 `db:"machine_id" json:"machineId"`
+	MachineCode      string `db:"machine_code" json:"machineCode"`
+	MachineName      string `db:"machine_name" json:"machineName"`
 	ID               int64  `db:"id" json:"id"`
 	Revision         int64  `db:"revision" json:"revision"`
 	OperationID      int64  `db:"operation_id" json:"operationId"`
@@ -193,11 +196,12 @@ func (in *OperationInput) Normalize() error {
 }
 
 type ProgramInput struct {
-	ExpectedRevision *int64 `json:"expectedRevision,omitempty"`
-	ProgramNo        string `json:"programNo"`
-	ProgramName      string `json:"programName"`
-	Controller       string `json:"controller"`
-	Remark           string `json:"remark"`
+	MachineID        MachineReference `json:"machineId,omitzero"`
+	ExpectedRevision *int64           `json:"expectedRevision,omitempty"`
+	ProgramNo        string           `json:"programNo"`
+	ProgramName      string           `json:"programName"`
+	Controller       string           `json:"controller"`
+	Remark           string           `json:"remark"`
 }
 
 func (in *ProgramInput) Normalize() error {

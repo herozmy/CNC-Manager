@@ -106,6 +106,7 @@ func New(o Options) http.Handler {
 			p.With(s.requirePermission(domain.PermissionCreate)).Post("/machines", s.handleCreateMachine)
 			p.With(s.requirePermission(domain.PermissionEdit)).Put("/machines/{id}", s.handleUpdateMachine)
 			p.With(s.requirePermission(domain.PermissionEdit)).Put("/machines/{id}/enabled", s.handleSetMachineEnabled)
+			p.With(s.requirePermission(domain.PermissionDelete)).Delete("/machines/{id}", s.handleDeleteMachine)
 
 			p.Get("/drawings", s.handleListDrawings)
 			p.With(s.requirePermission(domain.PermissionCreate)).Post("/drawings", s.handleCreateDrawing)

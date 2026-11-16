@@ -71,7 +71,7 @@ func TestMigrateCreatesSchemaAndIsIdempotent(t *testing.T) {
 	if n != 7 {
 		t.Fatalf("核心表数量 = %d，期望 7", n)
 	}
-	if err := db.Get(&n, `SELECT COUNT(*) FROM schema_migration`); err != nil || n != 7 {
+	if err := db.Get(&n, `SELECT COUNT(*) FROM schema_migration`); err != nil || n != 8 {
 		t.Fatalf("迁移记录 = %d, err=%v", n, err)
 	}
 }
@@ -334,6 +334,7 @@ func TestMachineEnabledMigrationPreservesExistingData(t *testing.T) {
 		`INSERT INTO machine(id,code,name,controller,remark,created_at,updated_at) VALUES(1,'OLD','旧机台','FANUC','保留','','')`,
 		`INSERT INTO drawing(id,drawing_no,created_at,updated_at) VALUES(1,'D1','','')`,
 		`INSERT INTO operation(id,drawing_id,op_no,machine_id,created_at,updated_at) VALUES(1,1,10,1,'','')`,
+		`INSERT INTO nc_program(id,operation_id,program_no,created_at,updated_at) VALUES(1,1,'O1','before','before'),(2,1,'O2','before','before')`,
 		`INSERT INTO machine_tool(machine_id,pocket_no,tool_no,updated_at) VALUES(1,1,'T01','')`,
 	} {
 		if _, err := db.Exec(sql); err != nil {
@@ -352,5 +353,61 @@ func TestMachineEnabledMigrationPreservesExistingData(t *testing.T) {
 	}
 	if _, err := db.Exec(`UPDATE machine SET enabled=2`); err == nil {
 		t.Fatal("invalid enabled state accepted")
+	}
+}
+
+func TestProgramMachineMigrationPreservesIndependentChanges(t *testing.T) {
+	db, err := Open(filepath.Join(t.TempDir(), "program.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	ctx := context.Background()
+	if _, err = db.Exec(`CREATE TABLE schema_migration(version TEXT PRIMARY KEY,applied_at TEXT NOT NULL)`); err != nil {
+		t.Fatal(err)
+	}
+	for _, version := range []string{"0001_init", "0002_operation_coordinates", "0003_operation_centering", "0004_drawing_price", "0005_roles", "0006_personal_ownership", "0007_machine_enabled"} {
+		raw, err := migrationsFS.ReadFile("migrations/" + version + ".sql")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err = applyMigration(ctx, db, version, string(raw)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, query := range []string{
+		`INSERT INTO machine(id,code,enabled,created_at,updated_at) VALUES(7,'old',0,'old','old')`,
+		`INSERT INTO drawing(id,drawing_no,created_at,updated_at) VALUES(1,'D','old','old')`,
+		`INSERT INTO operation(id,drawing_id,op_no,machine_id,created_at,updated_at) VALUES(1,1,10,7,'old','old'),(2,1,20,NULL,'old','old')`,
+		`INSERT INTO nc_program(id,operation_id,program_no,revision,created_at,updated_at) VALUES(1,1,'O1',4,'old','old'),(2,1,'O2',2,'old','old'),(3,2,'O3',1,'old','old')`,
+	} {
+		if _, err = db.Exec(query); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err = Migrate(ctx, db); err != nil {
+		t.Fatal(err)
+	}
+	var n int
+	if err = db.Get(&n, `SELECT COUNT(*) FROM nc_program WHERE machine_id=7 AND updated_at='old' AND ((id=1 AND revision=4) OR (id=2 AND revision=2))`); err != nil || n != 2 {
+		t.Fatal(n, err)
+	}
+	if _, err = db.Exec(`UPDATE nc_program SET machine_id=NULL WHERE id=1`); err != nil {
+		t.Fatal(err)
+	}
+	if err = Migrate(ctx, db); err != nil {
+		t.Fatal(err)
+	}
+	if err = db.Get(&n, `SELECT COUNT(*) FROM nc_program WHERE machine_id IS NULL`); err != nil || n != 2 {
+		t.Fatal(n, err)
+	}
+	if _, err = db.Exec(`DELETE FROM machine WHERE id=7`); err != nil {
+		t.Fatal(err)
+	}
+	if err = db.Get(&n, `SELECT COUNT(*) FROM nc_program WHERE machine_id IS NULL`); err != nil || n != 3 {
+		t.Fatal(n, err)
+	}
+	if err = db.Get(&n, `SELECT last_id FROM machine_id_sequence`); err != nil || n != 7 {
+		t.Fatal(n, err)
 	}
 }

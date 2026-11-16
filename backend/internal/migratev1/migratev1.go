@@ -219,8 +219,8 @@ var tableCopies = []tableCopy{
 		SELECT id, drawing_id, op_no, op_name, machine_id, fixture, z_height_milli, remark, sort_order, created_at, updated_at FROM old.operation`},
 	{"tool", `INSERT INTO tool (id, tool_no, name, spec, tool_type, remark, created_at, updated_at)
 		SELECT id, tool_no, name, spec, tool_type, remark, created_at, updated_at FROM old.tool`},
-	{"nc_program", `INSERT INTO nc_program (id, operation_id, program_no, program_name, controller, current_version_id, remark, sort_order, created_at, updated_at)
-		SELECT id, operation_id, program_no, program_name, controller, current_version_id, remark, sort_order, created_at, updated_at FROM old.nc_program`},
+	{"nc_program", `INSERT INTO nc_program (id, operation_id, program_no, program_name, controller, current_version_id, remark, sort_order, created_at, updated_at,machine_id)
+		SELECT p.id, p.operation_id, p.program_no, p.program_name, p.controller, p.current_version_id, p.remark, p.sort_order, p.created_at, p.updated_at,o.machine_id FROM old.nc_program p JOIN old.operation o ON o.id=p.operation_id`},
 	// 文件名以版本上记录的为准；极老数据为空时回退到物理文件的首次上传名。
 	{"nc_version", `INSERT INTO nc_version (id, program_id, version_no, sha256, file_name, change_note, created_by, created_at)
 		SELECT v.id, v.program_id, v.version_no, f.sha256,

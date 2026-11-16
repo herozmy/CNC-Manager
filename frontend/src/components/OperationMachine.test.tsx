@@ -41,7 +41,7 @@ test('新建关联、详情显示编号名称，编辑回填、更换和清空�
   await u.selectOptions(screen.getByLabelText('机台（可选）'), '')
   await u.click(screen.getByRole('button', { name: '保存' }))
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
-  expect(screen.queryByText(/机台：/)).not.toBeInTheDocument()
+  expect(screen.queryByText(/^机台：/)).not.toBeInTheDocument()
   expect(calls.filter((r) => r.method === 'PUT').at(-1)?.body).toMatchObject({ machineId: null })
   expect(screen.getByRole('link', { name: /O1234/ })).toBeVisible()
 })

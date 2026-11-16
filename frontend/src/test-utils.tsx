@@ -61,7 +61,7 @@ export function drawing(over: Partial<Record<string, unknown>> = {}) {
 }
 
 export const program = (over: Partial<Record<string, unknown>> = {}) => ({
-  revision: 1, id: 1, operationId: 1, programNo: 'O1234', programName: '粗车', controller: 'FANUC',
+  machineId: null as number | null, machineCode: '', machineName: '', revision: 1, id: 1, operationId: 1, programNo: 'O1234', programName: '粗车', controller: 'FANUC',
   currentVersionId: 5, currentVersionNo: 3, versionCount: 3, remark: '', ...over,
 })
 

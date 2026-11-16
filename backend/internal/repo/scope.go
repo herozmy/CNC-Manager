@@ -212,7 +212,7 @@ func (r *Repo) AssignDrawingOwner(ctx context.Context, id, ownerID int64) (*doma
 			return nil, fmt.Errorf("%w: 仅可分配待分配图纸", domain.ErrConflict)
 		}
 		var links int
-		if err := tx.GetContext(ctx, &links, `SELECT (SELECT COUNT(*) FROM operation o JOIN machine m ON m.id=o.machine_id WHERE o.drawing_id=? AND COALESCE(m.owner_user_id,0)<>?) + (SELECT COUNT(*) FROM program_tool pt JOIN tool t ON t.id=pt.tool_id JOIN nc_program p ON p.id=pt.program_id JOIN operation o ON o.id=p.operation_id WHERE o.drawing_id=? AND COALESCE(t.owner_user_id,0)<>?)`, id, ownerID, id, ownerID); err != nil {
+		if err := tx.GetContext(ctx, &links, `SELECT (SELECT COUNT(*) FROM operation o JOIN machine m ON m.id=o.machine_id WHERE o.drawing_id=? AND COALESCE(m.owner_user_id,0)<>?) + (SELECT COUNT(*) FROM nc_program p JOIN operation o ON o.id=p.operation_id JOIN machine m ON m.id=p.machine_id WHERE o.drawing_id=? AND COALESCE(m.owner_user_id,0)<>?) + (SELECT COUNT(*) FROM program_tool pt JOIN tool t ON t.id=pt.tool_id JOIN nc_program p ON p.id=pt.program_id JOIN operation o ON o.id=p.operation_id WHERE o.drawing_id=? AND COALESCE(t.owner_user_id,0)<>?)`, id, ownerID, id, ownerID, id, ownerID); err != nil {
 			return nil, err
 		}
 		if links > 0 {
