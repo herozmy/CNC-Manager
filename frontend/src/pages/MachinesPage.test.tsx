@@ -48,6 +48,58 @@ test('普通用户不发送外来归属筛选，翻页后改变搜索从第一�
   expect(calls.every((r) => !r.path.includes('ownerUserId'))).toBe(true)
 })
 
+test('机台台账加载失败仍可返回与重试，保留搜索及状态筛选', async () => {
+  let fail = true
+  const calls = mockApi((r) => r.path.startsWith('/machines?') ? fail ? { status: 503 } : { body: page([machine({ enabled: false, programCount: 31 })]) } : undefined)
+  renderApp(<MachinesPage />, '/machines?q=FANUC&status=disabled', member)
+  await screen.findByText('机台加载失败')
+  expect(screen.getByRole('link', { name: '返回我的' })).toHaveAttribute('href', '/me')
+  expect(screen.getByLabelText('搜索机台')).toHaveValue('FANUC')
+  expect(screen.getByLabelText('机台状态')).toHaveValue('disabled')
+  fail = false
+  await userEvent.setup().click(screen.getByRole('button', { name: '重试' }))
+  const ledger = await screen.findByRole('list', { name: '机台台账' })
+  const card = within(ledger).getByRole('link', { name: /CNC-01/ })
+  expect(card).toHaveAttribute('href', '/machines/1')
+  expect(card).toHaveTextContent('已停用')
+  expect(card).toHaveTextContent('31关联程序')
+  expect(calls.every((r) => r.path.includes('q=FANUC') && r.path.includes('enabled=false'))).toBe(true)
+})
+
+test('从台账新增机台，取消不创建，保存后进入真实机台详情', async () => {
+  const calls = mockApi((r) => {
+    if (r.path.startsWith('/machines?')) return { body: page([]) }
+    if (r.path === '/machines' && r.method === 'POST') return { status: 201, body: machine({ id: 7, ...(r.body as MachineInput) }) }
+    if (r.path === '/machines/7') return { body: machine({ id: 7, code: 'CNC-NEW' }) }
+    if (r.path.startsWith('/machines/7/drawings')) return { body: page([]) }
+  })
+  renderApp(<Routes><Route path="/machines" element={<MachinesPage />} /><Route path="/machines/:id" element={<MachinePage />} /></Routes>, '/machines', member)
+  const u = userEvent.setup()
+  await u.click(screen.getByRole('button', { name: '新增机台' }))
+  await u.click(screen.getByRole('button', { name: '取消' }))
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  expect(calls.some((r) => r.method === 'POST')).toBe(false)
+  await u.click(screen.getByRole('button', { name: '新增机台' }))
+  await u.type(screen.getByLabelText('机台编号'), 'CNC-NEW')
+  await u.click(screen.getByRole('button', { name: '创建机台' }))
+  expect(await screen.findByRole('heading', { level: 1, name: 'CNC-NEW' })).toBeInTheDocument()
+  await screen.findByText('此机台尚未关联工序或程序')
+  expect(calls.filter((r) => r.method === 'POST')).toHaveLength(1)
+  expect(calls.find((r) => r.method === 'POST')?.body).toMatchObject({ code: 'CNC-NEW', ownerUserId: 2 })
+})
+
+test('停用账号的台账及机台详情不请求数据，也不提供管理操作', () => {
+  const calls = mockApi(() => ({ body: page([]) }))
+  const list = renderApp(<MachinesPage />, '/machines', { ...member, enabled: false })
+  expect(screen.getByText('账号不可用，请联系管理员。')).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: '新增机台' })).not.toBeInTheDocument()
+  list.unmount()
+  renderApp(<Routes><Route path="/machines/:id" element={<MachinePage />} /></Routes>, '/machines/1', { ...member, enabled: false })
+  expect(screen.getByText('账号不可用，请联系管理员。')).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: '编辑机台' })).not.toBeInTheDocument()
+  expect(calls).toHaveLength(0)
+})
+
 test('新增机台重名失败保留草稿，取消可继续编辑，成功只提交一次', async () => {
   let fail = true
   const calls = mockApi((r) => {
