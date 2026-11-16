@@ -145,6 +145,37 @@ function renderMachine() {
   return renderApp(<Routes><Route path="/machines/:id" element={<MachinePage />} /></Routes>, '/machines/1', member)
 }
 
+test('机台详情编辑取消不改信息，保存失败保留草稿，重试更新铭牌与关联清单', async () => {
+  let m = machine(), fail = true
+  const calls = mockApi((r) => {
+    if (r.path === '/machines/1' && r.method === 'GET') return { body: m }
+    if (r.path.startsWith('/machines/1/drawings')) return { body: page([detail([operation()])]) }
+    if (r.path === '/machines/1' && r.method === 'PUT') {
+      if (fail) return { status: 503, body: { error: '暂时不可用' } }
+      m = { ...m, ...(r.body as MachineInput) }; return { body: m }
+    }
+  })
+  renderMachine()
+  const u = userEvent.setup()
+  await u.click(await screen.findByRole('button', { name: '编辑机台' }))
+  await u.click(screen.getByRole('button', { name: '取消' }))
+  expect(calls.some((r) => r.method === 'PUT')).toBe(false)
+  await u.click(screen.getByRole('button', { name: '编辑机台' }))
+  await u.clear(screen.getByLabelText('机台名称（可选）'))
+  await u.type(screen.getByLabelText('机台名称（可选）'), '五轴加工中心')
+  await u.click(screen.getByRole('button', { name: '保存修改' }))
+  expect(await screen.findByRole('alert')).toHaveTextContent('暂时不可用')
+  expect(screen.getByLabelText('机台名称（可选）')).toHaveValue('五轴加工中心')
+  fail = false
+  await u.click(screen.getByRole('button', { name: '保存修改' }))
+  await screen.findByText('机台信息已保存。')
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  expect(screen.getByText('五轴加工中心')).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: /O1234/ })).toHaveAttribute('href', '/drawings/1/programs/1')
+  expect(calls.filter((r) => r.method === 'PUT')).toHaveLength(2)
+  expect(calls.at(-1)?.path).toMatch(/^\/machines\/1\/drawings/)
+})
+
 test('关联清单展示工序、程序和当前版本，搜索失败后可重试', async () => {
   let fail = false
   const calls = mockApi((r) => {

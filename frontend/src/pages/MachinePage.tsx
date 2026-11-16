@@ -1,13 +1,14 @@
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useRef, useState } from 'react'
+import { ArrowLeft, ChevronRight, Cpu, FileCode2, FolderKanban, Layers, Pencil, Power, Search, Trash2 } from 'lucide-react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api } from '../api'
 import { ApiError } from '../api/client'
 import { useAccess } from '../auth/permissions'
 import MachineSheet from '../components/MachineSheet'
+import MachineStatusBadge from '../components/MachineStatusBadge'
 import DeleteSheet from '../components/DeleteSheet'
 import { Button } from '../components/ui/Button'
-import { Field } from '../components/ui/Field'
 import { Sheet } from '../components/ui/Sheet'
 import { EmptyState, ErrorState, Spinner } from '../components/ui/State'
 import { useDebounced } from '../lib/useDebounced'
@@ -46,39 +47,54 @@ export default function MachinePage() {
   if (!access.can('read')) return <main className="p-6">账号不可用，请联系管理员。</main>
   const missing = !valid || (query.error instanceof ApiError && query.error.status === 404)
   const machine = query.data
-  return <main className="mx-auto max-w-5xl space-y-4 px-4 pt-4 pb-8">
-    <Link to="/machines" className="inline-flex min-h-12 items-center text-sm text-muted underline">返回机台管理</Link>
+  return <main className="page-width min-w-0 space-y-4 px-4 pt-4 pb-8 md:px-6">
+    <Link to="/machines" className="inline-flex min-h-12 items-center gap-2 rounded-md px-2 text-sm text-muted hover:bg-hover focus-visible:outline-2 focus-visible:outline-accent"><ArrowLeft className="size-4" aria-hidden />返回机台管理</Link>
     {valid && query.isPending && <Spinner />}
     {missing && <EmptyState title="机台不存在或无权访问" />}
     {query.isError && !missing && <ErrorState message="机台加载失败" onRetry={() => query.refetch()} />}
     {machine && !missing && <>
-      <header className="space-y-3 rounded-lg border border-line bg-surface p-4">
-        <div className="flex items-start justify-between gap-3"><h1 className="min-w-0 break-words text-xl font-semibold">{machine.code}</h1><span className="shrink-0 rounded-full bg-inset px-3 py-1 text-sm">{machine.enabled ? '启用' : '已停用'}</span></div>
-        {machine.name && <p className="break-words text-lg">{machine.name}</p>}
-        <p className="text-sm text-muted">所属账号：{machine.ownerName}</p>
-        {machine.controller && <p className="text-sm">控制系统：{machine.controller}</p>}
-        {machine.remark && <p className="whitespace-pre-wrap break-words text-sm text-muted">{machine.remark}</p>}
-        <p className="text-sm text-muted">{machine.drawingCount} 张图纸 · {machine.operationCount} 道工序 · {machine.programCount} 个程序</p>
-        {!machine.enabled && <p className="rounded-md bg-warning-soft p-3 text-sm text-warning">此机台已停用。已有工序、程序版本和刀具表仍可查看，新关联不能选用。</p>}
-        {access.can('edit') && <div className="flex flex-wrap gap-2"><Button variant="secondary" onClick={() => setEditing(true)}>编辑机台</Button><Button variant="ghost" onClick={() => { setError(''); setTargetEnabled(!machine.enabled) }}>{machine.enabled ? '停用机台' : '启用机台'}</Button></div>}
-        {access.can('delete') && <Button variant="ghost" className="text-danger" onClick={() => setDeleting(true)}>删除机台</Button>}
+      <header className="panel overflow-hidden">
+        <div className="grid gap-5 p-4 md:p-5 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.7fr)] lg:items-center">
+          <div className="min-w-0">
+            <div className="flex items-start gap-3">
+              <span className="flex size-12 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent"><Cpu className="size-6" aria-hidden /></span>
+              <div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><h1 className="min-w-0 break-all font-mono text-xl font-semibold">{machine.code}</h1><MachineStatusBadge enabled={machine.enabled} /></div>{machine.name && <p className="mt-1 break-words text-sm text-body">{machine.name}</p>}</div>
+            </div>
+            <dl className="mt-4 grid min-w-0 gap-3 sm:grid-cols-2">
+              <div className="min-w-0"><dt className="text-xs text-muted">控制系统</dt><dd className="mt-1 break-words text-sm">{machine.controller || '未填写'}</dd></div>
+              <div className="min-w-0"><dt className="text-xs text-muted">所属账号</dt><dd className="mt-1 break-words text-sm">{machine.ownerName || '待分配'}</dd></div>
+            </dl>
+          </div>
+          <dl aria-label="机台关联统计" className="grid grid-cols-3 divide-x divide-line rounded-lg border border-line bg-canvas py-4 text-center">
+            <div className="px-2"><dt className="flex items-center justify-center gap-1 text-xs text-muted"><FolderKanban className="hidden size-3.5 sm:block" aria-hidden />图纸</dt><dd className="mt-2 font-mono text-2xl font-semibold tabular-nums">{machine.drawingCount}</dd></div>
+            <div className="px-2"><dt className="flex items-center justify-center gap-1 text-xs text-muted"><Layers className="hidden size-3.5 sm:block" aria-hidden />工序</dt><dd className="mt-2 font-mono text-2xl font-semibold tabular-nums">{machine.operationCount}</dd></div>
+            <div className="px-2"><dt className="flex items-center justify-center gap-1 text-xs text-muted"><FileCode2 className="hidden size-3.5 sm:block" aria-hidden />程序</dt><dd className="mt-2 font-mono text-2xl font-semibold tabular-nums">{machine.programCount}</dd></div>
+          </dl>
+        </div>
+        {machine.remark && <div className="mx-4 mb-4 rounded-md bg-inset p-3 md:mx-5"><p className="mb-1 text-xs text-muted">备注</p><p className="whitespace-pre-wrap break-words text-sm text-body">{machine.remark}</p></div>}
+        {!machine.enabled && <p className="mx-4 mb-4 rounded-md bg-warning-soft p-3 text-sm text-warning md:mx-5">此机台已停用。已有工序、程序版本和刀具表仍可查看，新关联不能选用。</p>}
+        {(access.can('edit') || access.can('delete')) && <div className="flex flex-wrap gap-2 border-t border-line bg-canvas px-4 py-3 md:px-5">
+          {access.can('edit') && <><Button variant="secondary" onClick={() => setEditing(true)}><Pencil className="size-4" aria-hidden />编辑机台</Button><Button variant="ghost" onClick={() => { setError(''); setTargetEnabled(!machine.enabled) }}><Power className="size-4" aria-hidden />{machine.enabled ? '停用机台' : '启用机台'}</Button></>}
+          {access.can('delete') && <Button variant="ghost" className="text-danger sm:ml-auto" onClick={() => setDeleting(true)}><Trash2 className="size-4" aria-hidden />删除机台</Button>}
+        </div>}
       </header>
       {notice && <p role="status" className="rounded-md bg-success-soft p-3 text-sm text-success">{notice}</p>}
       <section aria-label="关联图纸、工序和程序" className="space-y-3">
-        <h2 className="text-xl font-bold">关联图纸、工序和程序</h2>
-        <Field type="search" label="搜索关联记录" value={input} onChange={(e) => setInput(e.target.value)} placeholder="图纸号、类型、材料、工序、程序号或名称" />
-        <p className="text-xs text-muted">显示匹配图纸的相关工序及独立关联此机台的程序。</p>
+        <div className="panel space-y-3 p-4">
+          <div><h2 className="text-base font-semibold">关联图纸、工序和程序</h2><p className="mt-1 text-xs text-muted">显示匹配图纸的相关工序及独立关联此机台的程序。</p></div>
+          <label className="relative block"><span className="sr-only">搜索关联记录</span><Search className="pointer-events-none absolute top-1/2 left-3 size-5 -translate-y-1/2 text-subtle" aria-hidden /><input type="search" value={input} onChange={(e) => setInput(e.target.value)} placeholder="图纸号、类型、材料、工序、程序号或名称" enterKeyHint="search" className="h-12 w-full rounded-md border border-line-strong bg-surface pr-3 pl-10 text-base focus:outline-2 focus:outline-accent" /></label>
+        </div>
         {drawings.isPending && <Spinner />}
         {drawings.isError && <ErrorState message="关联记录加载失败" onRetry={() => drawings.refetch()} />}
         {drawings.isSuccess && <p className="text-sm text-muted">{drawings.data.pages[0].total} 张关联图纸</p>}
         {drawings.isSuccess && drawings.data.pages[0].total === 0 && <EmptyState title={q ? '没有匹配的关联记录' : '此机台尚未关联工序或程序'} />}
-        {drawings.data?.pages.flatMap((p) => p.items).map((d) => <article key={d.id} className="space-y-3 rounded-lg border border-line bg-surface p-4">
-          <h3><Link to={`/drawings/${d.id}`} className="inline-flex min-h-12 items-center break-words text-lg font-bold text-warning underline">{d.drawingNo}{d.name ? ` · ${d.name}` : ''}</Link></h3>
-          {d.operations.map((op) => <section key={op.id} className="rounded-md bg-canvas p-3">
-            <h4 className="font-semibold">{op.opNo}# {op.opName}</h4>
+        {drawings.data?.pages.flatMap((p) => p.items).map((d) => <article key={d.id} className="panel min-w-0 overflow-hidden">
+          <h3 className="border-b border-line"><Link to={`/drawings/${d.id}`} className="flex min-h-14 items-center gap-3 px-4 py-3 text-accent hover:bg-accent-soft focus-visible:outline-2 focus-visible:outline-accent"><FolderKanban className="size-5 shrink-0" aria-hidden /><span className="min-w-0 flex-1 break-words text-sm font-semibold"><span className="font-mono">{d.drawingNo}</span>{d.name ? ` · ${d.name}` : ''}</span><ChevronRight className="size-4 shrink-0" aria-hidden /></Link></h3>
+          <div className="grid min-w-0 gap-3 p-4 lg:grid-cols-2">{d.operations.map((op) => <section key={op.id} className="min-w-0 rounded-md border border-line bg-canvas p-3">
+            <h4 className="flex items-start gap-2 text-sm font-semibold"><Layers className="mt-0.5 size-4 shrink-0 text-muted" aria-hidden /><span className="min-w-0 break-words">{op.opNo}# {op.opName}</span></h4>
             {op.programs.length === 0 && <p className="mt-2 text-sm text-muted">暂无程序</p>}
-            <ul className="mt-2 space-y-2">{op.programs.map((p) => <li key={p.id}><Link to={`/drawings/${d.id}/programs/${p.id}`} className="flex min-h-14 items-center justify-between gap-3 rounded-md border border-line bg-surface p-3 hover:border-accent"><div className="min-w-0 break-words"><p className="font-medium">{p.programNo}</p>{p.programName && <p className="text-sm text-muted">{p.programName}</p>}</div><VersionBadge no={p.currentVersionNo} /></Link></li>)}</ul>
-          </section>)}
+            <ul className="mt-3 space-y-2">{op.programs.map((p) => <li key={p.id}><Link to={`/drawings/${d.id}/programs/${p.id}`} className="flex min-h-14 items-center gap-2 rounded-md border border-line bg-surface p-3 hover:border-accent focus-visible:outline-2 focus-visible:outline-accent"><FileCode2 className="size-4 shrink-0 text-accent" aria-hidden /><div className="min-w-0 flex-1 break-words"><p className="font-mono text-sm font-medium">{p.programNo}</p>{p.programName && <p className="mt-0.5 text-xs text-muted">{p.programName}</p>}</div><VersionBadge no={p.currentVersionNo} /><ChevronRight className="size-4 shrink-0 text-muted" aria-hidden /></Link></li>)}</ul>
+          </section>)}</div>
         </article>)}
         {drawings.hasNextPage && <Button variant="secondary" className="w-full" loading={drawings.isFetchingNextPage} onClick={() => void drawings.fetchNextPage()}>加载更多关联图纸</Button>}
       </section>
