@@ -13,6 +13,7 @@ import AuthPage from './pages/AuthPage'
 import BackupPage from './pages/BackupPage'
 import DrawingPage from './pages/DrawingPage'
 import MePage from './pages/MePage'
+import AccountPage from './pages/AccountPage'
 import MachinesPage from './pages/MachinesPage'
 import MachinePage from './pages/MachinePage'
 import NewDrawingPage from './pages/NewDrawingPage'
@@ -98,6 +99,7 @@ function Application() {
         <Route path="machines" element={<MachinesPage />} />
         <Route path="machines/:id" element={<MachinePage />} />
         <Route path="me" element={<MePage />} />
+        <Route path="me/account" element={<AccountPage />} />
         <Route path="me/backup" element={<BackupPage />} />
         <Route path="admin" element={<AdminPage />} />
         <Route path="admin/audit" element={<AuditPage />} />

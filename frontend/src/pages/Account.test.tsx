@@ -25,13 +25,55 @@ function server() {
   return calls
 }
 
+test.each([
+  user,
+  { ...user, role: 'editor' },
+  { ...user, enabled: false },
+])('$role启用状态$enabled的当前账号只显示入口，进入后才显示操作，返回后收起', async currentUser => {
+  const calls = mockApi(r => {
+    if (r.path === '/auth/status') return { body: { setupRequired: false } }
+    if (r.path === '/auth/me') return { body: currentUser }
+    if (r.path === '/meta') return { body: { version: 'local-test' } }
+  })
+  renderApp(<App />, '/me')
+  const u = userEvent.setup()
+  const entry = await screen.findByRole('link', { name: '当前账号' })
+  expect(entry).toHaveAttribute('href', '/me/account')
+  expect(entry).toHaveTextContent(currentUser.displayName)
+  expect(screen.queryByRole('button', { name: '修改名称' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: '修改密码' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: '退出登录' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  await u.click(entry)
+  expect(await screen.findByRole('heading', { name: '当前账号', level: 1 })).toBeVisible()
+  expect(screen.getByRole('button', { name: '修改名称' })).toBeEnabled()
+  expect(screen.getByRole('button', { name: '修改密码' })).toBeEnabled()
+  expect(screen.getByRole('button', { name: '退出登录' })).toBeEnabled()
+  expect(screen.getAllByRole('link', { name: '我的' }).every(link => link.getAttribute('aria-current') === 'page')).toBe(true)
+  await u.click(screen.getByRole('link', { name: '返回我的' }))
+  expect(await screen.findByRole('link', { name: '当前账号' })).toBeVisible()
+  expect(screen.queryByRole('button', { name: '修改名称' })).not.toBeInTheDocument()
+  expect(calls.filter(r => /^(\/admin|\/backup|\/machines)/.test(r.path))).toHaveLength(0)
+  expect(calls.filter(r => r.method !== 'GET')).toHaveLength(0)
+})
+
+test('未登录直达当前账号页仍进入登录流程', async () => {
+  mockApi(r => {
+    if (r.path === '/auth/status') return { body: { setupRequired: false } }
+    if (r.path === '/auth/me') return { status: 401 }
+  })
+  renderApp(<App />, '/me/account')
+  expect(await screen.findByRole('button', { name: '登录' })).toBeVisible()
+  expect(screen.queryByRole('button', { name: '修改名称' })).not.toBeInTheDocument()
+})
+
 test('未设置显示名称时回退用户名，取消名称编辑不提交也不改变账号信息', async () => {
   const calls = mockApi(r => {
     if (r.path === '/auth/status') return { body: { setupRequired: false } }
     if (r.path === '/auth/me') return { body: { ...user, displayName: '' } }
     if (r.path === '/meta') return { body: { version: 'local-test' } }
   })
-  renderApp(<App />, '/me')
+  renderApp(<App />, '/me/account')
   const u = userEvent.setup()
   const account = await screen.findByRole('region', { name: '当前账号' })
   expect(account).toHaveTextContent('admin · 管理员')
@@ -49,7 +91,7 @@ test('未设置显示名称时回退用户名，取消名称编辑不提交也�
 
 test('名称回填、非空校验、失败保留后重试，保存只更新显示名称并保留草稿', async () => {
   const calls = server()
-  const { client } = renderApp(<App />, '/me')
+  const { client } = renderApp(<App />, '/me/account')
   const u = userEvent.setup()
   await u.click(await screen.findByRole('button', { name: '修改名称' }))
   expect(screen.getByLabelText('显示名称')).toHaveValue('管理员')
@@ -69,11 +111,15 @@ test('名称回填、非空校验、失败保留后重试，保存只更新显�
   expect(screen.getByText('admin · 管理员')).toBeInTheDocument()
   expect(client.getQueryData(['version-tools-draft', 5])).toEqual({ dirty: true })
   expect(calls.filter((r) => r.method === 'PUT').at(-1)?.body).toEqual({ displayName: '车间负责人' })
+  await u.click(screen.getByRole('link', { name: '返回我的' }))
+  expect(await screen.findByRole('link', { name: '当前账号' })).toHaveTextContent('车间负责人')
+  expect(screen.queryByRole('button', { name: '修改名称' })).not.toBeInTheDocument()
+  expect(client.getQueryData(['version-tools-draft', 5])).toEqual({ dirty: true })
 })
 
 test('修改密码校验一致性，原密码错误保留表单，成功后清空会话并提示重新登录', async () => {
   const calls = server()
-  const { client } = renderApp(<App />, '/me')
+  const { client } = renderApp(<App />, '/me/account')
   const u = userEvent.setup()
   await u.click(await screen.findByRole('button', { name: '修改密码' }))
   await u.type(screen.getByLabelText('原密码'), 'wrong-password')
@@ -101,7 +147,7 @@ test('修改密码校验一致性，原密码错误保留表单，成功后清�
 
 test('修改密码前保护未保存刀具表，取消关闭不提交密码', async () => {
   const calls = server()
-  const { client } = renderApp(<App />, '/me')
+  const { client } = renderApp(<App />, '/me/account')
   const u = userEvent.setup()
   await screen.findByRole('button', { name: '修改密码' })
   client.setQueryDefaults(['version-tools-draft'], { gcTime: Infinity })
@@ -116,7 +162,7 @@ test('修改密码前保护未保存刀具表，取消关闭不提交密码', as
 
 test('请求中不能重复提交或关闭密码表单，失败后可重试', async () => {
   server()
-  renderApp(<App />, '/me')
+  renderApp(<App />, '/me/account')
   const u = userEvent.setup()
   await u.click(await screen.findByRole('button', { name: '修改密码' }))
   await u.type(screen.getByLabelText('原密码'), 'old-password')

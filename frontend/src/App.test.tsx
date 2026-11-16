@@ -252,9 +252,9 @@ test('退出登录回到登录页', async () => {
     }
     if (r.path === '/meta') return { body: { version: '2.0.0' } }
   })
-  renderApp(<App />, '/me')
+  renderApp(<App />, '/me/account')
   const u = userEvent.setup()
-  expect(await screen.findByText('版本 2.0.0')).toBeInTheDocument()
+  expect(await screen.findByRole('heading', { name: '当前账号', level: 1 })).toBeInTheDocument()
   expect(screen.getByText('admin · 管理员')).toBeInTheDocument()
   await u.click(screen.getByRole('button', { name: '退出登录' }))
   expect(await screen.findByText('登录后查看数控程序台账')).toBeInTheDocument()
@@ -268,8 +268,8 @@ test('页面外的刀具草稿也会在刷新前提示，退出后清除草稿',
     if (r.path === '/meta') return { body: { version: '2.1.0-dev' } }
     if (r.path === '/auth/logout') { out = true; return { status: 204 } }
   })
-  const { client } = renderApp(<App />, '/me')
-  await screen.findByText('版本 2.1.0-dev')
+  const { client } = renderApp(<App />, '/me/account')
+  await screen.findByRole('button', { name: '退出登录' })
   client.setQueryData(['version-tools-draft', 5], { dirty: true })
   const before = new Event('beforeunload', { cancelable: true })
   window.dispatchEvent(before)
@@ -315,8 +315,8 @@ test('退出完成后，较早发出的会话刷新响应不能恢复登录', as
     if (r.path === '/auth/logout') return { status: 204 }
     if (r.path === '/meta') return { body: { version: 'review' } }
   })
-  const { client } = renderApp(<App />, '/me')
-  await screen.findByText('版本 review')
+  const { client } = renderApp(<App />, '/me/account')
+  await screen.findByRole('button', { name: '退出登录' })
   const original = globalThis.fetch
   let release!: () => void
   let reached!: () => void
