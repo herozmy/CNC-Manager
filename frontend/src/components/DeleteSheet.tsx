@@ -41,8 +41,8 @@ export default function DeleteSheet({ title, message, remove, onDeleted, onClose
     }
   }
   return <Sheet open title={title} onClose={close}>
-    <p className="mb-5 text-slate-700">{message}</p>
-    {error && <p role="alert" className="mb-4 rounded-xl bg-red-50 p-3 text-red-700">删除失败：{error}</p>}
+    <p className="mb-5 text-body">{message}</p>
+    {error && <p role="alert" className="mb-4 rounded-md bg-danger-soft p-3 text-danger">删除失败：{error}</p>}
     <div className="grid grid-cols-2 gap-3">
       <Button variant="secondary" disabled={busy} onClick={close}>取消</Button>
       <Button variant="danger" loading={busy} onClick={() => void confirm()}>确认删除</Button>

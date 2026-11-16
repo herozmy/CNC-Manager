@@ -21,20 +21,20 @@ import { VersionBadge } from './DrawingPage'
 function VersionDetails({ v, onActivate, onView, onCompare }: { v: Version; onActivate: () => void; onView: () => void; onCompare?: () => void }) {
   const access = useAccess()
   return (
-    <section aria-label={`V${v.versionNo} 版本详情`} className={`rounded-2xl border p-4 ${v.isCurrent ? 'border-amber-400 bg-amber-50' : 'border-slate-200 bg-white'}`}>
+    <section aria-label={`V${v.versionNo} 版本详情`} className={`rounded-lg border p-4 ${v.isCurrent ? 'border-accent bg-warning-soft' : 'border-line bg-surface'}`}>
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <span className="text-lg font-bold">V{v.versionNo}</span>
-          {v.isCurrent && <span className="rounded-full bg-amber-500 px-2.5 py-0.5 text-xs font-semibold text-slate-900">当前</span>}
+          {v.isCurrent && <span className="rounded-full bg-amber-500 px-2.5 py-0.5 text-xs font-semibold text-ink">当前</span>}
         </div>
-        <span className="text-xs text-slate-500">{relativeTime(v.createdAt)}</span>
+        <span className="text-xs text-muted">{relativeTime(v.createdAt)}</span>
       </div>
-      <p className="mt-1 break-all text-slate-800">{v.fileName}</p>
-      <p className="text-sm text-slate-500">
+      <p className="mt-1 break-all text-ink">{v.fileName}</p>
+      <p className="text-sm text-muted">
         {formatBytes(v.fileSize)} · {v.encoding === 'gbk' ? 'GBK' : 'UTF-8'}
         {v.createdBy && ` · ${v.createdBy}`}
       </p>
-      {v.changeNote && <p className="mt-1 text-sm text-slate-700">{v.changeNote}</p>}
+      {v.changeNote && <p className="mt-1 text-sm text-body">{v.changeNote}</p>}
       <Button variant="secondary" className="mt-3 w-full" onClick={onView} aria-label={`查看 V${v.versionNo} 内容`}>查看 / 编辑 NC</Button>
       {onCompare && <Button variant="secondary" className="mt-2 w-full" onClick={onCompare}>版本对比</Button>}
       <div className="mt-3 grid grid-cols-2 gap-2">
@@ -42,7 +42,7 @@ function VersionDetails({ v, onActivate, onView, onCompare }: { v: Version; onAc
           href={api.downloadUrl(v.id)}
           download
           aria-label={`下载 V${v.versionNo}`}
-          className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white font-semibold active:bg-slate-200"
+          className="inline-flex min-h-12 items-center justify-center gap-2 rounded-md border border-line-strong bg-surface font-semibold active:bg-hover"
         >
           <Download className="size-5" aria-hidden />
           下载
@@ -101,7 +101,7 @@ export default function ProgramPage() {
 
   return (
     <main className="mx-auto max-w-3xl px-4 pt-4 pb-8">
-      <Link to={`/drawings/${drawingId}`} aria-label="返回图纸" className="mb-2 inline-flex size-12 items-center justify-center rounded-xl hover:bg-slate-200">
+      <Link to={`/drawings/${drawingId}`} aria-label="返回图纸" className="mb-2 inline-flex size-12 items-center justify-center rounded-md hover:bg-hover">
         <ArrowLeft className="size-6" aria-hidden />
       </Link>
       {valid && (drawing.isPending || versions.isPending) && !notFound && <Spinner />}
@@ -111,25 +111,25 @@ export default function ProgramPage() {
       {program && op && versions.data && (
         <>
           <header className="mb-4">
-            <p className="text-sm text-slate-500">
+            <p className="text-sm text-muted">
               {drawing.data?.drawingNo} · {op.opNo}# {op.opName}
             </p>
             <div className="flex items-center justify-between gap-3">
               <h1 className="min-w-0 text-2xl font-bold">{program.programNo}</h1>
               <VersionBadge no={current?.versionNo ?? null} />
             </div>
-            {(program.programName || program.controller) && <p className="text-slate-600">{[program.programName, program.controller].filter(Boolean).join(' · ')}</p>}
-            <p className="text-sm text-slate-600">程序机台：{program.machineId ? <Link className="underline text-amber-800" to={`/machines/${program.machineId}`}>{[program.machineCode, program.machineName].filter(Boolean).join(' · ') || `机台 #${program.machineId}`}</Link> : '未关联机台'}</p>
-            {program.remark && <p className="mt-2 rounded-xl bg-amber-50 p-3 text-sm text-slate-700">{program.remark}</p>}
+            {(program.programName || program.controller) && <p className="text-muted">{[program.programName, program.controller].filter(Boolean).join(' · ')}</p>}
+            <p className="text-sm text-muted">程序机台：{program.machineId ? <Link className="underline text-warning" to={`/machines/${program.machineId}`}>{[program.machineCode, program.machineName].filter(Boolean).join(' · ') || `机台 #${program.machineId}`}</Link> : '未关联机台'}</p>
+            {program.remark && <p className="mt-2 rounded-md bg-warning-soft p-3 text-sm text-body">{program.remark}</p>}
             <div className="mt-3 flex flex-wrap gap-2">
               {access.can('edit') && <Button variant="secondary" onClick={() => setEditing(true)}><Pencil className="size-5" aria-hidden />编辑程序信息</Button>}
-              {access.can('delete') && <Button variant="ghost" className="text-red-600" onClick={() => setDeleting(true)}>删除程序</Button>}
+              {access.can('delete') && <Button variant="ghost" className="text-danger" onClick={() => setDeleting(true)}>删除程序</Button>}
             </div>
           </header>
 
-          {saved && <p role="status" className="mb-4 rounded-xl bg-green-50 p-3">{saved}</p>}
+          {saved && <p role="status" className="mb-4 rounded-md bg-success-soft p-3">{saved}</p>}
           {uploaded && (
-            <div role="status" className="mb-4 rounded-xl bg-green-50 p-3 text-sm text-green-900">
+            <div role="status" className="mb-4 rounded-md bg-success-soft p-3 text-sm text-success">
               <p className="font-semibold">已上传 V{uploaded.versionNo}</p>
               {uploaded.parse && (
                 <p>
@@ -139,7 +139,7 @@ export default function ProgramPage() {
                 </p>
               )}
               {uploaded.parse?.warnings.map((w) => (
-                <p key={w} className="text-amber-800">
+                <p key={w} className="text-warning">
                   {w}
                 </p>
               ))}
@@ -149,7 +149,7 @@ export default function ProgramPage() {
           <div className={`mb-6 grid gap-3 ${current ? 'grid-cols-2 sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
             {current ? (
               <>
-                {access.can('download') && <a href={api.downloadUrl(current.id)} download aria-label="下载当前版本" className="inline-flex min-h-14 items-center justify-center gap-2 rounded-xl bg-amber-500 font-semibold text-slate-900 active:bg-amber-600">
+                {access.can('download') && <a href={api.downloadUrl(current.id)} download aria-label="下载当前版本" className="inline-flex min-h-14 items-center justify-center gap-2 rounded-md bg-amber-500 font-semibold text-ink active:bg-amber-600">
                   <Download className="size-5" aria-hidden />
                   下载当前 V{current.versionNo}
                 </a>}
@@ -158,7 +158,7 @@ export default function ProgramPage() {
                 </Button>
               </>
             ) : (
-              <p className="flex min-h-14 items-center justify-center rounded-xl bg-slate-100 text-slate-500">还没有 NC 文件</p>
+              <p className="flex min-h-14 items-center justify-center rounded-md bg-inset text-muted">还没有 NC 文件</p>
             )}
             {access.can('edit') && <Button variant="secondary" className={`min-h-14 ${current ? 'col-span-2 sm:col-span-1' : ''}`} onClick={() => fileInput.current?.click()}>
               <Upload className="size-5" aria-hidden />
@@ -179,7 +179,7 @@ export default function ProgramPage() {
 
           {versions.data.length === 0 ? (
             <EmptyState title="还没有版本">
-              <p className="text-sm text-slate-500">点击「上传新版本」选择 NC 文件</p>
+              <p className="text-sm text-muted">点击「上传新版本」选择 NC 文件</p>
             </EmptyState>
           ) : (
             <div className="space-y-3">
@@ -187,7 +187,7 @@ export default function ProgramPage() {
               <select
                 id="nc-version"
                 aria-label="选择 NC 程序版本"
-                className="h-12 w-full min-w-0 rounded-xl border border-slate-300 bg-white px-3 text-base text-slate-900 focus:outline-2 focus:outline-amber-500"
+                className="h-12 w-full min-w-0 rounded-md border border-line-strong bg-surface px-3 text-base text-ink focus:outline-2 focus:outline-accent"
                 value={selected?.id ?? ''}
                 onChange={(e) => setSelection(e.target.value ? { programId, versionId: Number(e.target.value) } : null)}
               >

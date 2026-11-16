@@ -18,8 +18,13 @@ import MachinePage from './pages/MachinePage'
 import NewDrawingPage from './pages/NewDrawingPage'
 import OverviewPage from './pages/OverviewPage'
 import ProgramPage from './pages/ProgramPage'
+import { ThemeProvider } from './layout/ThemeProvider'
 
 export default function App() {
+  return <ThemeProvider><Application /></ThemeProvider>
+}
+
+function Application() {
   const qc = useQueryClient()
   const session = useSession()
   const location = useLocation()
@@ -80,7 +85,7 @@ export default function App() {
 
   return (
     <>
-    {temporarySessionError && <div role="status" className="flex flex-wrap items-center justify-center gap-x-3 bg-amber-50 px-4 py-2 text-sm text-amber-950">
+    {temporarySessionError && <div role="status" className="flex flex-wrap items-center justify-center gap-x-3 bg-warning-soft px-4 py-2 text-sm text-warning">
       <p>连接暂时中断，未提交内容仍保留在当前页面。请恢复网络后重试。</p>
       <button type="button" className="min-h-12 shrink-0 underline disabled:opacity-50" disabled={session.isFetching} onClick={() => void session.refetch()}>重新连接</button>
     </div>}

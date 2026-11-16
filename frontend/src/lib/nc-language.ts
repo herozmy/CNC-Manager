@@ -29,12 +29,12 @@ export const ncLanguage = StreamLanguage.define({
 })
 
 export const ncHighlight = syntaxHighlighting(HighlightStyle.define([
-  { tag: tags.keyword, color: '#1d4ed8', fontWeight: 'bold' },
-  { tag: tags.labelName, color: '#7e22ce' },
-  { tag: tags.propertyName, color: '#0369a1' },
-  { tag: tags.number, color: '#b45309' },
-  { tag: tags.variableName, color: '#be123c' },
-  { tag: tags.comment, color: '#15803d' },
-  { tag: tags.string, color: '#047857' },
-  { tag: tags.operator, color: '#475569' },
+  { tag: tags.keyword, color: 'var(--nc-keyword)', fontWeight: 'bold' },
+  { tag: tags.labelName, color: 'var(--nc-label)' },
+  { tag: tags.propertyName, color: 'var(--nc-property)' },
+  { tag: tags.number, color: 'var(--nc-number)' },
+  { tag: tags.variableName, color: 'var(--nc-variable)' },
+  { tag: tags.comment, color: 'var(--nc-comment)' },
+  { tag: tags.string, color: 'var(--nc-string)' },
+  { tag: tags.operator, color: 'var(--ui-body)' },
 ]))

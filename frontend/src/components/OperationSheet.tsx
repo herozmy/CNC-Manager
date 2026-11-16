@@ -131,35 +131,35 @@ export default function OperationSheet({ drawingId, ownerUserId, operation, sugg
               <Field label="工序名称" value={opName} onChange={(e) => setOpName(e.target.value)} placeholder="如 粗车、精铣" />
             </div>
           </div>
-          <section className="space-y-2 rounded-xl border border-slate-200 p-3" aria-label="工序机台">
-            <label className="block space-y-1.5 text-sm font-medium text-slate-700">
+          <section className="space-y-2 rounded-md border border-line p-3" aria-label="工序机台">
+            <label className="block space-y-1.5 text-sm font-medium text-body">
               <span>机台（可选）</span>
-              <select aria-label="机台（可选）" value={machineId ?? ''} onChange={(e) => setMachineId(e.target.value ? Number(e.target.value) : null)} disabled={busy || machines.isPending || addingMachine} className="h-12 w-full min-w-0 rounded-xl border border-slate-300 bg-white px-3 text-base">
+              <select aria-label="机台（可选）" value={machineId ?? ''} onChange={(e) => setMachineId(e.target.value ? Number(e.target.value) : null)} disabled={busy || machines.isPending || addingMachine} className="h-12 w-full min-w-0 rounded-md border border-line-strong bg-surface px-3 text-base">
                 <option value="">未关联机台</option>
                 {machineId !== null && !options.some((m) => m.id === machineId) && <option value={machineId}>{[operation?.machineCode, operation?.machineName].filter(Boolean).join(' · ') || ('机台 #' + machineId)}（当前关联）</option>}
                 {options.map((m) => <option key={m.id} value={m.id}>{m.code}{m.name ? ' · ' + m.name : ''}{m.enabled === false ? '（已停用，当前关联）' : ''}</option>)}
               </select>
             </label>
-            {machines.isPending && <p role="status" className="text-sm text-slate-500">正在加载机台…</p>}
-            {machines.isError && <p className="text-sm text-red-700">机台列表加载失败，当前关联仍保留。<button type="button" className="ml-2 min-h-12 underline" disabled={busy} onClick={() => void machines.refetch()}>重试加载机台</button></p>}
-            {machines.isSuccess && options.length === 0 && <p className="text-sm text-slate-500">暂无可选机台，可先不关联。</p>}
-            <p className="text-xs text-slate-500">仅列出图纸所属账号的启用机台；已停用的当前关联可保留。选择“未关联机台”可解除关联。</p>
-            {ownerUserId === 0 ? <p className="text-sm text-slate-500">请先分配图纸所属账号，再新增机台。</p> : !addingMachine && <Button variant="secondary" disabled={busy} onClick={() => { setMachineError(''); setAddingMachine(true) }}>新增机台</Button>}
+            {machines.isPending && <p role="status" className="text-sm text-muted">正在加载机台…</p>}
+            {machines.isError && <p className="text-sm text-danger">机台列表加载失败，当前关联仍保留。<button type="button" className="ml-2 min-h-12 underline" disabled={busy} onClick={() => void machines.refetch()}>重试加载机台</button></p>}
+            {machines.isSuccess && options.length === 0 && <p className="text-sm text-muted">暂无可选机台，可先不关联。</p>}
+            <p className="text-xs text-muted">仅列出图纸所属账号的启用机台；已停用的当前关联可保留。选择“未关联机台”可解除关联。</p>
+            {ownerUserId === 0 ? <p className="text-sm text-muted">请先分配图纸所属账号，再新增机台。</p> : !addingMachine && <Button variant="secondary" disabled={busy} onClick={() => { setMachineError(''); setAddingMachine(true) }}>新增机台</Button>}
             {addingMachine && <fieldset disabled={busy} className="space-y-3">
               <Field label="机台编号" value={machineCode} onChange={(e) => setMachineCode(e.target.value)} maxLength={64} placeholder="如 CNC-01" />
               <Field label="机台名称（可选）" value={machineName} onChange={(e) => setMachineName(e.target.value)} maxLength={100} placeholder="如 立式加工中心" />
-              <p className="text-xs text-slate-500">新增后可供同一账号的其他工序复用；工序关联需点击下方“保存”。</p>
-              {machineError && <p role="alert" className="text-sm text-red-700">{machineError}</p>}
+              <p className="text-xs text-muted">新增后可供同一账号的其他工序复用；工序关联需点击下方“保存”。</p>
+              {machineError && <p role="alert" className="text-sm text-danger">{machineError}</p>}
               <div className="flex flex-wrap gap-2"><Button onClick={() => void addMachine()} loading={busy}>新增并选中</Button><Button variant="ghost" onClick={() => setAddingMachine(false)}>取消新增机台</Button></div>
             </fieldset>}
           </section>
-          <label className="block space-y-1.5 text-sm font-medium text-slate-700">
+          <label className="block space-y-1.5 text-sm font-medium text-body">
             <span>装夹方式</span>
             <select
               aria-label="装夹方式"
               value={fixtureChoice}
               onChange={(e) => setFixtureChoice(e.target.value)}
-              className="h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-base text-slate-900 focus:outline-2 focus:outline-offset-0 focus:outline-amber-500"
+              className="h-12 w-full rounded-md border border-line-strong bg-surface px-4 text-base text-ink focus:outline-2 focus:outline-offset-0 focus:outline-accent"
             >
               <option value="">未选择</option>
               {fixtureOptions.map((option) => <option key={option} value={option}>{option}</option>)}
@@ -177,17 +177,17 @@ export default function OperationSheet({ drawingId, ownerUserId, operation, sugg
           )}
           <Field label="分中方式" value={centeringMethod} onChange={(e) => setCenteringMethod(e.target.value)} placeholder="请输入分中方式（选填）" maxLength={200} disabled={busy} />
           <fieldset className="space-y-2" disabled={busy}>
-            <legend className="text-sm font-medium text-slate-700">坐标（mm）</legend>
+            <legend className="text-sm font-medium text-body">坐标（mm）</legend>
             <div className="grid grid-cols-3 gap-2">
-              {axes.map((axis) => <div key={axis} className="min-w-0 rounded-xl border border-slate-200 bg-slate-50 p-2">
+              {axes.map((axis) => <div key={axis} className="min-w-0 rounded-md border border-line bg-canvas p-2">
                 <Field label={axis} aria-label={`${axis} 坐标（mm）`} value={coordinates[axis]} onChange={(e) => setCoordinates((previous) => ({ ...previous, [axis]: e.target.value }))} error={coordinateError[axis]} placeholder="0" inputMode="text" autoComplete="off" spellCheck={false} className="min-w-0 px-2! tabular-nums" />
               </div>)}
             </div>
-            <p className="text-xs text-slate-500">支持正负数，留空按 0 保存，精确到 0.001 mm</p>
+            <p className="text-xs text-muted">支持正负数，留空按 0 保存，精确到 0.001 mm</p>
           </fieldset>
           <TextArea label="备注" value={remark} onChange={(e) => setRemark(e.target.value)} />
           {error && (
-            <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+            <p role="alert" className="rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger">
               {error}
             </p>
           )}
@@ -195,7 +195,7 @@ export default function OperationSheet({ drawingId, ownerUserId, operation, sugg
             保存
           </Button>
           {operation && (
-            <Button variant="ghost" className="w-full text-red-600" disabled={busy} onClick={() => setConfirmDelete(true)}>
+            <Button variant="ghost" className="w-full text-danger" disabled={busy} onClick={() => setConfirmDelete(true)}>
               删除此工序
             </Button>
           )}

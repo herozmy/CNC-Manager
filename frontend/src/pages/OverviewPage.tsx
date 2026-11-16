@@ -15,27 +15,27 @@ import { useDebounced } from '../lib/useDebounced'
 
 function DrawingCard({ d, onEdit, onDelete }: { d: Drawing; onEdit?: () => void; onDelete?: () => void }) {
   return (
-    <article className="flex items-stretch rounded-2xl border border-slate-200 bg-white shadow-sm md:hover:border-amber-400">
-      <Link to={`/drawings/${d.id}`} className="min-w-0 flex-1 rounded-l-2xl p-4 active:bg-slate-100">
+    <article className="flex items-stretch rounded-lg border border-line bg-surface shadow-sm md:hover:border-accent">
+      <Link to={`/drawings/${d.id}`} className="min-w-0 flex-1 rounded-l-lg p-4 active:bg-inset">
         <div className="flex items-start justify-between gap-3">
           <p className="min-w-0 break-words text-lg font-bold">{d.drawingNo}</p>
-          <span className="shrink-0 text-xs text-slate-500">{relativeTime(d.updatedAt)}</span>
+          <span className="shrink-0 text-xs text-muted">{relativeTime(d.updatedAt)}</span>
         </div>
-        <p className="mt-2 w-fit max-w-full break-words rounded-lg bg-slate-100 px-2 py-1 text-sm text-slate-700">类型：{d.name || '未分类'}</p>
-        {d.ownerName && <p className="mt-1 text-sm text-slate-500">所属账号：{d.ownerName}</p>}
-        {d.material && <p className="mt-1 break-words text-sm text-slate-500">{d.material}</p>}
-        <p className="mt-3 flex items-center gap-1.5 text-sm text-slate-600">
+        <p className="mt-2 w-fit max-w-full break-words rounded-lg bg-inset px-2 py-1 text-sm text-body">类型：{d.name || '未分类'}</p>
+        {d.ownerName && <p className="mt-1 text-sm text-muted">所属账号：{d.ownerName}</p>}
+        {d.material && <p className="mt-1 break-words text-sm text-muted">{d.material}</p>}
+        <p className="mt-3 flex items-center gap-1.5 text-sm text-muted">
           <Layers className="size-4" aria-hidden />
           {d.operationCount} 道工序 · {d.programCount} 个程序
         </p>
       </Link>
-      {(onEdit || onDelete) && <div className="flex w-14 shrink-0 flex-col overflow-hidden rounded-r-2xl border-l border-slate-100 md:w-20">
+      {(onEdit || onDelete) && <div className="flex w-14 shrink-0 flex-col overflow-hidden rounded-r-lg border-l border-line md:w-20">
         {onEdit && <button
           type="button"
           onClick={onEdit}
           aria-label={`编辑图纸 ${d.drawingNo}`}
           title="编辑图纸"
-          className="flex min-h-12 flex-1 flex-col items-center justify-center gap-1 text-sm text-slate-700 hover:bg-amber-50 active:bg-amber-100 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-amber-500 md:flex-row"
+          className="flex min-h-12 flex-1 flex-col items-center justify-center gap-1 text-sm text-body hover:bg-warning-soft active:bg-warning-soft focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent md:flex-row"
         >
           <Pencil className="size-4" aria-hidden /><span>编辑</span>
         </button>}
@@ -44,7 +44,7 @@ function DrawingCard({ d, onEdit, onDelete }: { d: Drawing; onEdit?: () => void;
           onClick={onDelete}
           aria-label={`删除图纸 ${d.drawingNo}`}
           title="删除图纸"
-          className={`flex min-h-12 flex-1 flex-col items-center justify-center gap-1 text-sm text-red-600 hover:bg-red-50 active:bg-red-100 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-amber-500 md:flex-row ${onEdit ? 'border-t border-slate-100' : ''}`}
+          className={`flex min-h-12 flex-1 flex-col items-center justify-center gap-1 text-sm text-danger hover:bg-danger-soft active:bg-danger-soft focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent md:flex-row ${onEdit ? 'border-t border-line' : ''}`}
         >
           <Trash2 className="size-4" aria-hidden /><span>删除</span>
         </button>}
@@ -78,7 +78,7 @@ export default function OverviewPage() {
       <header className="mb-4 flex items-end justify-between">
         <div>
           <h1 className="text-2xl font-bold">总览</h1>
-          {query.isSuccess && <p className="text-sm text-slate-500">{q ? `找到 ${total} 张图纸` : `共 ${total} 张图纸`}</p>}
+          {query.isSuccess && <p className="text-sm text-muted">{q ? `找到 ${total} 张图纸` : `共 ${total} 张图纸`}</p>}
         </div>
         {access.can('create') && <Link to="/drawings/new" className="hidden md:block">
           <Button>新建图纸</Button>
@@ -86,22 +86,22 @@ export default function OverviewPage() {
       </header>
       {access.admin && <div className="mb-3"><OwnerSelect value={ownerUserId} onChange={setOwnerUserId} includeUnassigned includeDisabled label="筛选所属账号" /></div>}
 
-      <div className="sticky top-0 z-[5] -mx-4 mb-4 bg-slate-50/95 px-4 py-2 backdrop-blur">
+      <div className="sticky top-0 z-[5] -mx-4 mb-4 bg-canvas/95 px-4 py-2 backdrop-blur">
         <label className="relative block">
           <span className="sr-only">搜索图纸</span>
-          <Search className="pointer-events-none absolute top-1/2 left-4 size-5 -translate-y-1/2 text-slate-400" aria-hidden />
+          <Search className="pointer-events-none absolute top-1/2 left-4 size-5 -translate-y-1/2 text-subtle" aria-hidden />
           <input
             type="search"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="图纸号、类型、材料、程序号"
             enterKeyHint="search"
-            className="h-12 w-full rounded-xl border border-slate-300 bg-white pr-4 pl-12 text-base focus:outline-2 focus:outline-amber-500"
+            className="h-12 w-full rounded-md border border-line-strong bg-surface pr-4 pl-12 text-base focus:outline-2 focus:outline-accent"
           />
         </label>
       </div>
 
-      {saved && <p role="status" className="mb-4 rounded-xl bg-green-50 p-3 text-sm text-green-900">图纸已保存</p>}
+      {saved && <p role="status" className="mb-4 rounded-md bg-success-soft p-3 text-sm text-success">图纸已保存</p>}
       {query.isPending && <Spinner />}
       {query.isError && <ErrorState message="图纸加载失败" onRetry={() => query.refetch()} />}
       {query.isSuccess && items.length === 0 && (

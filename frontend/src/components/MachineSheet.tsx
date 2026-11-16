@@ -48,15 +48,15 @@ export default function MachineSheet({ machine, onClose, onSaved }: { machine?: 
   return <Sheet open title={machine ? '编辑机台' : '新增机台'} onClose={close}>
     <form onSubmit={submit} noValidate className="space-y-4">
       <fieldset disabled={busy || discard} className="space-y-4">
-        {machine ? <p className="text-sm text-slate-500">所属账号：{machine.ownerName}（归属固定）</p> : access.admin && <OwnerSelect required value={form.ownerUserId ?? ''} onChange={(value) => setForm({ ...form, ownerUserId: value === '' ? undefined : value })} />}
+        {machine ? <p className="text-sm text-muted">所属账号：{machine.ownerName}（归属固定）</p> : access.admin && <OwnerSelect required value={form.ownerUserId ?? ''} onChange={(value) => setForm({ ...form, ownerUserId: value === '' ? undefined : value })} />}
         <Field label="机台编号" value={form.code} onChange={set('code')} maxLength={64} placeholder="如 CNC-01" />
         <Field label="机台名称（可选）" value={form.name} onChange={set('name')} maxLength={100} placeholder="如 立式加工中心" />
         <Field label="控制系统（可选）" value={form.controller} onChange={set('controller')} maxLength={100} placeholder="如 FANUC" />
         <TextArea label="备注" value={form.remark} onChange={set('remark')} maxLength={2000} />
       </fieldset>
-      {error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}
+      {error && <p role="alert" className="rounded-md bg-danger-soft p-3 text-sm text-danger">{error}</p>}
       <div className="grid grid-cols-2 gap-3"><Button variant="secondary" disabled={busy || discard} onClick={close}>取消</Button><Button type="submit" loading={busy} disabled={discard}>{machine ? '保存修改' : '创建机台'}</Button></div>
     </form>
-    {discard && <div className="mt-4 space-y-3 rounded-xl bg-amber-50 p-3"><p>有未保存的修改，确定放弃吗？</p><div className="flex gap-2"><Button variant="secondary" onClick={() => setDiscard(false)}>继续编辑</Button><Button variant="danger" onClick={onClose}>放弃修改</Button></div></div>}
+    {discard && <div className="mt-4 space-y-3 rounded-md bg-warning-soft p-3"><p>有未保存的修改，确定放弃吗？</p><div className="flex gap-2"><Button variant="secondary" onClick={() => setDiscard(false)}>继续编辑</Button><Button variant="danger" onClick={onClose}>放弃修改</Button></div></div>}
   </Sheet>
 }

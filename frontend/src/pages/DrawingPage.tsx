@@ -16,7 +16,7 @@ import { EmptyState, ErrorState, Spinner } from '../components/ui/State'
 
 export function VersionBadge({ no }: { no: number | null }) {
   return (
-    <span className={no ? 'shrink-0 rounded-full bg-amber-100 px-3 py-1 text-sm font-semibold text-amber-800' : 'shrink-0 rounded-full bg-slate-200 px-3 py-1 text-sm text-slate-600'}>
+    <span className={no ? 'shrink-0 rounded-full bg-warning-soft px-3 py-1 text-sm font-semibold text-warning' : 'shrink-0 rounded-full bg-hover px-3 py-1 text-sm text-muted'}>
       {no ? `V${no}` : '无版本'}
     </span>
   )
@@ -25,15 +25,15 @@ export function VersionBadge({ no }: { no: number | null }) {
 function ProgramRow({ drawingId, p }: { drawingId: number; p: Program }) {
   return (
     <li>
-      <Link to={`/drawings/${drawingId}/programs/${p.id}`} className="flex min-h-14 items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2 active:bg-slate-200">
+      <Link to={`/drawings/${drawingId}/programs/${p.id}`} className="flex min-h-14 items-center justify-between gap-3 rounded-md bg-canvas px-3 py-2 active:bg-hover">
         <div className="min-w-0">
           <p className="font-semibold">{p.programNo}</p>
-          <p className="truncate text-sm text-slate-500">程序机台：{[p.machineCode, p.machineName].filter(Boolean).join(' · ') || '未关联机台'}</p>
-          {(p.programName || p.controller) && <p className="truncate text-sm text-slate-500">{[p.programName, p.controller].filter(Boolean).join(' · ')}</p>}
+          <p className="truncate text-sm text-muted">程序机台：{[p.machineCode, p.machineName].filter(Boolean).join(' · ') || '未关联机台'}</p>
+          {(p.programName || p.controller) && <p className="truncate text-sm text-muted">{[p.programName, p.controller].filter(Boolean).join(' · ')}</p>}
         </div>
         <div className="flex shrink-0 items-center gap-1">
           <VersionBadge no={p.currentVersionNo} />
-          <ChevronRight className="size-5 text-slate-400" aria-hidden />
+          <ChevronRight className="size-5 text-subtle" aria-hidden />
         </div>
       </Link>
     </li>
@@ -47,33 +47,33 @@ function OperationCard({ drawingId, op, onEdit, onDelete, onAddProgram }: { draw
   const machine = [op.machineCode, op.machineName].filter(Boolean).join(' · ')
   const facts = [machine && `机台：${machine}`, op.fixture && `装夹 ${op.fixture}`].filter(Boolean)
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+    <section className="rounded-lg border border-line bg-surface shadow-sm">
       <div className="flex items-center gap-1 px-2">
         <h2 aria-label={`${op.opNo}# ${op.opName}`} className="min-w-0 flex-1 text-lg font-bold">
-          <button type="button" aria-label={`${expanded ? '收起' : '展开'}工序 ${op.opNo}`} aria-expanded={expanded} aria-controls={panelId} onClick={() => setExpanded(!expanded)} className="flex min-h-16 w-full items-center gap-2 rounded-xl px-2 py-3 text-left hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-amber-500">
+          <button type="button" aria-label={`${expanded ? '收起' : '展开'}工序 ${op.opNo}`} aria-expanded={expanded} aria-controls={panelId} onClick={() => setExpanded(!expanded)} className="flex min-h-16 w-full items-center gap-2 rounded-md px-2 py-3 text-left hover:bg-canvas focus-visible:outline-2 focus-visible:outline-accent">
             <span className="min-w-0 flex-1 truncate" title={`${op.opNo}# ${op.opName}`}>{op.opNo}# {op.opName}</span>
-            <span className="shrink-0 text-xs font-normal text-slate-500 sm:text-sm">{op.programs.length} 个程序</span>
-            <ChevronDown aria-hidden className={`size-5 shrink-0 text-slate-500 ${expanded ? 'rotate-180' : ''}`} />
+            <span className="shrink-0 text-xs font-normal text-muted sm:text-sm">{op.programs.length} 个程序</span>
+            <ChevronDown aria-hidden className={`size-5 shrink-0 text-muted ${expanded ? 'rotate-180' : ''}`} />
           </button>
         </h2>
         <div className="flex shrink-0 items-center gap-1">
           {access.can('edit') && <Button variant="ghost" onClick={onEdit} aria-label={`编辑工序 ${op.opNo}`} title="编辑工序" className="min-w-12 px-3">
             <Pencil className="size-4" aria-hidden /><span className="hidden sm:inline">编辑</span>
           </Button>}
-          {access.can('delete') && <Button variant="ghost" onClick={onDelete} aria-label={`删除工序 ${op.opNo}`} title="删除工序" className="min-w-12 px-3 text-red-600">
+          {access.can('delete') && <Button variant="ghost" onClick={onDelete} aria-label={`删除工序 ${op.opNo}`} title="删除工序" className="min-w-12 px-3 text-danger">
             <Trash2 className="size-4" aria-hidden /><span className="hidden sm:inline">删除</span>
           </Button>}
         </div>
       </div>
       <div id={panelId} role="region" aria-label={`工序 ${op.opNo} 详情`} hidden={!expanded}>
-        {expanded && <div className="border-t border-slate-100 p-4">
-          {facts.length > 0 && <p className="text-sm text-slate-600 [overflow-wrap:anywhere]">{facts.join(' · ')}</p>}
-          {op.centeringMethod && <p className="mt-1 text-sm text-slate-600 [overflow-wrap:anywhere]">分中方式：{op.centeringMethod}</p>}
-          {op.remark && <p className="mt-1 text-sm text-slate-500 [overflow-wrap:anywhere]">{op.remark}</p>}
+        {expanded && <div className="border-t border-line p-4">
+          {facts.length > 0 && <p className="text-sm text-muted [overflow-wrap:anywhere]">{facts.join(' · ')}</p>}
+          {op.centeringMethod && <p className="mt-1 text-sm text-muted [overflow-wrap:anywhere]">分中方式：{op.centeringMethod}</p>}
+          {op.remark && <p className="mt-1 text-sm text-muted [overflow-wrap:anywhere]">{op.remark}</p>}
           <dl aria-label="坐标（mm）" className="mt-3 grid grid-cols-3 gap-2">
             {([['X', op.xCoordinate ?? 0], ['Y', op.yCoordinate ?? 0], ['Z', op.zHeight]] as const).map(([axis, value]) => (
-              <div key={axis} className="min-w-0 rounded-xl bg-slate-50 px-3 py-2">
-                <dt className="text-xs text-slate-500">{axis}（mm）</dt>
+              <div key={axis} className="min-w-0 rounded-md bg-canvas px-3 py-2">
+                <dt className="text-xs text-muted">{axis}（mm）</dt>
                 <dd className="break-all font-semibold tabular-nums">{value}</dd>
               </div>
             ))}
@@ -85,7 +85,7 @@ function OperationCard({ drawingId, op, onEdit, onDelete, onAddProgram }: { draw
               ))}
             </ul>
           ) : (
-            <p className="mt-3 text-sm text-slate-400">暂无程序</p>
+            <p className="mt-3 text-sm text-subtle">暂无程序</p>
           )}
           {access.can('create') && <Button variant="secondary" onClick={onAddProgram} className="mt-3 w-full" aria-label={`在 ${op.opNo}# 下新增程序`}>
             <Plus className="size-5" aria-hidden />
@@ -119,7 +119,7 @@ export default function DrawingPage() {
 
   return (
     <main className="mx-auto max-w-3xl px-4 pt-4 pb-8">
-      <Link to="/" aria-label="返回总览" className="mb-2 inline-flex size-12 items-center justify-center rounded-xl hover:bg-slate-200">
+      <Link to="/" aria-label="返回总览" className="mb-2 inline-flex size-12 items-center justify-center rounded-md hover:bg-hover">
         <ArrowLeft className="size-6" aria-hidden />
       </Link>
       {valid && query.isPending && <Spinner />}
@@ -128,20 +128,20 @@ export default function DrawingPage() {
       {query.data && (
         <>
           <header className="mb-4">
-            <p className="mb-2 text-sm text-slate-500">所属账号：{query.data.ownerName || '待分配'}</p>
-            {access.admin && query.data.ownerUserId === 0 && <form className="mb-4 space-y-3 rounded-xl bg-amber-50 p-3" onSubmit={async (e) => { e.preventDefault(); if (!assignOwner || assignBusy) return; setAssignBusy(true); setAssignError(''); try { await api.assignDrawingOwner(id, assignOwner); await Promise.all([qc.invalidateQueries({ queryKey: ['drawing', id] }), qc.invalidateQueries({ queryKey: ['drawings'] }), qc.invalidateQueries({ queryKey: ['admin-users'] })]) } catch (err) { setAssignError(err instanceof Error ? err.message : '分配失败') } finally { setAssignBusy(false) } }}><p>此图纸仅管理员可见。分配后，其工序、程序和版本将由目标账号管理。</p><OwnerSelect required value={assignOwner} onChange={setAssignOwner} /><Button type="submit" loading={assignBusy}>确认分配图纸</Button>{assignError && <p role="alert" className="text-red-700">{assignError}</p>}</form>}
+            <p className="mb-2 text-sm text-muted">所属账号：{query.data.ownerName || '待分配'}</p>
+            {access.admin && query.data.ownerUserId === 0 && <form className="mb-4 space-y-3 rounded-md bg-warning-soft p-3" onSubmit={async (e) => { e.preventDefault(); if (!assignOwner || assignBusy) return; setAssignBusy(true); setAssignError(''); try { await api.assignDrawingOwner(id, assignOwner); await Promise.all([qc.invalidateQueries({ queryKey: ['drawing', id] }), qc.invalidateQueries({ queryKey: ['drawings'] }), qc.invalidateQueries({ queryKey: ['admin-users'] })]) } catch (err) { setAssignError(err instanceof Error ? err.message : '分配失败') } finally { setAssignBusy(false) } }}><p>此图纸仅管理员可见。分配后，其工序、程序和版本将由目标账号管理。</p><OwnerSelect required value={assignOwner} onChange={setAssignOwner} /><Button type="submit" loading={assignBusy}>确认分配图纸</Button>{assignError && <p role="alert" className="text-danger">{assignError}</p>}</form>}
             <div className="flex items-start justify-between gap-3">
               <h1 className="min-w-0 break-words text-2xl font-bold">{query.data.drawingNo}</h1>
               {access.can('edit') && <Button variant="secondary" className="shrink-0 px-3" onClick={() => { setSaved(false); setSheet({ kind: 'drawing' }) }}>
                 <Pencil className="size-4" aria-hidden />编辑图纸
               </Button>}
             </div>
-            <p className="mt-2 w-fit max-w-full break-words rounded-lg bg-slate-100 px-2 py-1 text-sm text-slate-700">类型：{query.data.name || '未分类'}</p>
-            {query.data.material && <p className="mt-1 break-words text-sm text-slate-500">{query.data.material}</p>}
-            <p className="mt-1 break-words text-sm text-slate-600 tabular-nums">价格：{query.data.price == null ? '未填写' : `${query.data.price} 元`}</p>
-            {query.data.remark && <p className="mt-2 rounded-xl bg-amber-50 p-3 text-sm text-slate-700">{query.data.remark}</p>}
+            <p className="mt-2 w-fit max-w-full break-words rounded-lg bg-inset px-2 py-1 text-sm text-body">类型：{query.data.name || '未分类'}</p>
+            {query.data.material && <p className="mt-1 break-words text-sm text-muted">{query.data.material}</p>}
+            <p className="mt-1 break-words text-sm text-muted tabular-nums">价格：{query.data.price == null ? '未填写' : `${query.data.price} 元`}</p>
+            {query.data.remark && <p className="mt-2 rounded-md bg-warning-soft p-3 text-sm text-body">{query.data.remark}</p>}
           </header>
-          {saved && <p role="status" className="mb-4 rounded-xl bg-green-50 p-3 text-sm text-green-900">图纸已保存</p>}
+          {saved && <p role="status" className="mb-4 rounded-md bg-success-soft p-3 text-sm text-success">图纸已保存</p>}
           {ops.length === 0 ? (
             <EmptyState title="暂无工序">
               {access.can('create') && <Button onClick={() => setSheet({ kind: 'op' })}>新增第一道工序</Button>}

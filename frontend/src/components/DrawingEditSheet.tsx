@@ -79,13 +79,13 @@ export default function DrawingEditSheet({ drawing, onClose, onSaved }: Props) {
       <fieldset disabled={busy || discard} className="space-y-4">
         <DrawingFields value={form} onChange={setForm} noError={noError} priceError={priceError} />
       </fieldset>
-      {error && <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+      {error && <p role="alert" className="rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger">{error}</p>}
       <div className="grid grid-cols-2 gap-3">
         <Button variant="secondary" disabled={busy || discard} onClick={close}>取消</Button>
         <Button type="submit" loading={busy} disabled={discard}>保存修改</Button>
       </div>
     </form>
-    {discard && <div className="mt-4 space-y-3 rounded-xl bg-amber-50 p-3">
+    {discard && <div className="mt-4 space-y-3 rounded-md bg-warning-soft p-3">
       <p>有未保存的修改，确定放弃吗？</p>
       <div className="flex gap-2">
         <Button variant="secondary" onClick={() => setDiscard(false)}>继续编辑</Button>

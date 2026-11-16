@@ -34,11 +34,11 @@ export function Sheet({ open, title, onClose, children, wide = false }: SheetPro
         aria-modal="true"
         aria-label={title}
         onClick={(e) => e.stopPropagation()}
-        className={`max-h-[92dvh] w-full overflow-y-auto rounded-t-3xl bg-white p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-2xl ${wide ? 'md:max-w-5xl' : 'md:max-w-lg'} md:rounded-3xl`}
+        className={`max-h-[92dvh] w-full overflow-y-auto rounded-t-3xl bg-surface p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-2xl ${wide ? 'md:max-w-5xl' : 'md:max-w-lg'} md:rounded-3xl`}
       >
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-xl font-bold">{title}</h2>
-          <button onClick={onClose} aria-label="关闭" className="flex size-12 items-center justify-center rounded-xl hover:bg-slate-100">
+          <button onClick={onClose} aria-label="关闭" className="flex size-12 items-center justify-center rounded-md hover:bg-inset">
             <X className="size-6" aria-hidden />
           </button>
         </div>
@@ -64,7 +64,7 @@ interface ConfirmProps {
 export function ConfirmSheet({ open, title, message, confirmLabel, danger, busy, onConfirm, onClose }: ConfirmProps) {
   return (
     <Sheet open={open} title={title} onClose={onClose}>
-      <p className="mb-5 text-slate-700">{message}</p>
+      <p className="mb-5 text-body">{message}</p>
       <div className="grid grid-cols-2 gap-3">
         <Button variant="secondary" onClick={onClose}>
           取消

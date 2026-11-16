@@ -29,7 +29,7 @@ export default function VersionToolTable(props: Props) {
   const qc = useQueryClient()
   const cached = qc.getQueryData<ToolDraft>(['version-tools-draft', props.version.id])
   const query = useQuery({ queryKey: ['version-tools', props.version.id], queryFn: () => api.versionTools(props.version.id), retry: false, refetchOnWindowFocus: false, refetchOnMount: 'always' })
-  return <section aria-label={`V${props.version.versionNo} 刀具信息`} className="mt-5 space-y-4 rounded-2xl border border-slate-200 bg-white p-4">
+  return <section aria-label={`V${props.version.versionNo} 刀具信息`} className="mt-5 space-y-4 rounded-lg border border-line bg-surface p-4">
     <h2 className="text-lg font-bold">刀具信息 · V{props.version.versionNo}{props.version.isCurrent ? '（当前）' : ''}</h2>
     {cached || (query.data && query.isFetchedAfterMount)
       ? <ToolEditor key={props.version.id} {...props} initial={cached?.table ?? query.data!} />
@@ -111,31 +111,31 @@ function ToolEditor({ version, initial }: Props & { initial: ToolTable }) {
         <Button variant="secondary" disabled={busy || !!confirm || rows.length >= 500} onClick={() => { setRows([...rows, draft(blank, seed.current++)]); setMessage('') }}>手动添加</Button>
         <Button type="submit" disabled={!dirty || busy || conflict || !!confirm} loading={save.isPending}>保存刀具表</Button>
         {dirty && <Button variant="ghost" disabled={busy || !!confirm} onClick={() => setConfirm('discard')}>撤销修改</Button>}
-        <span className="text-sm text-slate-500">{rows.length} 把刀具</span>
-        {dirty && <span className="text-sm font-semibold text-amber-700">未保存</span>}
+        <span className="text-sm text-muted">{rows.length} 把刀具</span>
+        {dirty && <span className="text-sm font-semibold text-warning">未保存</span>}
       </div>}
-      {message && <p role="status" className="rounded-xl bg-emerald-50 p-3 text-sm text-emerald-800">{message}</p>}
-      {error && <p role="alert" className="text-red-700">{error}</p>}
-      {conflict && <div className="space-y-2 rounded-xl bg-amber-50 p-3">
+      {message && <p role="status" className="rounded-md bg-success-soft p-3 text-sm text-success">{message}</p>}
+      {error && <p role="alert" className="text-danger">{error}</p>}
+      {conflict && <div className="space-y-2 rounded-md bg-warning-soft p-3">
         <p>刀具表已被修改，草稿已保留。请核对草稿后载入最新数据。</p>
         <Button variant="secondary" disabled={busy} onClick={() => setConfirm('reload')}>载入最新刀具表</Button>
       </div>}
-      {confirm && <div className="space-y-3 rounded-xl bg-amber-50 p-3">
+      {confirm && <div className="space-y-3 rounded-md bg-warning-soft p-3">
         <p>{confirm === 'reload' ? '确定放弃草稿并载入最新刀具表吗？' : '有未保存的修改，确定放弃吗？'}</p>
         <div className="flex flex-wrap gap-2">
           <Button variant="secondary" disabled={busy} onClick={() => setConfirm(null)}>继续编辑</Button>
           <Button variant="danger" disabled={busy} onClick={() => confirm === 'reload' ? reload.mutate() : accept(table)}>{confirm === 'reload' ? '放弃并载入' : '放弃修改'}</Button>
         </div>
       </div>}
-      {rows.length === 0 && <p className="py-8 text-center text-slate-500">暂无刀具，可从 NC 识别或手动添加。</p>}
+      {rows.length === 0 && <p className="py-8 text-center text-muted">暂无刀具，可从 NC 识别或手动添加。</p>}
       <fieldset disabled={!access.can('edit') || busy || !!confirm} className="min-w-0 space-y-3">
-        {rows.map((row, index) => <section key={row.key} aria-label={`第 ${index + 1} 把刀具`} className="min-w-0 space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+        {rows.map((row, index) => <section key={row.key} aria-label={`第 ${index + 1} 把刀具`} className="min-w-0 space-y-3 rounded-lg border border-line bg-canvas p-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h3 className="font-bold">{index + 1}. {row.toolNo || '新刀具'}</h3>
             <div className="flex gap-1">
               <Button variant="ghost" className="px-3" aria-label={`上移第 ${index + 1} 把刀具`} disabled={index === 0} onClick={() => move(index, -1)}>↑</Button>
               <Button variant="ghost" className="px-3" aria-label={`下移第 ${index + 1} 把刀具`} disabled={index === rows.length - 1} onClick={() => move(index, 1)}>↓</Button>
-              <Button variant="ghost" className="px-3 text-red-700" aria-label={`删除第 ${index + 1} 把刀具`} onClick={() => setRows(rows.filter((r) => r.key !== row.key))}>删除</Button>
+              <Button variant="ghost" className="px-3 text-danger" aria-label={`删除第 ${index + 1} 把刀具`} onClick={() => setRows(rows.filter((r) => r.key !== row.key))}>删除</Button>
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">

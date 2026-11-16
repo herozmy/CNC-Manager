@@ -10,9 +10,9 @@ interface Props extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const styles: Record<Variant, string> = {
-  primary: 'bg-amber-500 text-slate-900 hover:bg-amber-400 active:bg-amber-600',
-  secondary: 'bg-white text-slate-900 border border-slate-300 hover:bg-slate-100 active:bg-slate-200',
-  ghost: 'text-slate-700 hover:bg-slate-200 active:bg-slate-300',
+  primary: 'bg-blue-600 text-white hover:bg-blue-500 active:bg-blue-700',
+  secondary: 'bg-surface text-ink border border-line-strong hover:bg-inset active:bg-hover',
+  ghost: 'text-body hover:bg-hover active:bg-slate-300',
   danger: 'bg-red-600 text-white hover:bg-red-500 active:bg-red-700',
 }
 
@@ -23,9 +23,9 @@ export function Button({ variant = 'primary', loading, disabled, className, chil
       type={type}
       disabled={disabled || loading}
       className={clsx(
-        'inline-flex min-h-12 items-center justify-center gap-2 rounded-xl px-5 text-base font-semibold',
+        'inline-flex min-h-12 items-center justify-center gap-2 rounded-md px-4 text-sm font-semibold',
         'transition-colors disabled:cursor-not-allowed disabled:opacity-50',
-        'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-600',
+        'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent',
         styles[variant],
         className,
       )}

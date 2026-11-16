@@ -55,7 +55,7 @@ export default function NewDrawingPage() {
   return (
     <main className="mx-auto max-w-xl px-4 pt-4 pb-8">
       <header className="mb-4 flex items-center gap-2">
-        <Link to="/" aria-label="返回总览" className="flex size-12 items-center justify-center rounded-xl hover:bg-slate-200">
+        <Link to="/" aria-label="返回总览" className="flex size-12 items-center justify-center rounded-md hover:bg-hover">
           <ArrowLeft className="size-6" aria-hidden />
         </Link>
         <h1 className="text-2xl font-bold">新建图纸</h1>
@@ -66,7 +66,7 @@ export default function NewDrawingPage() {
           <DrawingFields value={form} onChange={setForm} noError={noError} priceError={priceError} />
         </fieldset>
         {error && (
-          <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+          <p role="alert" className="rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger">
             {error}
           </p>
         )}
