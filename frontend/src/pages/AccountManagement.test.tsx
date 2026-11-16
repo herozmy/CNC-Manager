@@ -4,6 +4,7 @@ import { Route, Routes } from 'react-router-dom'
 import { afterEach, expect, test, vi } from 'vitest'
 import { detail, mockApi, operation, program, renderApp, user, version } from '../test-utils'
 import type { User } from '../api/types'
+import App from '../App'
 import AdminPage from './AdminPage'
 import AuditPage from './AuditPage'
 import DrawingPage from './DrawingPage'
@@ -13,6 +14,74 @@ import type { Program } from '../api/types'
 
 const member: User = { ...user, id: 2, username: 'worker', displayName: '车工', role: 'editor' }
 afterEach(() => vi.unstubAllGlobals())
+
+function navigationServer(currentUser: User = user, failUsers = false) {
+  let fail = failUsers
+  return mockApi(r => {
+    if (r.path === '/auth/status') return { body: { setupRequired: false } }
+    if (r.path === '/auth/me') return { body: currentUser }
+    if (r.path === '/meta') return { body: { version: 'local-test' } }
+    if (r.path === '/admin/users') {
+      if (fail) { fail = false; return { status: 500, body: { error: '暂时不可用' } } }
+      return { body: [currentUser] }
+    }
+    if (r.path.startsWith('/admin/audit-logs?')) return { body: { items: [], total: 0, page: 1, size: 20 } }
+  })
+}
+
+test('我的只显示账号管理独立卡片，点击后加载账号，操作日志在管理页进入并可逐级返回', async () => {
+  const calls = navigationServer()
+  renderApp(<App />, '/me')
+  const u = userEvent.setup()
+  const card = await screen.findByRole('link', { name: '账号管理' })
+  expect(card).toHaveAttribute('href', '/admin')
+  expect(screen.queryByRole('link', { name: '操作审计' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: '新增账号' })).not.toBeInTheDocument()
+  expect(calls.filter(r => r.path.startsWith('/admin'))).toHaveLength(0)
+  await u.click(card)
+  expect(await screen.findByRole('button', { name: '编辑账号 admin' })).toBeEnabled()
+  expect(screen.getAllByRole('link', { name: '我的' }).every(link => link.getAttribute('aria-current') === 'page')).toBe(true)
+  expect(calls.some(r => r.path.startsWith('/admin/audit-logs'))).toBe(false)
+  await u.click(screen.getByRole('link', { name: '查看操作日志 →' }))
+  expect(await screen.findByText('没有匹配的记录')).toBeVisible()
+  expect(screen.getAllByRole('link', { name: '我的' }).every(link => link.getAttribute('aria-current') === 'page')).toBe(true)
+  await u.click(screen.getByRole('link', { name: '返回账号管理' }))
+  await u.click(await screen.findByRole('link', { name: '返回我的' }))
+  expect(await screen.findByRole('link', { name: '账号管理' })).toBeVisible()
+  expect(screen.queryByRole('button', { name: '新增账号' })).not.toBeInTheDocument()
+})
+
+test.each(['/admin', '/admin/audit'])('%s直达链接仍有效，并归属我的导航', async route => {
+  navigationServer()
+  renderApp(<App />, route)
+  const heading = route === '/admin' ? '账号管理' : '操作日志'
+  expect(await screen.findByRole('heading', { name: heading, level: 1 })).toBeVisible()
+  expect(screen.getAllByRole('link', { name: '我的' }).every(link => link.getAttribute('aria-current') === 'page')).toBe(true)
+})
+
+test('账号列表加载失败可重试，失败时仍能返回我的', async () => {
+  const calls = navigationServer(user, true)
+  renderApp(<App />, '/me')
+  const u = userEvent.setup()
+  await u.click(await screen.findByRole('link', { name: '账号管理' }))
+  expect(await screen.findByText('管理数据加载失败')).toBeVisible()
+  expect(screen.getByRole('link', { name: '返回我的' })).toHaveAttribute('href', '/me')
+  await u.click(screen.getByRole('button', { name: '重试' }))
+  expect(await screen.findByRole('button', { name: '编辑账号 admin' })).toBeEnabled()
+  expect(calls.filter(r => r.path === '/admin/users')).toHaveLength(2)
+})
+
+test.each([member, { ...user, enabled: false }])('$username启用状态$enabled不提供账号管理卡片，直达页面也不请求管理接口', async currentUser => {
+  const calls = navigationServer(currentUser)
+  const view = renderApp(<App />, '/me')
+  await screen.findByText('版本 local-test')
+  expect(screen.queryByRole('link', { name: '账号管理' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('link', { name: '操作审计' })).not.toBeInTheDocument()
+  view.unmount()
+  renderApp(<App />, '/admin')
+  expect(await screen.findByText('仅系统管理员可访问账号管理。')).toBeVisible()
+  expect(calls.filter(r => r.path.startsWith('/admin'))).toHaveLength(0)
+})
 
 test('新增账号只选择管理员或普通账号，无自定义角色和权限', async () => {
   let users: User[] = [user]

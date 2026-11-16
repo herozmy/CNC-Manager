@@ -10,6 +10,7 @@ import AdminPage from './pages/AdminPage'
 import AuditPage from './pages/AuditPage'
 import AppShell from './layout/AppShell'
 import AuthPage from './pages/AuthPage'
+import BackupPage from './pages/BackupPage'
 import DrawingPage from './pages/DrawingPage'
 import MePage from './pages/MePage'
 import MachinesPage from './pages/MachinesPage'
@@ -92,6 +93,7 @@ export default function App() {
         <Route path="machines" element={<MachinesPage />} />
         <Route path="machines/:id" element={<MachinePage />} />
         <Route path="me" element={<MePage />} />
+        <Route path="me/backup" element={<BackupPage />} />
         <Route path="admin" element={<AdminPage />} />
         <Route path="admin/audit" element={<AuditPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />

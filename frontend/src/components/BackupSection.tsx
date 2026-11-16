@@ -69,7 +69,6 @@ export default function BackupSection() {
   }
 
   return <section className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4" aria-label="备份与迁移">
-    <h2 className="text-lg font-bold">备份与迁移</h2>
     <p className="text-sm leading-6 text-slate-600">一份备份包含全部账号、图纸、工序、程序版本、刀具表和 NC 文件，可导入另一台服务器。</p>
     <div className="grid grid-cols-2 gap-3">
       <Button variant="secondary" className="px-2" loading={busy} onClick={create}><Archive className="size-4 shrink-0" aria-hidden />创建备份</Button>

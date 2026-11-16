@@ -29,10 +29,82 @@ async function selectAndCheck() {
   return u
 }
 
+test('我的只显示备份与迁移独立卡片，点击后才加载操作和恢复列表，返回后收起', async () => {
+  const calls = server()
+  renderApp(<App />, '/me')
+  const u = userEvent.setup()
+  const card = await screen.findByRole('link', { name: '备份与迁移' })
+  expect(card).toHaveAttribute('href', '/me/backup')
+  expect(screen.queryByRole('button', { name: '创建备份' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: '导入备份' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('region', { name: '备份与迁移' })).not.toBeInTheDocument()
+  expect(calls.filter(r => r.path.startsWith('/backup'))).toHaveLength(0)
+  await u.click(card)
+  expect(await screen.findByText('暂无可恢复备份，创建成功后会自动显示在这里。')).toBeVisible()
+  expect(screen.getByRole('button', { name: '创建备份' })).toBeEnabled()
+  expect(screen.getByRole('button', { name: '导入备份' })).toBeEnabled()
+  expect(screen.getAllByRole('link', { name: '我的' }).every(link => link.getAttribute('aria-current') === 'page')).toBe(true)
+  await u.click(screen.getByRole('link', { name: '返回我的' }))
+  expect(await screen.findByRole('link', { name: '备份与迁移' })).toBeVisible()
+  expect(screen.queryByRole('button', { name: '创建备份' })).not.toBeInTheDocument()
+  expect(screen.queryByText('暂无可恢复备份，创建成功后会自动显示在这里。')).not.toBeInTheDocument()
+})
+
+test('备份页面可直接打开并归属我的导航，可返回我的', async () => {
+  server()
+  renderApp(<App />, '/me/backup')
+  const u = userEvent.setup()
+  expect(await screen.findByRole('heading', { name: '备份与迁移', level: 1 })).toBeVisible()
+  expect(screen.getByRole('button', { name: '导入备份' })).toBeEnabled()
+  expect(screen.getAllByRole('link', { name: '我的' }).every(link => link.getAttribute('aria-current') === 'page')).toBe(true)
+  await u.click(screen.getByRole('link', { name: '返回我的' }))
+  expect(await screen.findByRole('heading', { name: '我的' })).toBeVisible()
+})
+
+test('进入备份页面列表加载失败可重试，失败时仍能返回我的', async () => {
+  server()
+  const original = fetch
+  let requests = 0
+  vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+    if (String(input).endsWith('/backup/recoveries') && ++requests === 1) return Promise.resolve(new Response(JSON.stringify({ error: '暂时不可用' }), { status: 500 }))
+    return original(input, init)
+  }))
+  renderApp(<App />, '/me')
+  const u = userEvent.setup()
+  await u.click(await screen.findByRole('link', { name: '备份与迁移' }))
+  expect(await screen.findByText('恢复副本列表暂时不可用。')).toBeVisible()
+  expect(screen.getByRole('link', { name: '返回我的' })).toHaveAttribute('href', '/me')
+  await u.click(screen.getByRole('button', { name: '重试' }))
+  expect(await screen.findByText('暂无可恢复备份，创建成功后会自动显示在这里。')).toBeVisible()
+  expect(requests).toBe(2)
+})
+
+test.each([
+  { role: 'editor', enabled: true },
+  { role: 'viewer', enabled: true },
+  { role: 'admin', enabled: false },
+])('$role启用状态$enabled不提供备份入口，直接进入也不请求备份接口', async current => {
+  const calls = mockApi(r => {
+    if (r.path === '/auth/status') return { body: { setupRequired: false } }
+    if (r.path === '/auth/me') return { body: { ...user, ...current } }
+    if (r.path === '/meta') return { body: { version: 'local-test' } }
+  })
+  const view = renderApp(<App />, '/me')
+  await screen.findByText('整站备份与导入请联系管理员。')
+  expect(screen.queryByRole('link', { name: '备份与迁移' })).not.toBeInTheDocument()
+  view.unmount()
+  renderApp(<App />, '/me/backup')
+  expect(await screen.findByText('仅系统管理员可访问备份与迁移。')).toBeVisible()
+  expect(screen.getByRole('link', { name: '返回我的' })).toHaveAttribute('href', '/me')
+  expect(screen.queryByRole('button', { name: '创建备份' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: '导入备份' })).not.toBeInTheDocument()
+  expect(calls.filter(r => r.path.startsWith('/backup'))).toHaveLength(0)
+})
+
 test('v1 备份显示转换结果和账号归属说明，确认后导入并使用原账号重新登录', async () => {
   const calls = server('admin', false, false, { ...preview, format: 'cnc-manager-v1/1', version: '1.2.13',
     migration: { skippedSessions: 2, orphanFiles: 1, skippedSettings: 1 } })
-  renderApp(<App />, '/me')
+  renderApp(<App />, '/me/backup')
   const u = await selectAndCheck()
   expect(await screen.findByText('v1 迁移说明')).toBeVisible()
   expect(screen.getByText(/所有 v1 账号将成为管理员/)).toBeVisible()
@@ -50,7 +122,7 @@ test('v1 备份显示转换结果和账号归属说明，确认后导入并使�
 
 test('导入先检查摘要并确认覆盖，成功清缓存并使用备份账号重新登录', async () => {
   const calls = server()
-  const { client } = renderApp(<App />, '/me')
+  const { client } = renderApp(<App />, '/me/backup')
   const u = await selectAndCheck()
   expect(await screen.findByText('备份检查通过')).toBeVisible()
   expect(screen.getByText('可登录管理员：sourceadmin')).toBeVisible()
@@ -70,7 +142,7 @@ test('导入先检查摘要并确认覆盖，成功清缓存并使用备份账�
 
 test('损坏文件提示错误，可选择新文件重新检查', async () => {
   const calls = server('admin', true)
-  renderApp(<App />, '/me')
+  renderApp(<App />, '/me/backup')
   const u = await selectAndCheck()
   expect(await screen.findByRole('alert')).toHaveTextContent('备份文件损坏')
   expect(screen.queryByRole('button', { name: '确认覆盖导入' })).not.toBeInTheDocument()
@@ -83,7 +155,7 @@ test('损坏文件提示错误，可选择新文件重新检查', async () => {
 
 test('更换文件清除摘要和确认，取消不导入', async () => {
   const calls = server()
-  renderApp(<App />, '/me')
+  renderApp(<App />, '/me/backup')
   const u = await selectAndCheck()
   await screen.findByText('备份检查通过')
   await u.click(screen.getByRole('checkbox'))
@@ -96,7 +168,7 @@ test('更换文件清除摘要和确认，取消不导入', async () => {
 
 test('导入期间阻止重复提交和关闭，失败保留文件可重试', async () => {
   server('admin', false, true)
-  renderApp(<App />, '/me')
+  renderApp(<App />, '/me/backup')
   const u = await selectAndCheck()
   await screen.findByText('备份检查通过')
   await u.click(screen.getByRole('checkbox'))
@@ -120,7 +192,7 @@ test('导入期间阻止重复提交和关闭，失败保留文件可重试', as
 
 test('有未保存刀具表时禁止导入，非管理员隐藏操作入口', async () => {
   server()
-  const view = renderApp(<App />, '/me')
+  const view = renderApp(<App />, '/me/backup')
   await screen.findByRole('button', { name: '导入备份' })
   view.client.setQueryDefaults(['version-tools-draft'], { gcTime: Infinity })
   view.client.setQueryData(['version-tools-draft', 7], { dirty: true })
@@ -139,7 +211,7 @@ test('有未保存刀具表时禁止导入，非管理员隐藏操作入口', as
 
 test('下载失败显示可重试错误，不生成假的下载成功提示', async () => {
   server()
-  renderApp(<App />, '/me')
+  renderApp(<App />, '/me/backup')
   const u = userEvent.setup()
   await u.click(await screen.findByRole('button', { name: '创建备份' }))
   expect(await screen.findByRole('alert')).toHaveTextContent('服务器空间不足')
@@ -157,7 +229,7 @@ test('创建只保存到服务器，不触发下载', async () => {
   const createURL = vi.fn(() => 'blob:test')
   vi.stubGlobal('URL', class extends URL { static createObjectURL = createURL; static revokeObjectURL = vi.fn() })
   const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
-  renderApp(<App />, '/me')
+  renderApp(<App />, '/me/backup')
   const u = userEvent.setup()
   await u.click(await screen.findByRole('button', { name: '创建备份' }))
   expect(await screen.findByRole('status')).toHaveTextContent('备份已保存到服务器')
@@ -179,7 +251,7 @@ test('成功创建后刷新列表，只有点击下载才触发下载且不重�
   }))
   vi.stubGlobal('URL', class extends URL { static createObjectURL = vi.fn(() => 'blob:test'); static revokeObjectURL = vi.fn() })
   const downloadClick = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
-  renderApp(<App />, '/me')
+  renderApp(<App />, '/me/backup')
   const u = userEvent.setup()
   await screen.findByText('暂无可恢复备份，创建成功后会自动显示在这里。')
   await u.click(screen.getByRole('button', { name: '创建备份' }))
@@ -206,7 +278,7 @@ test('删除备份须确认，取消不删除，失败可重试，成功刷新�
     }
     return original(input, init)
   }))
-  renderApp(<App />, '/me')
+  renderApp(<App />, '/me/backup')
   const u = userEvent.setup()
   await u.click(await screen.findByText('可恢复备份（1）'))
   await u.click(screen.getByRole('button', { name: /删除 .* 的备份/ }))

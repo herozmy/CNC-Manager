@@ -16,7 +16,7 @@ const items = [
 export default function AppShell() {
   const access = useAccess()
   const { pathname } = useLocation()
-  const activePath = pathname === '/machines' || pathname.startsWith('/machines/') ? '/me' : pathname
+  const activePath = ['/machines', '/admin'].some(path => pathname === path || pathname.startsWith(`${path}/`)) ? '/me' : pathname
   const isActive = (to: string) => activePath === to || (to !== '/' && activePath.startsWith(`${to}/`))
   const visibleItems = items.filter((item) => item.to !== '/drawings/new' || access.can('create'))
   return (

@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
+import { ArrowLeft } from 'lucide-react'
 import type { FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api'
@@ -41,7 +42,7 @@ export default function AdminPage() {
   function openUser(value: User | 'new') { setError(''); setNotice(''); setUser(value); setUserForm(value === 'new' ? { ...emptyUser, enabled: true } : { username: value.username, displayName: value.displayName, password: '', role: value.role === 'admin' ? 'admin' : 'editor', enabled: value.enabled }) }
 
   return <main className="mx-auto max-w-3xl space-y-6 px-4 py-5">
-    <header className="space-y-2"><Link to="/me" className="text-sm text-slate-600">返回我的</Link><h1 className="text-2xl font-bold">账号管理</h1><p className="text-sm text-slate-600">普通账号只管理自己的数据，管理员可查看全部数据。</p><Link className="inline-block py-2 font-medium text-amber-800" to="/admin/audit">查看操作日志 →</Link></header>
+    <header className="space-y-2"><Link to="/me" className="inline-flex min-h-12 items-center gap-2 rounded-xl px-2 text-sm text-slate-600 hover:bg-slate-200"><ArrowLeft className="size-5" aria-hidden />返回我的</Link><h1 className="text-2xl font-bold">账号管理</h1><p className="text-sm text-slate-600">普通账号只管理自己的数据，管理员可查看全部数据。</p><Link className="inline-flex min-h-12 items-center rounded-xl px-2 font-medium text-amber-800 hover:bg-amber-50" to="/admin/audit">查看操作日志 →</Link></header>
     {notice && <p role="status" className="rounded-xl bg-green-50 p-3 text-green-800">{notice}</p>}
     {users.isPending && <Spinner />}
     {users.isError && <ErrorState message="管理数据加载失败" onRetry={() => { void users.refetch() }} />}

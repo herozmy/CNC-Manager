@@ -1,13 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { useState } from 'react'
-import { ChevronRight, Factory } from 'lucide-react'
+import { Archive, ChevronRight, Factory, Users } from 'lucide-react'
 import { api } from '../api'
 import { useAccess } from '../auth/permissions'
 import { setSession, useSession } from '../auth/session'
 import { Button } from '../components/ui/Button'
 import AccountSheet from '../components/AccountSheet'
-import BackupSection from '../components/BackupSection'
 
 
 export default function MePage() {
@@ -43,8 +42,16 @@ export default function MePage() {
         <span className="min-w-0 flex-1"><span className="block text-lg font-bold">机台</span><span className="mt-1 block text-sm text-slate-500">管理机台，查看关联图纸和程序</span></span>
         <ChevronRight className="size-5 shrink-0 text-slate-400" aria-hidden />
       </Link>}
-      {user.role === 'admin' && <section className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4"><Link className="rounded-xl bg-slate-100 p-3 font-semibold" to="/admin">账号管理</Link><Link className="rounded-xl bg-slate-100 p-3 font-semibold" to="/admin/audit">操作审计</Link></section>}
-      {user.role === 'admin' ? <BackupSection /> : <p className="text-sm text-slate-500">整站备份与导入请联系管理员。</p>}
+      {access.admin && <Link to="/admin" aria-label="账号管理" className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm hover:border-amber-400 active:bg-slate-100 focus-visible:outline-2 focus-visible:outline-amber-500">
+        <span className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-700"><Users className="size-6" aria-hidden /></span>
+        <span className="min-w-0 flex-1"><span className="block text-lg font-bold">账号管理</span><span className="mt-1 block text-sm text-slate-500">管理账号，查看操作审计</span></span>
+        <ChevronRight className="size-5 shrink-0 text-slate-400" aria-hidden />
+      </Link>}
+      {access.admin ? <Link to="/me/backup" aria-label="备份与迁移" className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm hover:border-amber-400 active:bg-slate-100 focus-visible:outline-2 focus-visible:outline-amber-500">
+        <span className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-700"><Archive className="size-6" aria-hidden /></span>
+        <span className="min-w-0 flex-1"><span className="block text-lg font-bold">备份与迁移</span><span className="mt-1 block text-sm text-slate-500">创建备份，导入迁移和恢复数据</span></span>
+        <ChevronRight className="size-5 shrink-0 text-slate-400" aria-hidden />
+      </Link> : <p className="text-sm text-slate-500">整站备份与导入请联系管理员。</p>}
       <Button variant="secondary" loading={logout.isPending} onClick={() => logout.mutate()} className="w-full">
         退出登录
       </Button>
