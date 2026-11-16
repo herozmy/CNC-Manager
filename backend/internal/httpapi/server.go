@@ -100,6 +100,13 @@ func New(o Options) http.Handler {
 				b.Delete("/recoveries/{name}", s.handleBackupRecoveryDelete)
 			})
 
+			p.Get("/machines", s.handleListMachines)
+			p.Get("/machines/{id}", s.handleGetMachine)
+			p.Get("/machines/{id}/drawings", s.handleMachineDrawings)
+			p.With(s.requirePermission(domain.PermissionCreate)).Post("/machines", s.handleCreateMachine)
+			p.With(s.requirePermission(domain.PermissionEdit)).Put("/machines/{id}", s.handleUpdateMachine)
+			p.With(s.requirePermission(domain.PermissionEdit)).Put("/machines/{id}/enabled", s.handleSetMachineEnabled)
+
 			p.Get("/drawings", s.handleListDrawings)
 			p.With(s.requirePermission(domain.PermissionCreate)).Post("/drawings", s.handleCreateDrawing)
 			p.Get("/drawings/{id}/detail", s.handleDrawingDetail)

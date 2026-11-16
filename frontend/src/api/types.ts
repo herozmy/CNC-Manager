@@ -228,4 +228,24 @@ export interface MachineOption {
   id: number
   code: string
   name: string
+  enabled: boolean
 }
+export interface Machine extends MachineOption {
+  controller: string
+  remark: string
+  ownerUserId: number
+  ownerName: string
+  drawingCount: number
+  operationCount: number
+  programCount: number
+  createdAt: string
+  updatedAt: string
+}
+export interface MachineInput {
+  code: string
+  name: string
+  controller: string
+  remark: string
+  ownerUserId?: number
+}
+export interface MachineFilter { q: string; page: number; size?: number; enabled?: boolean; ownerUserId?: number }

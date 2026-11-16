@@ -8,7 +8,7 @@ import DrawingPage from '../pages/DrawingPage'
 import OperationSheet from './OperationSheet'
 
 afterEach(() => vi.unstubAllGlobals())
-const machines: MachineOption[] = [{ id: 5, code: 'CNC-01', name: '车床' }, { id: 6, code: 'CNC-02', name: '加工中心' }]
+const machines: MachineOption[] = [{ id: 5, code: 'CNC-01', name: '车床', enabled: true }, { id: 6, code: 'CNC-02', name: '加工中心', enabled: true }]
 const view = <Routes><Route path="/drawings/:id" element={<DrawingPage />} /></Routes>
 
 test('新建关联、详情显示编号名称，编辑回填、更换和清空，不改变程序', async () => {
@@ -78,7 +78,7 @@ test('新增机台失败保留输入，成功选中后单独保存工序', async
     if (r.path === '/drawings/1/machines' && r.method === 'GET') return { body: list }
     if (r.path === '/drawings/1/machines') {
       if (fail) return { status: 409, body: { error: '该机台编号已存在' } }
-      const m = { id: 8, ...(r.body as { code: string; name: string }) }; list.push(m); return { status: 201, body: m }
+      const m = { id: 8, enabled: true, ...(r.body as { code: string; name: string }) }; list.push(m); return { status: 201, body: m }
     }
     if (r.path === '/drawings/1/operations') return { body: {} }
   })
@@ -126,4 +126,15 @@ test('待分配图纸只允许选择已有机台，不显示新增入口', async
   renderApp(<OperationSheet drawingId={1} ownerUserId={0} onClose={() => {}} />)
   expect(screen.queryByRole('button', { name: '新增机台' })).not.toBeInTheDocument()
   expect(await screen.findByRole('option', { name: 'CNC-01 · 车床' })).toBeInTheDocument()
+})
+
+test('停用机台仅保留当前关联，不提供其他停用机台供新选', async () => {
+  const disabled = machines.map((m) => ({ ...m, enabled: false }))
+  const calls = mockApi((r) => r.method === 'GET' ? { body: disabled } : { body: {} })
+  renderApp(<OperationSheet drawingId={1} operation={operation({ machineId: 5 })} onClose={vi.fn()} />)
+  const selected = await screen.findByRole('option', { name: /CNC-01.*已停用/ })
+  expect(selected).toBeInTheDocument()
+  expect(screen.queryByRole('option', { name: /CNC-02/ })).not.toBeInTheDocument()
+  await userEvent.setup().click(screen.getByRole('button', { name: '保存' }))
+  await waitFor(() => expect(calls.some((r) => r.method === 'PUT' && (r.body as { machineId: number }).machineId === 5)).toBe(true))
 })

@@ -1,12 +1,18 @@
 import { act, screen, waitFor } from '@testing-library/react'
+import { focusManager } from '@tanstack/react-query'
 import userEvent from '@testing-library/user-event'
 import { afterEach, expect, test, vi } from 'vitest'
 import App from './App'
-import { drawing, mockApi, renderApp, user } from './test-utils'
+import { detail, drawing, mockApi, operation, program, renderApp, user, version } from './test-utils'
 import { SESSION_KEY } from './auth/session'
 import { FORBIDDEN_EVENT, UNAUTHORIZED_EVENT } from './api/client'
 
-afterEach(() => vi.unstubAllGlobals())
+afterEach(() => { vi.unstubAllGlobals(); focusManager.setFocused(undefined) })
+
+async function returnToApp(client: ReturnType<typeof renderApp>['client']) {
+  act(() => { focusManager.setFocused(false); focusManager.setFocused(true) })
+  await waitFor(() => expect(client.getQueryState(SESSION_KEY)?.fetchStatus).toBe('idle'))
+}
 
 test('尚无用户时显示创建管理员表单，并校验密码', async () => {
   const calls = mockApi((r) => (r.path === '/auth/status' ? { body: { setupRequired: true } } : undefined))
@@ -84,6 +90,82 @@ test('服务器不可用时给出重试入口', async () => {
   renderApp(<App />)
   expect(await screen.findByText('无法连接服务器')).toBeInTheDocument()
   expect(screen.getByRole('button', { name: '重试' })).toBeInTheDocument()
+})
+
+test.each(['network', 'gateway'] as const)('会话后台检查失败（%s）保留上传文件和说明，恢复后可以提交', async (failure) => {
+  let offline = false
+  let uploaded = false
+  const calls = mockApi((r) => {
+    if (r.path === '/auth/status') {
+      if (offline) {
+        if (failure === 'network') throw new TypeError('Failed to fetch')
+        return { status: 503, body: { error: '服务暂时不可用' } }
+      }
+      return { body: { setupRequired: false } }
+    }
+    if (r.path === '/auth/me') return { body: user }
+    if (r.path === '/drawings/1/detail') return { body: detail([operation({ programs: [program()] })]) }
+    if (r.path === '/programs/1/versions' && r.method === 'GET') return { body: uploaded ? [version()] : [] }
+    if (r.path === '/versions/5/tools') return { body: { items: [], revision: 'empty' } }
+    if (r.path === '/programs/1/versions' && r.method === 'POST') {
+      uploaded = true
+      return { status: 201, body: version() }
+    }
+  })
+  const { client } = renderApp(<App />, '/drawings/1/programs/1')
+  const u = userEvent.setup()
+  await screen.findByRole('heading', { name: 'O1234' })
+  const file = new File(['O9016\nM30\n'], '现场验收.NC')
+  await u.upload(screen.getByLabelText('选择 NC 文件'), file)
+  await u.type(screen.getByLabelText('变更说明（可选）'), '断网保留说明')
+
+  offline = true
+  await returnToApp(client)
+  expect(await screen.findByText(/连接暂时中断/)).toBeInTheDocument()
+  expect(screen.getByRole('dialog', { name: '上传新版本' })).toBeInTheDocument()
+  expect(screen.getByText('现场验收.NC')).toBeInTheDocument()
+  expect(screen.getByLabelText('变更说明（可选）')).toHaveValue('断网保留说明')
+  expect(calls.some((r) => r.method === 'POST')).toBe(false)
+
+  offline = false
+  await returnToApp(client)
+  await waitFor(() => expect(screen.queryByText(/连接暂时中断/)).not.toBeInTheDocument())
+  expect(screen.getByLabelText('变更说明（可选）')).toHaveValue('断网保留说明')
+  await u.click(screen.getByRole('button', { name: '上传' }))
+  expect(await screen.findByText('已上传 V3')).toBeInTheDocument()
+  const uploads = calls.filter((r) => r.method === 'POST')
+  expect(uploads).toHaveLength(1)
+  expect((uploads[0].body as FormData).get('file')).toBe(file)
+  expect((uploads[0].body as FormData).get('changeNote')).toBe('断网保留说明')
+})
+
+test('断网保留草稿后，会话确认过期仍清除草稿并返回登录页', async () => {
+  let phase: 'online' | 'offline' | 'expired' = 'online'
+  mockApi((r) => {
+    if (r.path === '/auth/status') {
+      if (phase === 'offline') throw new TypeError('Failed to fetch')
+      return { body: { setupRequired: false } }
+    }
+    if (r.path === '/auth/me') return phase === 'expired' ? { status: 401 } : { body: user }
+    if (r.path === '/drawings/1/detail') return { body: detail([operation()]) }
+    if (r.path === '/programs/1/versions') return { body: [] }
+  })
+  const { client } = renderApp(<App />, '/drawings/1/programs/1')
+  const u = userEvent.setup()
+  await screen.findByRole('heading', { name: 'O1234' })
+  await u.upload(screen.getByLabelText('选择 NC 文件'), new File(['M30'], '待上传.NC'))
+  await u.type(screen.getByLabelText('变更说明（可选）'), '会话失效后不得保留')
+  client.setQueryData(['version-tools-draft', 5], { dirty: true })
+  phase = 'offline'
+  await returnToApp(client)
+  expect(await screen.findByText(/连接暂时中断/)).toBeInTheDocument()
+  expect(screen.getByRole('dialog', { name: '上传新版本' })).toBeInTheDocument()
+  phase = 'expired'
+  await returnToApp(client)
+  expect(await screen.findByText('登录后查看数控程序台账')).toBeInTheDocument()
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  expect(client.getQueryData(['version-tools-draft', 5])).toBeUndefined()
+  expect(client.getQueryData(SESSION_KEY)).toEqual({ state: 'out' })
 })
 
 test('退出登录回到登录页', async () => {

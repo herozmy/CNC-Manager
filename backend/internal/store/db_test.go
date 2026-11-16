@@ -71,7 +71,7 @@ func TestMigrateCreatesSchemaAndIsIdempotent(t *testing.T) {
 	if n != 7 {
 		t.Fatalf("核心表数量 = %d，期望 7", n)
 	}
-	if err := db.Get(&n, `SELECT COUNT(*) FROM schema_migration`); err != nil || n != 6 {
+	if err := db.Get(&n, `SELECT COUNT(*) FROM schema_migration`); err != nil || n != 7 {
 		t.Fatalf("迁移记录 = %d, err=%v", n, err)
 	}
 }
@@ -308,5 +308,49 @@ func TestPersonalOwnershipMigrationKeepsSharedDataAndDuplicateNumbers(t *testing
 	}
 	if _, err = db.Exec(`UPDATE drawing SET owner_user_id=3 WHERE id=11`); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestMachineEnabledMigrationPreservesExistingData(t *testing.T) {
+	db, err := Open(filepath.Join(t.TempDir(), "machine.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	ctx := context.Background()
+	if _, err := db.Exec(`CREATE TABLE schema_migration(version TEXT PRIMARY KEY,applied_at TEXT NOT NULL)`); err != nil {
+		t.Fatal(err)
+	}
+	for _, version := range []string{"0001_init", "0002_operation_coordinates", "0003_operation_centering", "0004_drawing_price", "0005_roles", "0006_personal_ownership"} {
+		raw, err := migrationsFS.ReadFile("migrations/" + version + ".sql")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := applyMigration(ctx, db, version, string(raw)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, sql := range []string{
+		`INSERT INTO machine(id,code,name,controller,remark,created_at,updated_at) VALUES(1,'OLD','旧机台','FANUC','保留','','')`,
+		`INSERT INTO drawing(id,drawing_no,created_at,updated_at) VALUES(1,'D1','','')`,
+		`INSERT INTO operation(id,drawing_id,op_no,machine_id,created_at,updated_at) VALUES(1,1,10,1,'','')`,
+		`INSERT INTO machine_tool(machine_id,pocket_no,tool_no,updated_at) VALUES(1,1,'T01','')`,
+	} {
+		if _, err := db.Exec(sql); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := Migrate(ctx, db); err != nil {
+		t.Fatal(err)
+	}
+	if err := Migrate(ctx, db); err != nil {
+		t.Fatal(err)
+	}
+	var actual string
+	if err := db.Get(&actual, `SELECT m.code||':'||m.controller||':'||m.remark||':'||m.enabled||':'||o.machine_id||':'||mt.tool_no FROM machine m JOIN operation o ON o.machine_id=m.id JOIN machine_tool mt ON mt.machine_id=m.id`); err != nil || actual != "OLD:FANUC:保留:1:1:T01" {
+		t.Fatal(actual, err)
+	}
+	if _, err := db.Exec(`UPDATE machine SET enabled=2`); err == nil {
+		t.Fatal("invalid enabled state accepted")
 	}
 }

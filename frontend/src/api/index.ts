@@ -1,9 +1,19 @@
 import { http } from './client'
 import type {
-  MachineOption, UserInput, UserUpdate, AuditEntry, AuditFilter, BackupPreview, BackupRecovery, ToolTable, ProgramToolInput, ParseResult, ContentInput, VersionContent, VersionSaveResult, VersionDiff, Drawing, DrawingDetail, DrawingInput, Meta, Operation, OperationInput, Page, Program, ProgramInput, UploadResult, User, Version,
+  Machine, MachineInput, MachineFilter, MachineOption, UserInput, UserUpdate, AuditEntry, AuditFilter, BackupPreview, BackupRecovery, ToolTable, ProgramToolInput, ParseResult, ContentInput, VersionContent, VersionSaveResult, VersionDiff, Drawing, DrawingDetail, DrawingInput, Meta, Operation, OperationInput, Page, Program, ProgramInput, UploadResult, User, Version,
 } from './types'
 
 export const api = {
+  machines: (filter: MachineFilter) => {
+    const params = new URLSearchParams()
+    Object.entries(filter).forEach(([key, value]) => { if (value !== undefined) params.set(key, String(value)) })
+    return http.get<Page<Machine>>(`/machines?${params}`)
+  },
+  machine: (id: number) => http.get<Machine>(`/machines/${id}`),
+  createMachine: (input: MachineInput) => http.post<Machine>('/machines', input),
+  updateMachine: (id: number, input: MachineInput) => http.put<Machine>(`/machines/${id}`, input),
+  setMachineEnabled: (id: number, enabled: boolean) => http.put<Machine>(`/machines/${id}/enabled`, { enabled }),
+  machineDrawings: (id: number, q: string, page: number) => http.get<Page<DrawingDetail>>(`/machines/${id}/drawings?q=${encodeURIComponent(q)}&page=${page}&size=20`),
   users: () => http.get<User[]>('/admin/users'),
   createUser: (input: UserInput) => http.post<User>('/admin/users', input),
   updateUser: (id: number, input: UserUpdate) => http.put<User>(`/admin/users/${id}`, input),

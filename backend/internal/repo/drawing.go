@@ -215,7 +215,7 @@ func (r *Repo) rawCreateOperation(ctx context.Context, drawingID int64, in domai
 	if err != nil {
 		return nil, err
 	}
-	if err := checkRelatedOwner(ctx, r.tx, "machine", in.MachineID, d.OwnerUserID); err != nil {
+	if err := r.checkOperationMachine(ctx, in.MachineID, nil, d.OwnerUserID); err != nil {
 		return nil, err
 	}
 	now := domain.Now()
@@ -246,7 +246,7 @@ func (r *Repo) rawUpdateOperation(ctx context.Context, id int64, in domain.Opera
 	if err != nil {
 		return nil, err
 	}
-	if err := checkRelatedOwner(ctx, r.tx, "machine", in.MachineID, ownerID); err != nil {
+	if err := r.checkOperationMachine(ctx, in.MachineID, previous.MachineID, ownerID); err != nil {
 		return nil, err
 	}
 	if _, err := r.tx.ExecContext(ctx,

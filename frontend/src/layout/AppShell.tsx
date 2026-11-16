@@ -1,16 +1,17 @@
 import { useAccess } from '../auth/permissions'
 import clsx from 'clsx'
-import { Home, Plus, User } from 'lucide-react'
+import { Factory, Home, Plus, User } from 'lucide-react'
 import { NavLink, Outlet } from 'react-router-dom'
 
 const items = [
   { to: '/', label: '总览', icon: Home, end: true },
   { to: '/drawings/new', label: '新建图纸', icon: Plus, primary: true },
+  { to: '/machines', label: '机台', icon: Factory },
   { to: '/me', label: '我的', icon: User },
 ] as const
 
 /**
- * 手机：底部标签栏，「新建图纸」居中突出；
+ * 手机：底部标签栏，提供总览、新建图纸、机台、我的；
  * 平板/桌面（md 以上）：左侧导航。
  */
 export default function AppShell() {

@@ -32,7 +32,7 @@ function initialFixtureChoice(fixture: string) {
 export default function OperationSheet({ drawingId, ownerUserId, operation, suggestedNo = 10, onClose }: Props) {
   const qc = useQueryClient()
   const machines = useQuery({ queryKey: ['drawing-machines', drawingId], queryFn: () => api.drawingMachines(drawingId), retry: false })
-  const options = machines.data ?? []
+  const options = (machines.data ?? []).filter((m) => m.enabled !== false || m.id === operation?.machineId)
   const [machineId, setMachineId] = useState<number | null>(operation?.machineId ?? null)
   const [addingMachine, setAddingMachine] = useState(false)
   const [machineCode, setMachineCode] = useState('')
@@ -70,6 +70,7 @@ export default function OperationSheet({ drawingId, ownerUserId, operation, sugg
       const machine = await api.createDrawingMachine(drawingId, { code: machineCode.trim(), name: machineName.trim() })
       qc.setQueryData<MachineOption[]>(['drawing-machines', drawingId], (old) => [...(old ?? []), machine])
       void qc.invalidateQueries({ queryKey: ['drawing-machines'] })
+      void qc.invalidateQueries({ queryKey: ['machines'] })
       setMachineId(machine.id)
       setAddingMachine(false)
       setMachineCode(''); setMachineName('')
@@ -136,13 +137,13 @@ export default function OperationSheet({ drawingId, ownerUserId, operation, sugg
               <select aria-label="机台（可选）" value={machineId ?? ''} onChange={(e) => setMachineId(e.target.value ? Number(e.target.value) : null)} disabled={busy || machines.isPending || addingMachine} className="h-12 w-full min-w-0 rounded-xl border border-slate-300 bg-white px-3 text-base">
                 <option value="">未关联机台</option>
                 {machineId !== null && !options.some((m) => m.id === machineId) && <option value={machineId}>{[operation?.machineCode, operation?.machineName].filter(Boolean).join(' · ') || ('机台 #' + machineId)}（当前关联）</option>}
-                {options.map((m) => <option key={m.id} value={m.id}>{m.code}{m.name ? ' · ' + m.name : ''}</option>)}
+                {options.map((m) => <option key={m.id} value={m.id}>{m.code}{m.name ? ' · ' + m.name : ''}{m.enabled === false ? '（已停用，当前关联）' : ''}</option>)}
               </select>
             </label>
             {machines.isPending && <p role="status" className="text-sm text-slate-500">正在加载机台…</p>}
             {machines.isError && <p className="text-sm text-red-700">机台列表加载失败，当前关联仍保留。<button type="button" className="ml-2 min-h-12 underline" disabled={busy} onClick={() => void machines.refetch()}>重试加载机台</button></p>}
             {machines.isSuccess && options.length === 0 && <p className="text-sm text-slate-500">暂无可选机台，可先不关联。</p>}
-            <p className="text-xs text-slate-500">仅列出图纸所属账号的机台。选择“未关联机台”可解除关联。</p>
+            <p className="text-xs text-slate-500">仅列出图纸所属账号的启用机台；已停用的当前关联可保留。选择“未关联机台”可解除关联。</p>
             {ownerUserId === 0 ? <p className="text-sm text-slate-500">请先分配图纸所属账号，再新增机台。</p> : !addingMachine && <Button variant="secondary" disabled={busy} onClick={() => { setMachineError(''); setAddingMachine(true) }}>新增机台</Button>}
             {addingMachine && <fieldset disabled={busy} className="space-y-3">
               <Field label="机台编号" value={machineCode} onChange={(e) => setMachineCode(e.target.value)} maxLength={64} placeholder="如 CNC-01" />
