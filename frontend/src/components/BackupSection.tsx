@@ -142,14 +142,14 @@ function ImportSheet({ onClose }: { onClose: () => void }) {
     try {
       await api.importBackup(file, preview.sha256)
       await qc.cancelQueries()
-      setSession(qc, { state: 'out', notice: '备份导入成功，请使用备份中的账号和密码登录。导入前的数据已自动保留为恢复副本。' })
+      setSession(qc, { state: 'out', notice: `${preview.migration ? 'v1 数据迁移成功' : '备份导入成功'}，请使用备份中的账号和密码登录。导入前的数据已自动保留为恢复副本。` })
     } catch (e) { setError(errorMessage(e)) }
     finally { pending.current = false; setBusy(null) }
   }
 
   return <Sheet open title="导入备份" onClose={() => { if (!pending.current) onClose() }}>
     <div className="space-y-4">
-      <p className="text-sm leading-6 text-slate-600">选择本系统导出的 ZIP 文件（最大 512 MB）。先检查备份，确认后再导入。</p>
+      <p className="text-sm leading-6 text-slate-600">支持 CNC-Manager v1、v2 导出的整站 ZIP（最大 512 MB）。先检查备份；v1 数据会自动转换，确认后再导入。</p>
       <label className="block space-y-2 text-sm font-semibold">备份文件
         <input type="file" accept=".zip,application/zip" disabled={!!busy} className="block w-full min-w-0 rounded-xl border border-slate-300 p-3 text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-2" onChange={(e) => { setFile(e.target.files?.[0] || null); setPreview(null); setConfirmed(false); setError('') }} />
       </label>
@@ -158,12 +158,21 @@ function ImportSheet({ onClose }: { onClose: () => void }) {
       {preview && <>
         <div className="rounded-xl bg-slate-50 p-3 text-sm leading-6">
           <p className="font-semibold text-green-800">备份检查通过</p>
+          <p>备份类型：{preview.migration ? 'v1 整站备份（已准备转换为 v2）' : 'v2 整站备份'}</p>
           <p>备份时间：{date(preview.createdAt)}</p>
           <p className="break-all">程序版本：{preview.version}</p>
           <p>账号 {preview.summary.users} · 图纸 {preview.summary.drawings} · 工序 {preview.summary.operations}</p>
           <p>程序 {preview.summary.programs} · 版本 {preview.summary.versions} · 刀具记录 {preview.summary.tools} · NC 文件 {preview.summary.files}</p>
           <p className="break-all">可登录管理员：{preview.summary.admins.join('、')}</p>
         </div>
+        {preview.migration && <div className="rounded-xl bg-blue-50 p-3 text-sm leading-6 text-blue-950">
+          <p className="font-semibold">v1 迁移说明</p>
+          <p>原账号和密码保留，所有 v1 账号将成为管理员。图纸、机台和刀具进入“待分配”，需由管理员确认数据归属。</p>
+          <p>旧登录会话不导入（{preview.migration.skippedSessions} 个），迁移后请重新登录。</p>
+          {preview.migration.orphanFiles > 0 && <p>未被任何程序版本引用的 NC 文件不导入（{preview.migration.orphanFiles} 个）。</p>}
+          {preview.migration.skippedSettings > 0 && <p>v1 扩展配置不导入（{preview.migration.skippedSettings} 项）。</p>}
+          <p>检查尚未覆盖当前数据，确认后才会导入。</p>
+        </div>}
         <div className="rounded-xl bg-amber-50 p-3 text-sm leading-6 text-amber-950">
           <p className="font-semibold">将覆盖当前服务器的全部账号和业务数据。</p>
           <p>导入前自动生成恢复副本；导入后所有设备退出登录，需要使用备份中的账号和密码重新登录。导入期间请暂停其他设备上的编辑。</p>
@@ -174,7 +183,7 @@ function ImportSheet({ onClose }: { onClose: () => void }) {
         </label>
       </>}
       {dirty && <p role="alert" className="text-sm text-red-600">请先保存或撤销未保存的刀具表修改，再导入备份。</p>}
-      {busy && <p role="status" className="text-sm text-slate-600">{busy === 'check' ? '正在上传并检查备份…' : '正在备份当前数据并导入，请勿关闭页面…'}</p>}
+      {busy && <p role="status" className="text-sm text-slate-600">{busy === 'check' ? '正在上传并检查备份，v1 数据会自动转换，请稍候…' : '正在备份当前数据并导入，请勿关闭页面…'}</p>}
       {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
       <div className="grid grid-cols-2 gap-3">
         <Button variant="secondary" disabled={!!busy} onClick={onClose}>取消</Button>

@@ -208,6 +208,7 @@ export interface BackupPreview {
   version: string
   createdAt: string
   sha256: string
+  migration?: { skippedSessions: number; orphanFiles: number; skippedSettings: number }
   summary: { users: number; drawings: number; operations: number; programs: number; versions: number; tools: number; files: number; admins: string[] }
 }
 

@@ -45,19 +45,27 @@ bash scripts/build.sh
 
 ## Docker 部署
 
-在新克隆的干净源码目录构建镜像，使用命名卷保存数据：
+镜像内嵌前端，以 UID/GID `1000:1000` 运行，数据统一保存到 `/data`。推荐使用 Docker Compose 和命名卷。先从当前源码构建并启动：
 
 ```bash
-docker build -t cnc-manager:v2 .
-docker run -d --name cnc-manager \
-  --restart unless-stopped \
-  -p 8080:8080 \
-  -e CNC_DATA_DIR=/data \
-  -v cnc-manager-data:/data \
-  cnc-manager:v2
+docker compose -f compose.yaml -f compose.build.yaml up -d --build
+docker compose ps
+docker compose logs --tail=100 cnc-manager
 ```
 
-通过服务器的 `8080` 端口访问。更新容器时复用原数据卷，升级前先创建并下载备份。
+通过服务器的 `8080` 端口访问。已有服务占用此端口时，在命令前设置 `CNC_PORT=8081`；只允许本机反向代理访问时设置 `CNC_BIND_IP=127.0.0.1`。镜像发布后可使用 `docker compose pull && docker compose up -d` 更新；默认使用 `herozmy/cnc-manager:latest`，`latest` 和 `v2` 均指向 v2 最新版，用 `CNC_IMAGE=herozmy/cnc-manager:v<版本号>` 固定版本。继续运行 v1 时应固定已有的 `v1.x.x` 标签。
+
+更新前在管理员页面创建并下载备份，更新时复用原数据卷。`docker compose down` 保留数据卷，`down -v` 会删除数据。使用绑定目录代替命名卷时，先创建目录并赋予 UID/GID `1000:1000` 写权限。每个数据目录只运行一个服务实例。旧版数据需按“从 v1 迁移”操作，不直接复用旧版容器的数据目录。
+
+需要在另一台 Linux 主机构建和推送时，配置本机 `.local/docker-remote.env`：
+
+```bash
+CNC_DOCKER_HOST=your-ssh-alias
+CNC_DOCKER_WORK_DIR=/path/to/build-work
+CNC_DOCKER_IMAGE=herozmy/cnc-manager
+```
+
+完成本机验证后执行 `bash scripts/docker-remote.sh build`。远端需要 Docker Engine、Buildx、rsync 和 Python 3。脚本只导出源码到远端工作目录的独立子目录，构建 Linux amd64 镜像并运行临时容器，验证健康检查、NC 上传下载、备份、容器重建后的账号与文件持久化，测试结束清理临时容器和数据卷，不自动切换现有服务或推送。发布审核通过后执行 `bash scripts/docker-remote.sh push`，从同一构建目录推送 `v<版本号>`、`v2` 和 `latest`，检查三者摘要一致，并拉取 `latest` 重新验证；已存在的版本标签仅允许复用完全相同的镜像，不覆盖其他内容。Docker 仓库登录在远端通过 `docker login` 完成。
 
 ## 配置
 
@@ -87,7 +95,7 @@ NC 刀具识别和语法高亮用于整理与查看，不提供加工仿真或�
 
 1. 点击“创建备份”。完成后 ZIP 保存在服务器，页面刷新列表，不自动下载。
 2. 在“可恢复备份”中点击对应条目的“下载”，并在设备下载记录中确认保存；删除服务器备份需再次确认。
-3. 恢复或迁移到同版本服务时选择“导入备份”，上传 ZIP 并检查摘要，确认覆盖后导入。
+3. 选择“导入备份”，上传 v1 或 v2 整站 ZIP 并检查预览。v1 备份自动转换为当前 v2 数据；v2 备份要求数据库结构兼容。确认覆盖后导入。
 4. 导入前系统自动备份目标数据。导入完成后使用备份中的账号和密码重新登录。
 
 ZIP 包含账号、数据归属、操作日志、已保存的业务数据、NC 文件及密钥；不包含有效登录会话、未保存编辑或其他历史备份。导入会覆盖目标服务器的账号和业务数据。备份包未额外加密，请妥善保管。
@@ -95,6 +103,42 @@ ZIP 包含账号、数据归属、操作日志、已保存的业务数据、NC �
 网页备份上限为 ZIP 512 MB、解压后 2 GB、100,000 个 NC 文件。超出范围时采用停服复制完整数据目录的方式迁移。
 
 v2.0.2 增加图纸价格字段，首次启动会自动升级数据库，原图纸价格为空。升级前完整备份数据；旧版 ZIP 需先用匹配版本恢复，再升级程序，新版 ZIP 包含价格。不将升级后的数据库直接交给旧版程序使用。
+
+## 从 v1 迁移
+
+网页支持直接导入 v1 程序导出的整站 ZIP，无需先执行命令行工具。在 v1 的备份功能中创建并下载 ZIP，然后由 v2 管理员在“我的 → 备份与迁移 → 导入备份”上传并检查。页面展示账号、图纸、工序、版本、刀具和 NC 数量，以及账号身份、数据归属和未导入项。检查只在临时目录中转换，确认覆盖后才导入；导入前自动保存当前 v2 的恢复副本。迁移后使用原 v1 账号和密码登录。
+
+支持的 v1 ZIP 包含格式为 `1` 的 `manifest.json`、`data/cnccool.db` 和对应的 `data/nc/` 文件。缺失或损坏的 NC、旧数据库结构、异常路径或混合格式会拒绝导入，当前数据保留。仅接受整站 ZIP，不接受单独数据库或普通 NC 压缩包；网页上限仍为 ZIP 512 MB、解压后 2 GB、100,000 个 NC 文件。
+
+超出网页范围或需要先转换独立数据目录时，可使用 `migrate-v1`。Docker 镜像内置该命令，也可从 v2 源码单独编译。在实际执行迁移的 macOS / Linux 主机上运行：
+
+```bash
+mkdir -p .local/bin
+(cd backend && go build -o ../.local/bin/migrate-v1 ./cmd/migrate-v1)
+./.local/bin/migrate-v1 -from /path/to/v1-copy -to /path/to/new-v2-data
+```
+
+使用 Docker 时无需在宿主机安装 Go。先构建包含迁移工具的镜像，再将 v1 副本只读挂载，将新的空目录作为目标。以下目录替换为实际绝对路径，目标不要使用正在运行的 v2 数据目录：
+
+```bash
+docker build -t cnc-manager:migration .
+mkdir -p /path/to/new-v2-data
+sudo chown 1000:1000 /path/to/new-v2-data
+docker run --rm --network none --cap-drop ALL \
+  --security-opt no-new-privileges:true \
+  --entrypoint migrate-v1 \
+  --mount type=bind,src=/path/to/v1-copy,dst=/v1,readonly \
+  --mount type=bind,src=/path/to/new-v2-data,dst=/v2 \
+  cnc-manager:migration -from /v1 -to /v2
+```
+
+v1 副本须允许容器 UID/GID `1000:1000` 读取。迁移容器不启动网页服务，也不开放端口；失败时保留原空挂载目录并清理本次生成的内容，修正源数据后可重试。发布了包含迁移工具的新镜像后，可先拉取该固定版本镜像，再替换上述 `cnc-manager:migration`，无需重新编译；较早的镜像没有此命令。
+
+先停止 v1 并备份完整数据目录，使用备份副本迁移。源目录需包含 `cnccool.db` 和对应的 `nc/`；旧库须已升级至结构迁移 `0010_machine_tool_magazine`。目标目录必须不存在或完全为空，已初始化的 v2 目录也不能作为目标。工具只读旧库，保留主键、业务字段、版本关联和刀具表，校验 NC 内容并用新生成的 `nc.key` 重新加密。缺失或损坏的被引用 NC 会使整次迁移取消，不生成可用的半份数据库。
+
+迁移后使用原账号和密码重新登录，旧会话不导入；v1 账号全部成为管理员。图纸、机台和刀具进入“待分配”范围，仅管理员可见；分配图纸前需处理其机台、刀具关联，参见下节。未被版本引用的 NC 文件和旧登录会话不导入，工具会报告数量；v1 的 `app_setting` 扩展配置也不导入。完整备份新目录，尤其保留 `nc.key`。
+
+验证新目录后，可停服备份现有 v2，再将新目录绑定到容器 `/data`，赋予 UID/GID `1000:1000` 写权限后启动。也可先用独立 v2 实例打开转换后的目录，导出 v2 整站 ZIP，再通过目标 v2 的网页检查和覆盖导入；这会替换目标账号及业务数据。不要把 v1 数据目录直接挂到 v2 容器，也不要同时运行两个服务访问同一数据目录。
 
 ## 个人数据归属升级
 

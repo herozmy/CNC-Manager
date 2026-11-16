@@ -3,11 +3,12 @@
 //	migrate-v1 -from <v1 数据目录> -to <v2 数据目录>
 //
 // v1 数据目录含 cnccool.db 与 nc/；旧数据只读，不会被修改。
-// 导入失败会整体回滚并清理本次新建的数据目录。
+// 导入失败会整体回滚并清理新数据；原有空目录（含 Docker 绑定挂载）保留。
 package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -37,14 +38,21 @@ func main() {
 func run(from, to string) error {
 	if entries, err := os.ReadDir(to); err == nil && len(entries) > 0 {
 		return fmt.Errorf("目标目录 %s 非空，拒绝导入", to)
+	} else if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("读取目标目录失败: %w", err)
 	}
 	_, existed := os.Stat(to)
 	l := config.NewLayout(to)
 
 	rep, err := doImport(from, l)
 	if err != nil {
-		if existed != nil { // 目录是本次新建的，失败时清理，避免留下半成品
-			_ = os.RemoveAll(to)
+		if existed != nil {
+			err = errors.Join(err, os.RemoveAll(to))
+		} else {
+			// Docker 的绑定挂载根目录不能删除；仅清理本次生成的内容，保留原空目录。
+			for _, path := range []string{l.DBPath, l.DBPath + "-wal", l.DBPath + "-shm", l.KeyPath, l.NCDir} {
+				err = errors.Join(err, os.RemoveAll(path))
+			}
 		}
 		return err
 	}

@@ -1,0 +1,4 @@
+services:
+  cnc-manager:
+    build:
+      context: .

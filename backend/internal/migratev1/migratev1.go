@@ -11,6 +11,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -29,10 +30,11 @@ const requiredV1Migration = "0010_machine_tool_magazine"
 
 // Report 是导入结果，Counts 为各表导入行数。
 type Report struct {
-	Counts         map[string]int
-	BlobsMigrated  int
-	OrphanFiles    int // 旧库中没有任何版本引用、未导入的 NC 文件记录
-	SkippedSession int // 未导入的登录会话数（用户需重新登录）
+	Counts          map[string]int
+	BlobsMigrated   int
+	OrphanFiles     int // 旧库中没有任何版本引用、未导入的 NC 文件记录
+	SkippedSession  int // 未导入的登录会话数（用户需重新登录）
+	SkippedSettings int // 未导入的 v1 扩展配置
 }
 
 // Run 执行导入。newDB 必须是已完成迁移且为空的 v2 库。
@@ -62,6 +64,10 @@ func Run(ctx context.Context, oldDBPath, oldNCRoot string, newDB *sqlx.DB, store
 	}
 	if last < requiredV1Migration {
 		return nil, fmt.Errorf("旧库结构版本为 %q，低于 %s，请先用 v1 程序升级后再迁移", last, requiredV1Migration)
+	}
+	var integrity string
+	if err := conn.GetContext(ctx, &integrity, `PRAGMA old.integrity_check`); err != nil || integrity != "ok" {
+		return nil, fmt.Errorf("旧数据库完整性检查失败")
 	}
 
 	tx, err := conn.BeginTxx(ctx, nil)
@@ -93,6 +99,9 @@ func Run(ctx context.Context, oldDBPath, oldNCRoot string, newDB *sqlx.DB, store
 		return nil, err
 	}
 	if err := tx.GetContext(ctx, &rep.SkippedSession, `SELECT COUNT(*) FROM old.user_session`); err != nil {
+		return nil, err
+	}
+	if err := tx.GetContext(ctx, &rep.SkippedSettings, `SELECT COUNT(*) FROM old.app_setting`); err != nil {
 		return nil, err
 	}
 	if err := reconcile(ctx, tx, rep); err != nil {
@@ -134,14 +143,17 @@ func importBlobs(ctx context.Context, tx *sqlx.Tx, oldNCRoot string, store *ncst
 	}
 	var problems []string
 	for _, b := range blobs {
-		plain, err := readOld(oldNCRoot, b.RelPath)
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		plain, err := readOld(oldNCRoot, b.RelPath, store.MaxBytes())
 		if err != nil {
 			problems = append(problems, fmt.Sprintf("%s: %v", b.RelPath, err))
 			continue
 		}
 		sum := sha256.Sum256(plain)
-		if hex.EncodeToString(sum[:]) != b.SHA256 {
-			problems = append(problems, fmt.Sprintf("%s: 内容哈希与数据库记录不符（文件可能被改动或损坏）", b.RelPath))
+		if hex.EncodeToString(sum[:]) != b.SHA256 || int64(len(plain)) != b.Size {
+			problems = append(problems, fmt.Sprintf("%s: 内容哈希或大小与数据库记录不符（文件可能被改动或损坏）", b.RelPath))
 			continue
 		}
 		saved, err := store.Save(strings.NewReader(string(plain)))
@@ -167,17 +179,25 @@ func importBlobs(ctx context.Context, tx *sqlx.Tx, oldNCRoot string, store *ncst
 }
 
 // readOld 读取旧库中的一个 NC 文件，兼容加密与更早期的明文存储。
-func readOld(root, rel string) ([]byte, error) {
+func readOld(root, rel string, maxBytes int64) ([]byte, error) {
 	clean := filepath.Clean(filepath.FromSlash(rel))
 	if filepath.IsAbs(clean) || clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
 		return nil, fmt.Errorf("非法路径")
 	}
-	raw, err := os.ReadFile(filepath.Join(root, clean))
+	f, err := os.Open(filepath.Join(root, clean))
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil, fmt.Errorf("文件缺失")
 		}
 		return nil, err
+	}
+	defer f.Close()
+	raw, err := io.ReadAll(io.LimitReader(f, maxBytes+65))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(raw)) > maxBytes+64 {
+		return nil, fmt.Errorf("文件超过当前服务器的单文件上限")
 	}
 	if !ncstore.IsEncrypted(raw) {
 		return raw, nil

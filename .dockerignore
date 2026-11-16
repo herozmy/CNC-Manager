@@ -1,0 +1,18 @@
+# Only application build inputs enter the Docker context.
+**
+!Dockerfile
+!VERSION
+!frontend/
+!frontend/**
+!backend/
+!backend/**
+**/node_modules
+**/data
+**/dist
+**/.git
+**/.local
+**/.env*
+**/*.log
+**/*.[mM][dD]
+**/*.[mM][aA][rR][kK][dD][oO][wW][nN]
+backend/server

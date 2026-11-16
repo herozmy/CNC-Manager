@@ -3,18 +3,19 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, expect, test, vi } from 'vitest'
 import App from '../App'
 import { mockApi, renderApp, user } from '../test-utils'
+import type { BackupPreview } from '../api/types'
 
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals() })
 
 const preview = { format: 'cnc-manager-v2/1', version: '2.1.0-dev', createdAt: '2026-11-14T08:00:00Z', sha256: 'checked-hash', summary: { users: 1, drawings: 2, operations: 3, programs: 4, versions: 5, tools: 6, files: 5, admins: ['sourceadmin'] } }
 
-function server(role = 'admin', failCheck = false, failImport = false) {
+function server(role = 'admin', failCheck = false, failImport = false, result: BackupPreview = preview) {
   return mockApi((r) => {
     if (r.path === '/auth/status') return { body: { setupRequired: false } }
     if (r.path === '/auth/me') return { body: { ...user, role } }
     if (r.path === '/meta') return { body: { version: '2.1.0-dev' } }
     if (r.path === '/backup/recoveries') return { body: [] }
-    if (r.path === '/backup/inspect') return failCheck ? { status: 400, body: { error: '备份文件损坏' } } : { body: preview }
+    if (r.path === '/backup/inspect') return failCheck ? { status: 400, body: { error: '备份文件损坏' } } : { body: result }
     if (r.path === '/backup/import') return failImport ? { status: 500, body: { error: '原数据已保留' } } : { body: { recoveryName: 'pre-import.zip' } }
     if (r.path === '/backup/create') return { status: 500, body: { error: '服务器空间不足' } }
   })
@@ -27,6 +28,25 @@ async function selectAndCheck() {
   await u.click(screen.getByRole('button', { name: '检查备份' }))
   return u
 }
+
+test('v1 备份显示转换结果和账号归属说明，确认后导入并使用原账号重新登录', async () => {
+  const calls = server('admin', false, false, { ...preview, format: 'cnc-manager-v1/1', version: '1.2.13',
+    migration: { skippedSessions: 2, orphanFiles: 1, skippedSettings: 1 } })
+  renderApp(<App />, '/me')
+  const u = await selectAndCheck()
+  expect(await screen.findByText('v1 迁移说明')).toBeVisible()
+  expect(screen.getByText(/所有 v1 账号将成为管理员/)).toBeVisible()
+  expect(screen.getByText(/图纸、机台和刀具进入“待分配”/)).toBeVisible()
+  expect(screen.getByText(/旧登录会话不导入（2 个）/)).toBeVisible()
+  expect(screen.getByText(/NC 文件不导入（1 个）/)).toBeVisible()
+  expect(screen.getByText(/v1 扩展配置不导入（1 项）/)).toBeVisible()
+  expect(screen.getByText(/检查尚未覆盖当前数据/)).toBeVisible()
+  expect(screen.getByRole('button', { name: '确认覆盖导入' })).toBeDisabled()
+  expect(calls.filter((r) => r.path === '/backup/import')).toHaveLength(0)
+  await u.click(screen.getByRole('checkbox'))
+  await u.click(screen.getByRole('button', { name: '确认覆盖导入' }))
+  expect(await screen.findByRole('status')).toHaveTextContent('v1 数据迁移成功，请使用备份中的账号和密码登录')
+})
 
 test('导入先检查摘要并确认覆盖，成功清缓存并使用备份账号重新登录', async () => {
   const calls = server()

@@ -19,13 +19,16 @@ import (
 	"time"
 
 	"cnc-manager/internal/config"
+	"cnc-manager/internal/migratev1"
 	"cnc-manager/internal/ncstore"
 	"cnc-manager/internal/repo"
+	"cnc-manager/internal/store"
 )
 
 const MaxArchiveBytes int64 = 512 << 20
 const maxExpandedBytes uint64 = 2 << 30
 const Format = "cnc-manager-v2/1"
+const LegacyFormat = "cnc-manager-v1/1"
 
 var blobName = regexp.MustCompile(`^data/nc/[a-f0-9]{2}/[a-f0-9]{2}/[a-f0-9]{64}\.nc$`)
 var recoveryName = regexp.MustCompile(`^(?:pre-import|manual)-[0-9]{8}-[0-9]{6}-[0-9]+\.zip$`)
@@ -38,8 +41,15 @@ type Manifest struct {
 
 type Preview struct {
 	Manifest
-	Summary repo.BackupSummary `json:"summary"`
-	SHA256  string             `json:"sha256"`
+	Summary   repo.BackupSummary `json:"summary"`
+	SHA256    string             `json:"sha256"`
+	Migration *LegacyMigration   `json:"migration,omitempty"`
+}
+
+type LegacyMigration struct {
+	SkippedSessions int `json:"skippedSessions"`
+	OrphanFiles     int `json:"orphanFiles"`
+	SkippedSettings int `json:"skippedSettings"`
 }
 
 type Recovery struct {
@@ -205,6 +215,21 @@ func (m *Manager) Inspect(ctx context.Context, source io.ReaderAt, size int64) (
 			s.Close()
 		}
 	}()
+	legacy := false
+	for _, f := range zr.File {
+		if f.Name == "data/cnccool.db" {
+			legacy = true
+		}
+	}
+	if legacy && len(zr.File) > 100002 {
+		return nil, fmt.Errorf("备份中的 NC 文件数量过多")
+	}
+	dbName := "data/cnc.db"
+	extractRoot := root
+	if legacy {
+		dbName = "data/cnccool.db"
+		extractRoot = filepath.Join(root, "v1")
+	}
 	seen := map[string]bool{}
 	var total uint64
 	for _, f := range zr.File {
@@ -212,7 +237,7 @@ func (m *Manager) Inspect(ctx context.Context, source io.ReaderAt, size int64) (
 			return nil, err
 		}
 		name := f.Name
-		if !f.Mode().IsRegular() || seen[name] || (name != "manifest.json" && name != "data/cnc.db" && name != "data/nc.key" && !blobName.MatchString(name)) {
+		if !f.Mode().IsRegular() || seen[name] || (name != "manifest.json" && name != dbName && (legacy || name != "data/nc.key") && !blobName.MatchString(name)) {
 			return nil, fmt.Errorf("备份包含重复文件或不支持的路径")
 		}
 		seen[name] = true
@@ -220,7 +245,7 @@ func (m *Manager) Inspect(ctx context.Context, source io.ReaderAt, size int64) (
 		switch name {
 		case "manifest.json":
 			limit = 4096
-		case "data/cnc.db":
+		case dbName:
 			limit = uint64(MaxArchiveBytes)
 		case "data/nc.key":
 			limit = ncstore.KeySize
@@ -229,7 +254,7 @@ func (m *Manager) Inspect(ctx context.Context, source io.ReaderAt, size int64) (
 			return nil, fmt.Errorf("备份解压后超过允许大小")
 		}
 		total += f.UncompressedSize64
-		path := filepath.Join(root, filepath.FromSlash(name))
+		path := filepath.Join(extractRoot, filepath.FromSlash(name))
 		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 			return nil, err
 		}
@@ -237,17 +262,25 @@ func (m *Manager) Inspect(ctx context.Context, source io.ReaderAt, size int64) (
 			return nil, fmt.Errorf("备份文件损坏: %w", err)
 		}
 	}
-	for _, name := range []string{"manifest.json", "data/cnc.db", "data/nc.key"} {
+	required := []string{"manifest.json", dbName}
+	if !legacy {
+		required = append(required, "data/nc.key")
+	}
+	for _, name := range required {
 		if !seen[name] {
 			return nil, fmt.Errorf("备份缺少 %s", name)
 		}
 	}
-	raw, err := os.ReadFile(filepath.Join(root, "manifest.json"))
+	raw, err := os.ReadFile(filepath.Join(extractRoot, "manifest.json"))
 	if err != nil {
 		return nil, err
 	}
-	if json.Unmarshal(raw, &s.Manifest) != nil || s.Format != Format || len(s.Version) > 100 {
-		return nil, fmt.Errorf("仅支持本系统 v2 导出的整站备份")
+	if legacy {
+		if err := m.convertLegacy(ctx, s, raw); err != nil {
+			return nil, err
+		}
+	} else if json.Unmarshal(raw, &s.Manifest) != nil || s.Format != Format || len(s.Version) > 100 {
+		return nil, fmt.Errorf("仅支持 CNC-Manager v1 或 v2 导出的整站备份")
 	}
 	if _, err := time.Parse(time.RFC3339, s.CreatedAt); err != nil {
 		return nil, fmt.Errorf("备份时间无效")
@@ -260,7 +293,7 @@ func (m *Manager) Inspect(ctx context.Context, source io.ReaderAt, size int64) (
 	if err != nil {
 		return nil, err
 	}
-	if len(seen) != len(s.blobs)+3 {
+	if !legacy && len(seen) != len(s.blobs)+3 {
 		return nil, fmt.Errorf("NC 文件数量与数据库不匹配")
 	}
 	for _, blob := range s.blobs {
@@ -270,7 +303,7 @@ func (m *Manager) Inspect(ctx context.Context, source io.ReaderAt, size int64) (
 		if err := validBlob(blob, m.Files.MaxBytes()); err != nil {
 			return nil, err
 		}
-		if !seen["data/nc/"+blob.RelPath] {
+		if !legacy && !seen["data/nc/"+blob.RelPath] {
 			return nil, fmt.Errorf("备份缺少 NC 文件")
 		}
 		raw, err := os.ReadFile(filepath.Join(root, "data/nc", filepath.FromSlash(blob.RelPath)))
@@ -287,6 +320,47 @@ func (m *Manager) Inspect(ctx context.Context, source io.ReaderAt, size int64) (
 	}
 	s.SHA256 = hex.EncodeToString(h.Sum(nil))
 	return s, nil
+}
+
+// Convert only in the private staging directory. Apply uses the same validated
+// v2 snapshot/recovery transaction for both formats; inspection never writes live data.
+func (m *Manager) convertLegacy(ctx context.Context, s *Stage, raw []byte) error {
+	var manifest struct {
+		Format    int    `json:"format"`
+		Version   string `json:"version"`
+		CreatedAt string `json:"createdAt"`
+	}
+	if json.Unmarshal(raw, &manifest) != nil || manifest.Format != 1 || len(manifest.Version) > 100 {
+		return fmt.Errorf("v1 备份格式无效，请选择 v1 程序导出的整站 ZIP")
+	}
+	if _, err := time.Parse(time.RFC3339, manifest.CreatedAt); err != nil {
+		return fmt.Errorf("备份时间无效")
+	}
+	s.Manifest = Manifest{LegacyFormat, manifest.Version, manifest.CreatedAt}
+	layout := config.NewLayout(filepath.Join(s.root, "data"))
+	key, err := ncstore.LoadOrCreateKey(layout.KeyPath)
+	if err != nil {
+		return err
+	}
+	files, err := ncstore.New(layout.NCDir, m.Files.MaxBytes(), key)
+	if err != nil {
+		return err
+	}
+	db, err := store.Open(layout.DBPath)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	if err := store.Migrate(ctx, db); err != nil {
+		return err
+	}
+	old := filepath.Join(s.root, "v1", "data")
+	report, err := migratev1.Run(ctx, filepath.Join(old, "cnccool.db"), filepath.Join(old, "nc"), db, files)
+	if err != nil {
+		return fmt.Errorf("v1 数据转换失败: %w", err)
+	}
+	s.Migration = &LegacyMigration{report.SkippedSession, report.OrphanFiles, report.SkippedSettings}
+	return nil
 }
 
 func extractFile(f *zip.File, target string, size int64) error {
