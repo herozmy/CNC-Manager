@@ -27,8 +27,9 @@ def v1zip(source):
     with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
         z.writestr("manifest.json", json.dumps({"format": 1, "version": "1.2.13", "createdAt": "2026-01-02T03:04:05Z"}))
         z.write(source / "cnccool.db", "data/cnccool.db")
-        for f in sorted((source / "nc").rglob("*.nc")):
-            z.write(f, "data/" + f.relative_to(source).as_posix())
+        for f in sorted((source / "nc").rglob("*")):
+            if f.is_file():
+                z.write(f, "data/" + f.relative_to(source).as_posix())
     return out.getvalue()
 
 
@@ -111,6 +112,7 @@ def scenario(client, raw, checks):
         assert client.request("/api/versions/" + vid + "/download") == plain
         content = client.request("/api/versions/" + vid + "/content")
         assert content["content"] == plain.decode("gbk" if i == 1 else "utf-8")
+        assert content["fileName"] == ("v%d" % (i+1) if i < 2 else "legacy") + fixture.EXTENSIONS[i]
     checks.append("encrypted-utf8-gbk-and-plaintext-downloads")
     with zipfile.ZipFile(io.BytesIO(client.request("/api/backup/export"))) as z:
         assert z.read("data/nc.key") == key_before

@@ -19,6 +19,7 @@ import uuid
 
 PASSWORD = "correct horse"  # Public test credential; no production account.
 CONTENTS = [b"O1000\nG00 X0\nM30\n", "(精车)\nM30\n".encode("gbk"), b"O3000\nM30\n"]
+EXTENSIONS = [".NC", ".tap", ".txt"]
 # Independent v1 AES-GCM fixtures, followed by a legacy plaintext file.
 ENCRYPTED = [
     "Q05DQ05DMDEIfkOlrC/BLImGR0YISt2ymGfgvd+CIGDXAuIOjhiXJ2VQb03/vujCzaMvwnA=",
@@ -53,14 +54,14 @@ def seed(root):
     insert("nc_program", id=21, operation_id=11, program_no="O1000", current_version_id=102, **timestamps)
     for i, plain in enumerate(CONTENTS):
         sha = hashlib.sha256(plain).hexdigest()
-        rel = sha[:2] + "/" + sha[2:4] + "/" + sha + ".nc"
+        rel = sha[:2] + "/" + sha[2:4] + "/" + sha + EXTENSIONS[i]
         f = root / "nc" / rel
         f.parent.mkdir(parents=True, exist_ok=True)
         f.write_bytes(base64.b64decode(ENCRYPTED[i]) if i < 2 else plain)
-        insert("nc_file", id=i+1, sha256=sha, size_bytes=len(plain), original_name="legacy.nc",
+        insert("nc_file", id=i+1, sha256=sha, size_bytes=len(plain), original_name="legacy" + EXTENSIONS[i],
                rel_path=rel, file_encoding="gbk" if i == 1 else "utf-8", created_at=ts)
         insert("nc_version", id=101+i, program_id=21, version_no=i+1, file_id=i+1,
-               file_name="v%d.nc" % (i+1) if i < 2 else "", created_at=ts)
+               file_name="v%d" % (i+1) + EXTENSIONS[i] if i < 2 else "", created_at=ts)
     insert("program_tool", id=31, program_id=21, version_id=102, seq=1, tool_no="T05",
            offset_no="D05", tool_dia_milli=12500, comp_amount_milli=150,
            custom_params_json='[{"name":"x","value":"1"}]')
@@ -94,7 +95,7 @@ def main():
         seed(source)
         snapshot = hashes(source)
         shutil.copytree(source, broken)
-        next((broken / "nc").rglob("*.nc")).unlink()
+        next(f for f in (broken / "nc").rglob("*") if f.is_file()).unlink()
         target.mkdir()
         if args.image:
             os.chown(target, 1000, 1000)
@@ -182,7 +183,7 @@ def main():
                     content = request("/api/versions/" + version + "/content")
                     assert content["content"] == plain.decode("gbk" if i == 1 else "utf-8")
                     if i == 2:
-                        assert content["fileName"] == "legacy.nc"
+                        assert content["fileName"] == "legacy" + EXTENSIONS[i]
                 checks.extend(["encrypted-utf8-and-gbk-downloads", "plaintext-and-filename-fallback"])
                 result["passed"] = True
             finally:

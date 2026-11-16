@@ -24,6 +24,11 @@ import (
 // and content-addressed files beneath data/nc/. No v2 key is present.
 func legacyArchive(t *testing.T, edit func(*sqlx.DB)) []byte {
 	t.Helper()
+	return legacyArchiveWithExtension(t, ".nc", edit)
+}
+
+func legacyArchiveWithExtension(t *testing.T, extension string, edit func(*sqlx.DB)) []byte {
+	t.Helper()
 	root := t.TempDir()
 	db, err := store.Open(filepath.Join(root, "cnccool.db"))
 	if err != nil {
@@ -62,7 +67,7 @@ func legacyArchive(t *testing.T, edit func(*sqlx.DB)) []byte {
 	for i, content := range plain {
 		sum := sha256.Sum256(content)
 		sha := hex.EncodeToString(sum[:])
-		rel := sha[:2] + "/" + sha[2:4] + "/" + sha + ".nc"
+		rel := sha[:2] + "/" + sha[2:4] + "/" + sha + extension
 		path := filepath.Join(root, "nc", rel)
 		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 			t.Fatal(err)
@@ -81,7 +86,7 @@ func legacyArchive(t *testing.T, edit func(*sqlx.DB)) []byte {
 		if i == 1 {
 			encoding = "gbk"
 		}
-		exec(`INSERT INTO nc_file(id,sha256,size_bytes,original_name,rel_path,file_encoding,created_at) VALUES (?,?,?,'legacy.nc',?,?,'now')`, i+1, sha, len(content), rel, encoding)
+		exec(`INSERT INTO nc_file(id,sha256,size_bytes,original_name,rel_path,file_encoding,created_at) VALUES (?,?,?,?,?,?,'now')`, i+1, sha, len(content), "legacy"+extension, rel, encoding)
 		if i < 3 {
 			exec(`INSERT INTO nc_version(id,program_id,version_no,file_id,file_name,created_at) VALUES (?,21,?,?,'','now')`, 101+i, i+1, i+1)
 		}
@@ -120,6 +125,82 @@ func legacyArchive(t *testing.T, edit func(*sqlx.DB)) []byte {
 		t.Fatal(err)
 	}
 	return out.Bytes()
+}
+
+func TestV1WebMigrationPreservesLegacyExtensions(t *testing.T) {
+	ctx := context.Background()
+	// v1 Save uses the uploaded file's extension, preserving its case.
+	// Very long original names may be truncated before the extension in v1.
+	for _, extension := range []string{".nc", ".NC", ".txt", ".tap", ".prg", ".mpf", ".spf", ".h", ".eia", ".iso", ".cnc", ".gcode", ".min", ".dnc", ".TxT", ""} {
+		name := extension
+		if name == "" {
+			name = "no-extension"
+		}
+		t.Run(name, func(t *testing.T) {
+			raw := legacyArchiveWithExtension(t, extension, nil)
+			dest, db := fixture(t, "original")
+			stage, err := dest.Inspect(ctx, bytes.NewReader(raw), int64(len(raw)))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer stage.Close()
+			if stage.Summary.Files != 3 || stage.Summary.Versions != 3 {
+				t.Fatal(stage.Preview)
+			}
+			if _, err := dest.Apply(ctx, stage); err != nil {
+				t.Fatal(err)
+			}
+			for i, want := range [][]byte{[]byte("O1000\nG00 X0\nM30\n"), {'(', 0xbe, 0xab, 0xb3, 0xb5, ')', '\n', 'M', '3', '0', '\n'}, []byte("O3000\nM30\n")} {
+				var rel, name string
+				if err := db.QueryRow(`SELECT b.rel_path,v.file_name FROM nc_version v JOIN nc_blob b ON b.sha256=v.sha256 WHERE v.id=?`, 101+i).Scan(&rel, &name); err != nil {
+					t.Fatal(err)
+				}
+				if name != "legacy"+extension || !strings.HasSuffix(rel, ".nc") {
+					t.Fatal("original filename or v2 storage path changed", name, rel)
+				}
+				got, err := dest.Files.ReadAll(rel)
+				if err != nil || !bytes.Equal(got, want) {
+					t.Fatal("NC content not preserved", i, err)
+				}
+			}
+		})
+	}
+}
+
+func TestV1ArchivePathErrors(t *testing.T) {
+	raw := legacyArchive(t, nil)
+	dest, _ := fixture(t, "original")
+	unchanged := func(n string, b []byte) (string, []byte) { return n, b }
+	for name, kind := range map[string]string{
+		"data/cnccool.db":       "重复文件",
+		"data/nc/../../outside": "不支持的路径",
+		"data/nc/aa/bb/" + strings.Repeat("a", 64) + ".exe": "不支持的路径",
+	} {
+		t.Run(kind, func(t *testing.T) {
+			data := rewrite(t, raw, unchanged, name)
+			stage, err := dest.Inspect(context.Background(), bytes.NewReader(data), int64(len(data)))
+			if err == nil {
+				stage.Close()
+				t.Fatal("invalid archive accepted")
+			}
+			if !strings.Contains(err.Error(), kind) || !strings.Contains(err.Error(), name) {
+				t.Fatal("error does not identify offending path", err)
+			}
+		})
+	}
+	// v2 retains its exact .nc-only storage contract.
+	source, db := fixture(t, "source")
+	seed(t, source, db)
+	v2 := rewrite(t, archive(t, source), func(n string, b []byte) (string, []byte) {
+		if blobName.MatchString(n) {
+			n = strings.TrimSuffix(n, ".nc") + ".txt"
+		}
+		return n, b
+	}, "")
+	if stage, err := dest.Inspect(context.Background(), bytes.NewReader(v2), int64(len(v2))); err == nil {
+		stage.Close()
+		t.Fatal("v2 archive accepted a legacy extension")
+	}
 }
 
 func TestV1WebMigrationAndRecovery(t *testing.T) {

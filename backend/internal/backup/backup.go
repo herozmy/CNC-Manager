@@ -31,6 +31,10 @@ const Format = "cnc-manager-v2/1"
 const LegacyFormat = "cnc-manager-v1/1"
 
 var blobName = regexp.MustCompile(`^data/nc/[a-f0-9]{2}/[a-f0-9]{2}/[a-f0-9]{64}\.nc$`)
+
+// v1 stores the uploaded extension verbatim, unlike v2's fixed .nc suffix.
+// Its filename length limit can also remove the extension from long names.
+var legacyBlobName = regexp.MustCompile(`^data/nc/[a-f0-9]{2}/[a-f0-9]{2}/[a-f0-9]{64}(?:\.(?i:nc|tap|txt|prg|mpf|spf|h|eia|iso|cnc|gcode|min|dnc))?$`)
 var recoveryName = regexp.MustCompile(`^(?:pre-import|manual)-[0-9]{8}-[0-9]{6}-[0-9]+\.zip$`)
 
 type Manifest struct {
@@ -231,14 +235,24 @@ func (m *Manager) Inspect(ctx context.Context, source io.ReaderAt, size int64) (
 		extractRoot = filepath.Join(root, "v1")
 	}
 	seen := map[string]bool{}
+	allowedBlob := blobName
+	if legacy {
+		allowedBlob = legacyBlobName
+	}
 	var total uint64
 	for _, f := range zr.File {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
 		name := f.Name
-		if !f.Mode().IsRegular() || seen[name] || (name != "manifest.json" && name != dbName && (legacy || name != "data/nc.key") && !blobName.MatchString(name)) {
-			return nil, fmt.Errorf("备份包含重复文件或不支持的路径")
+		if !f.Mode().IsRegular() {
+			return nil, fmt.Errorf("备份包含非普通文件: %q", name)
+		}
+		if seen[name] {
+			return nil, fmt.Errorf("备份包含重复文件: %q", name)
+		}
+		if name != "manifest.json" && name != dbName && (legacy || name != "data/nc.key") && !allowedBlob.MatchString(name) {
+			return nil, fmt.Errorf("备份包含不支持的路径: %q", name)
 		}
 		seen[name] = true
 		limit := uint64(m.Files.MaxBytes() + 64)
