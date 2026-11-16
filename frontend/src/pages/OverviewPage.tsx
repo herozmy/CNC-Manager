@@ -1,10 +1,11 @@
 import { useInfiniteQuery } from '@tanstack/react-query'
-import { Layers, Search, Trash2 } from 'lucide-react'
+import { Layers, Pencil, Search, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api'
 import type { Drawing } from '../api/types'
 import DeleteSheet from '../components/DeleteSheet'
+import DrawingEditSheet from '../components/DrawingEditSheet'
 import { Button } from '../components/ui/Button'
 import { EmptyState, ErrorState, Spinner } from '../components/ui/State'
 import { relativeTime } from '../lib/format'
@@ -12,7 +13,7 @@ import { useAccess } from '../auth/permissions'
 import OwnerSelect from '../components/OwnerSelect'
 import { useDebounced } from '../lib/useDebounced'
 
-function DrawingCard({ d, onDelete }: { d: Drawing; onDelete?: () => void }) {
+function DrawingCard({ d, onEdit, onDelete }: { d: Drawing; onEdit?: () => void; onDelete?: () => void }) {
   return (
     <article className="flex items-stretch rounded-2xl border border-slate-200 bg-white shadow-sm md:hover:border-amber-400">
       <Link to={`/drawings/${d.id}`} className="min-w-0 flex-1 rounded-l-2xl p-4 active:bg-slate-100">
@@ -28,14 +29,26 @@ function DrawingCard({ d, onDelete }: { d: Drawing; onDelete?: () => void }) {
           {d.operationCount} 道工序 · {d.programCount} 个程序
         </p>
       </Link>
-      {onDelete && <button
-        type="button"
-        onClick={onDelete}
-        aria-label={`删除图纸 ${d.drawingNo}`}
-        className="flex w-14 shrink-0 items-center justify-center rounded-r-2xl border-l border-slate-100 text-red-600 hover:bg-red-50 active:bg-red-100"
-      >
-        <Trash2 className="size-5" aria-hidden />
-      </button>}
+      {(onEdit || onDelete) && <div className="flex w-14 shrink-0 flex-col overflow-hidden rounded-r-2xl border-l border-slate-100 md:w-20">
+        {onEdit && <button
+          type="button"
+          onClick={onEdit}
+          aria-label={`编辑图纸 ${d.drawingNo}`}
+          title="编辑图纸"
+          className="flex min-h-12 flex-1 flex-col items-center justify-center gap-1 text-sm text-slate-700 hover:bg-amber-50 active:bg-amber-100 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-amber-500 md:flex-row"
+        >
+          <Pencil className="size-4" aria-hidden /><span>编辑</span>
+        </button>}
+        {onDelete && <button
+          type="button"
+          onClick={onDelete}
+          aria-label={`删除图纸 ${d.drawingNo}`}
+          title="删除图纸"
+          className={`flex min-h-12 flex-1 flex-col items-center justify-center gap-1 text-sm text-red-600 hover:bg-red-50 active:bg-red-100 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-amber-500 md:flex-row ${onEdit ? 'border-t border-slate-100' : ''}`}
+        >
+          <Trash2 className="size-4" aria-hidden /><span>删除</span>
+        </button>}
+      </div>}
     </article>
   )
 }
@@ -46,6 +59,8 @@ export default function OverviewPage() {
   const [ownerUserId, setOwnerUserId] = useState<number | ''>('')
   const [input, setInput] = useState('')
   const [deleting, setDeleting] = useState<Drawing | null>(null)
+  const [editing, setEditing] = useState<Drawing | null>(null)
+  const [saved, setSaved] = useState(false)
   const q = useDebounced(input.trim())
   const query = useInfiniteQuery({
     queryKey: ['drawings', q, ownerUserId],
@@ -86,6 +101,7 @@ export default function OverviewPage() {
         </label>
       </div>
 
+      {saved && <p role="status" className="mb-4 rounded-xl bg-green-50 p-3 text-sm text-green-900">图纸已保存</p>}
       {query.isPending && <Spinner />}
       {query.isError && <ErrorState message="图纸加载失败" onRetry={() => query.refetch()} />}
       {query.isSuccess && items.length === 0 && (
@@ -101,7 +117,7 @@ export default function OverviewPage() {
         <ul className="space-y-3">
           {items.map((d) => (
             <li key={d.id}>
-              <DrawingCard d={d} onDelete={access.can('delete') ? () => setDeleting(d) : undefined} />
+              <DrawingCard d={d} onEdit={access.can('edit') ? () => { setSaved(false); setEditing(d) } : undefined} onDelete={access.can('delete') ? () => setDeleting(d) : undefined} />
             </li>
           ))}
         </ul>
@@ -113,6 +129,7 @@ export default function OverviewPage() {
           </Button>
         </div>
       )}
+      {editing && <DrawingEditSheet key={editing.id} drawing={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); setSaved(true) }} />}
       {deleting && (
         <DeleteSheet
           title="删除图纸"
