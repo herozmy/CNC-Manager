@@ -1,4 +1,4 @@
-import { act, screen, waitFor } from '@testing-library/react'
+import { act, screen, waitFor, within } from '@testing-library/react'
 import { focusManager } from '@tanstack/react-query'
 import userEvent from '@testing-library/user-event'
 import { afterEach, expect, test, vi } from 'vitest'
@@ -13,6 +13,79 @@ async function returnToApp(client: ReturnType<typeof renderApp>['client']) {
   act(() => { focusManager.setFocused(false); focusManager.setFocused(true) })
   await waitFor(() => expect(client.getQueryState(SESSION_KEY)?.fetchStatus).toBe('idle'))
 }
+
+function machineNavigationServer(currentUser = user, fails = false) {
+  let fail = fails
+  const machine = { id: 1, code: 'CNC-01', name: '立式加工中心', enabled: true, controller: 'FANUC', remark: '', ownerUserId: currentUser.id, ownerName: currentUser.displayName, drawingCount: 0, operationCount: 0, programCount: 0, createdAt: '', updatedAt: '' }
+  const calls = mockApi(r => {
+    if (r.path === '/auth/status') return { body: { setupRequired: false } }
+    if (r.path === '/auth/me') return { body: currentUser }
+    if (r.path === '/meta') return { body: { version: 'local-test' } }
+    if (r.path === '/backup/recoveries') return { body: [] }
+    if (r.path === '/admin/users') return { body: [currentUser] }
+    if (r.path.startsWith('/machines?')) {
+      if (fail) { fail = false; return { status: 500, body: { error: '暂时不可用' } } }
+      return { body: { items: [machine], total: 1, page: 1, size: 20 } }
+    }
+    if (r.path === '/machines/1') return { body: machine }
+    if (r.path.startsWith('/machines/1/drawings?')) return { body: { items: [], total: 0, page: 1, size: 20 } }
+  })
+  return calls
+}
+
+test.each(['admin', 'editor'] as const)('%s账号从我的独立卡片进入机台，进入前不加载列表，返回后收起', async role => {
+  const calls = machineNavigationServer({ ...user, role })
+  renderApp(<App />, '/me')
+  const u = userEvent.setup()
+  const card = await screen.findByRole('link', { name: '机台管理' })
+  expect(card).toHaveAttribute('href', '/machines')
+  expect(screen.getByRole('heading', { name: '我的' })).toBeInTheDocument()
+  expect(screen.queryByLabelText('搜索机台')).not.toBeInTheDocument()
+  expect(screen.queryByText('CNC-01')).not.toBeInTheDocument()
+  expect(screen.queryByRole('link', { name: '机台' })).not.toBeInTheDocument()
+  expect(calls.some(r => r.path.startsWith('/machines'))).toBe(false)
+  expect(within(screen.getByRole('navigation', { name: '主导航' })).getAllByRole('link').map(link => link.getAttribute('aria-label'))).toEqual(['总览', '新建图纸', '我的'])
+  await u.click(card)
+  expect(await screen.findByText('CNC-01')).toBeInTheDocument()
+  expect(screen.getByRole('heading', { name: '机台管理' })).toBeInTheDocument()
+  expect(screen.getAllByRole('link', { name: '我的' }).every(link => link.getAttribute('aria-current') === 'page')).toBe(true)
+  await u.click(screen.getByRole('link', { name: '返回我的' }))
+  expect(await screen.findByRole('link', { name: '机台管理' })).toBeInTheDocument()
+  expect(screen.queryByText('CNC-01')).not.toBeInTheDocument()
+  expect(screen.queryByLabelText('搜索机台')).not.toBeInTheDocument()
+})
+
+test('从我的进入机台加载失败可重试，失败时仍能返回我的', async () => {
+  const calls = machineNavigationServer({ ...user, role: 'editor' }, true)
+  renderApp(<App />, '/me')
+  const u = userEvent.setup()
+  await u.click(await screen.findByRole('link', { name: '机台管理' }))
+  expect(await screen.findByText('机台加载失败')).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: '返回我的' })).toHaveAttribute('href', '/me')
+  await u.click(screen.getByRole('button', { name: '重试' }))
+  expect(await screen.findByText('CNC-01')).toBeInTheDocument()
+  expect(calls.filter(r => r.path.startsWith('/machines?'))).toHaveLength(2)
+})
+
+test('机台详情直达链接仍有效，并归属我的导航，可逐级返回我的', async () => {
+  machineNavigationServer({ ...user, role: 'editor' })
+  renderApp(<App />, '/machines/1')
+  const u = userEvent.setup()
+  expect(await screen.findByRole('heading', { name: 'CNC-01' })).toBeInTheDocument()
+  expect(screen.getAllByRole('link', { name: '我的' }).every(link => link.getAttribute('aria-current') === 'page')).toBe(true)
+  await u.click(screen.getByRole('link', { name: '返回机台管理' }))
+  await screen.findByRole('heading', { name: '机台管理' })
+  await u.click(screen.getByRole('link', { name: '返回我的' }))
+  expect(await screen.findByRole('link', { name: '机台管理' })).toBeInTheDocument()
+})
+
+test('停用账号的我的页面不提供机台入口或请求机台列表', async () => {
+  const calls = machineNavigationServer({ ...user, role: 'editor', enabled: false })
+  renderApp(<App />, '/me')
+  await screen.findByText('版本 local-test')
+  expect(screen.queryByRole('link', { name: /机台/ })).not.toBeInTheDocument()
+  expect(calls.some(r => r.path.startsWith('/machines'))).toBe(false)
+})
 
 test('尚无用户时显示创建管理员表单，并校验密码', async () => {
   const calls = mockApi((r) => (r.path === '/auth/status' ? { body: { setupRequired: true } } : undefined))

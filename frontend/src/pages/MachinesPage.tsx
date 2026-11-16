@@ -1,5 +1,6 @@
 import { useInfiniteQuery } from '@tanstack/react-query'
 import { useState } from 'react'
+import { ArrowLeft } from 'lucide-react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '../api'
 import { useAccess } from '../auth/permissions'
@@ -32,6 +33,7 @@ export default function MachinesPage() {
   if (!access.can('read')) return <main className="p-6">账号不可用，请联系管理员。</main>
   const machines = query.data?.pages.flatMap((page) => page.items) ?? []
   return <main className="mx-auto max-w-3xl space-y-4 px-4 pt-4 pb-8">
+    <Link to="/me" className="inline-flex min-h-12 items-center gap-2 rounded-xl px-2 text-sm text-slate-600 hover:bg-slate-200"><ArrowLeft className="size-5" aria-hidden />返回我的</Link>
     <header className="flex items-start justify-between gap-3"><div><h1 className="text-2xl font-bold">机台管理</h1><p className="mt-1 text-sm text-slate-500">管理机台，查找关联图纸、工序和程序</p></div>{access.can('create') && <Button className="shrink-0" onClick={() => setAdding(true)}>新增机台</Button>}</header>
     <Field type="search" label="搜索机台" value={input} onChange={(e) => change('q', e.target.value)} placeholder="机台编号、名称、控制系统" />
     <div className="grid gap-3 sm:grid-cols-2">
