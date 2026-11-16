@@ -10,12 +10,13 @@ import { Button } from './ui/Button'
 export interface NCCodeEditorHandle { getValue: () => string }
 export interface NCCodeEditorProps {
   initialValue: string
+  label?: string
   readOnly: boolean
   onDirtyChange: (dirty: boolean) => void
   ref?: Ref<NCCodeEditorHandle>
 }
 
-export default function NCCodeEditor({ initialValue, readOnly, onDirtyChange, ref }: NCCodeEditorProps) {
+export default function NCCodeEditor({ initialValue, label = 'NC 程序内容', readOnly, onDirtyChange, ref }: NCCodeEditorProps) {
   const host = useRef<HTMLDivElement>(null)
   const view = useRef<EditorView | null>(null)
   const access = useRef(new Compartment())
@@ -32,19 +33,21 @@ export default function NCCodeEditor({ initialValue, readOnly, onDirtyChange, re
       ncLanguage, ncHighlight, search({ top: true }),
       keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap]),
       access.current.of([EditorState.readOnly.of(true), EditorView.editable.of(false)]),
-      EditorView.contentAttributes.of({ 'aria-label': 'NC 程序内容', 'aria-multiline': 'true', spellcheck: 'false', autocapitalize: 'off', autocorrect: 'off', tabindex: '0' }),
+      EditorView.contentAttributes.of({ 'aria-label': label, 'aria-multiline': 'true', spellcheck: 'false', autocapitalize: 'off', autocorrect: 'off', tabindex: '0' }),
       EditorState.phrases.of({ 'Find': '查找', 'Replace': '替换', 'next': '下一个', 'previous': '上一个', 'all': '全部', 'match case': '区分大小写', 'regexp': '正则表达式', 'by word': '全词匹配', 'replace': '替换', 'replace all': '全部替换', 'close': '关闭查找' }),
       EditorView.theme({
-        '&': { fontSize: '14px', borderRadius: '0.75rem', border: '1px solid #cbd5e1', overflow: 'hidden' },
-        '&.cm-focused': { outline: '2px solid #f59e0b' },
+        '&': { fontSize: '14px', color: 'var(--ui-ink)', backgroundColor: 'var(--ui-canvas)', borderRadius: '0.375rem', border: '1px solid var(--ui-line-strong)', overflow: 'hidden' },
+        '&.cm-focused': { outline: '2px solid var(--ui-accent)' },
         '.cm-scroller': { overflow: 'auto', height: 'min(48dvh, 520px)', minHeight: '220px', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' },
-        '.cm-content': { padding: '8px 0' },
-        '.cm-gutters': { backgroundColor: '#f8fafc', color: '#64748b', borderRight: '1px solid #e2e8f0' },
-        '.cm-activeLine': { backgroundColor: '#fef3c744' },
+        '.cm-content': { padding: '8px 0', caretColor: 'var(--ui-accent)' },
+        '.cm-panels': { backgroundColor: 'var(--ui-muted)', color: 'var(--ui-ink)' },
+        '.cm-activeLineGutter': { backgroundColor: 'var(--ui-accent-soft)', color: 'var(--ui-accent)' },
+        '.cm-gutters': { backgroundColor: 'var(--ui-muted)', color: 'var(--ui-subtle)', borderRight: '1px solid var(--ui-line)' },
+        '.cm-activeLine': { backgroundColor: 'var(--ui-accent-soft)' },
         '.cm-search': { display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '6px', padding: '8px', paddingRight: '28px' },
-        '.cm-search input:not([type=checkbox])': { maxWidth: '100%', minHeight: '36px', border: '1px solid #94a3b8', borderRadius: '4px' },
+        '.cm-search input:not([type=checkbox])': { maxWidth: '100%', minHeight: '36px', border: '1px solid var(--ui-line-strong)', borderRadius: '4px' },
         '.cm-search label': { display: 'inline-flex', alignItems: 'center', gap: '4px', minHeight: '32px', whiteSpace: 'nowrap' },
-        '.cm-search button': { minHeight: '36px', background: '#fff', border: '1px solid #94a3b8', borderRadius: '6px', padding: '4px 8px' },
+        '.cm-search button': { minHeight: '36px', background: 'var(--ui-surface)', color: 'var(--ui-ink)', border: '1px solid var(--ui-line-strong)', borderRadius: '6px', padding: '4px 8px' },
       }),
       EditorView.updateListener.of((update) => {
         if (update.docChanged) {
@@ -62,7 +65,7 @@ export default function NCCodeEditor({ initialValue, readOnly, onDirtyChange, re
     view.current = editor
     setLineCount(state.doc.lines)
     return () => { editor.destroy(); view.current = null }
-  }, [initialValue, onDirtyChange])
+  }, [initialValue, label, onDirtyChange])
 
   useEffect(() => {
     view.current?.dispatch({ effects: access.current.reconfigure([
@@ -86,11 +89,11 @@ export default function NCCodeEditor({ initialValue, readOnly, onDirtyChange, re
   return <div className="min-w-0 space-y-2">
     <div className="flex flex-wrap items-center gap-2">
       <Button variant="secondary" onClick={() => view.current && openSearchPanel(view.current)}>查找 / 替换</Button>
-      <input aria-label="跳转行号" inputMode="numeric" value={line} onChange={(e) => setLine(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); jump() } }} placeholder="行号" className="h-12 w-20 rounded-xl border border-slate-300 px-3" />
+      <input aria-label="跳转行号" inputMode="numeric" value={line} onChange={(e) => setLine(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); jump() } }} placeholder="行号" className="h-12 w-20 rounded-md border border-line-strong px-3" />
       <Button variant="secondary" onClick={jump}>跳转</Button>
-      <span className="text-xs text-slate-500">行:列 {position} · 共 {lineCount} 行</span>
+      <span className="text-xs text-muted">行:列 {position} · 共 {lineCount} 行</span>
     </div>
-    {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
+    {error && <p role="alert" className="text-sm text-danger">{error}</p>}
     <div ref={host} className="min-w-0" />
   </div>
 }

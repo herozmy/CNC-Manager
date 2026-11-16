@@ -277,3 +277,71 @@ test('刀具表直接显示，选择历史版本后切换表格并保留各版�
   expect(await screen.findByLabelText('刀具号')).toHaveValue('T02')
   expect(calls.some((r) => r.method !== 'GET')).toBe(false)
 })
+
+test('工作台显式加载所选 NC 预览，浏览历史和复制失败都不修改版本', async () => {
+  const calls = server([version(), version({ id: 4, versionNo: 2, isCurrent: false })], r => {
+    if (r.path === '/versions/5/content' || r.path === '/versions/4/content') {
+      const old = r.path.includes('/4/')
+      return { body: { versionId: old ? 4 : 5, programId: 1, versionNo: old ? 2 : 3, fileName: 'O1234.nc', encoding: 'utf-8', content: old ? 'O1234\n(V2)\nM30' : 'O1234\n(V3)\nM30', lineCount: 3, sizeBytes: 20, isCurrent: !old } }
+    }
+  })
+  renderApp(view(), URL)
+  const u = userEvent.setup()
+  await u.click(await screen.findByRole('button', { name: '加载 NC 预览' }))
+  expect(await screen.findByLabelText('NC 程序预览')).toHaveValue('O1234\n(V3)\nM30')
+  expect(screen.getByLabelText('NC 程序预览')).toHaveAttribute('readonly')
+  vi.spyOn(navigator.clipboard, 'writeText').mockRejectedValueOnce(new Error('denied'))
+  await u.click(screen.getByRole('button', { name: '复制程序' }))
+  expect(await screen.findByText('复制失败，请选择代码后手动复制')).toBeInTheDocument()
+  await u.click(screen.getByRole('button', { name: '复制程序' }))
+  expect(await screen.findByText('已复制程序')).toBeInTheDocument()
+  await u.click(screen.getByRole('button', { name: '浏览 V2' }))
+  expect(screen.getByLabelText('选择 NC 程序版本')).toHaveValue('4')
+  expect(screen.getByText('正在浏览历史版本 · V2 · UTF-8')).toBeInTheDocument()
+  expect(screen.queryByLabelText('NC 程序预览')).not.toBeInTheDocument()
+  await u.click(screen.getByRole('button', { name: '加载 NC 预览' }))
+  expect(await screen.findByLabelText('NC 程序预览')).toHaveValue('O1234\n(V2)\nM30')
+  expect(screen.getByRole('link', { name: '下载当前版本' })).toHaveAttribute('href', '/api/versions/5/download')
+  expect(calls.some(r => r.method !== 'GET')).toBe(false)
+  vi.restoreAllMocks()
+})
+
+test('刀具草稿在工作台标签间保留，差异视图使用真实版本接口', async () => {
+  const calls = server([version(), version({ id: 4, versionNo: 2, isCurrent: false })], r => {
+    if (r.path.startsWith('/versions/4/diff?')) return { body: { leftVersionNo: 2, rightVersionNo: 3, identical: false, truncated: false, totalLines: 1, totalChanges: 1, lines: [{ type: 'change', leftNo: 2, rightNo: 2, leftText: 'G01 F1650', rightText: 'G01 F950' }] } }
+  })
+  renderApp(view(), URL)
+  const u = userEvent.setup()
+  await u.click(await screen.findByRole('button', { name: '手动添加' }))
+  await u.type(screen.getByLabelText('刀具号'), 'T08')
+  await u.type(screen.getByLabelText('刀具名称'), '未保存的精镗刀')
+  await u.click(screen.getByRole('tab', { name: '版本差异' }))
+  const table = await screen.findByRole('table', { name: '版本差异' })
+  expect(table).toHaveTextContent('G01 F1650')
+  expect(table).toHaveTextContent('G01 F950')
+  expect(calls.some(r => r.path.startsWith('/versions/4/diff?with=5'))).toBe(true)
+  await u.click(screen.getByRole('tab', { name: '版本刀具表' }))
+  expect(screen.getByLabelText('刀具号')).toHaveValue('T08')
+  expect(screen.getByLabelText('刀具名称')).toHaveValue('未保存的精镗刀')
+  await u.keyboard('{ArrowLeft}')
+  expect(screen.getByRole('tab', { name: 'NC 代码' })).toHaveAttribute('aria-selected', 'true')
+  expect(screen.getByLabelText('刀具号')).toHaveValue('T08')
+  expect(calls.some(r => r.method !== 'GET')).toBe(false)
+})
+
+test('NC 预览加载失败可重试，并保留版本与刀具操作入口', async () => {
+  let fail = true
+  server([version()], r => r.path === '/versions/5/content' ? fail
+    ? { status: 500, body: { error: '暂时不可用' } }
+    : { body: { versionId: 5, programId: 1, versionNo: 3, fileName: 'O1234.nc', encoding: 'utf-8', content: 'O1234\nM30', lineCount: 2, sizeBytes: 10, isCurrent: true } }
+    : undefined)
+  renderApp(view(), URL)
+  const u = userEvent.setup()
+  await u.click(await screen.findByRole('button', { name: '加载 NC 预览' }))
+  await screen.findByText('NC 预览加载失败')
+  expect(screen.getByRole('tab', { name: '版本差异' })).toBeDisabled()
+  expect(screen.getByRole('button', { name: '查看 / 编辑当前版本' })).toBeInTheDocument()
+  fail = false
+  await u.click(screen.getByRole('button', { name: '重试' }))
+  expect(await screen.findByLabelText('NC 程序预览')).toHaveValue('O1234\nM30')
+})

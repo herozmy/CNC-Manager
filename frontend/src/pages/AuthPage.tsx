@@ -38,12 +38,12 @@ export default function AuthPage({ setup, notice, initialUsername = '' }: { setu
 
   return (
     <main className="flex min-h-dvh items-center justify-center bg-slate-900 p-4">
-      <form onSubmit={submit} className="w-full max-w-sm space-y-5 rounded-2xl bg-white p-6 shadow-xl" noValidate>
+      <form onSubmit={submit} className="w-full max-w-sm space-y-5 rounded-lg bg-surface p-6 shadow-xl" noValidate>
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">CNC-Manager</h1>
-          <p className="mt-1 text-slate-600">{setup ? '首次使用：创建管理员账号' : '登录后查看数控程序台账'}</p>
+          <h1 className="text-2xl font-bold text-ink">CNC-Manager</h1>
+          <p className="mt-1 text-muted">{setup ? '首次使用：创建管理员账号' : '登录后查看数控程序台账'}</p>
         </div>
-        {notice && <p role="status" className="rounded-lg bg-green-50 px-3 py-2 text-sm text-green-800">{notice}</p>}
+        {notice && <p role="status" className="rounded-lg bg-success-soft px-3 py-2 text-sm text-success">{notice}</p>}
         <Field label="用户名" value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" autoCapitalize="none" autoFocus />
         {setup && <Field label="显示名称（可选）" value={displayName} onChange={(e) => setDisplayName(e.target.value)} />}
         <Field
@@ -56,15 +56,15 @@ export default function AuthPage({ setup, notice, initialUsername = '' }: { setu
         />
         {setup && <Field label="确认密码" type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} autoComplete="new-password" />}
         {error && (
-          <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+          <p role="alert" className="rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger">
             {error}
           </p>
         )}
         <Button type="submit" loading={busy} className="w-full">
           {setup ? '创建并进入' : '登录'}
         </Button>
-        {!setup && <details className="rounded-xl bg-slate-50 p-3 text-sm text-slate-600">
-          <summary className="cursor-pointer py-2 font-medium text-slate-800">忘记密码？</summary>
+        {!setup && <details className="rounded-md bg-canvas p-3 text-sm text-muted">
+          <summary className="cursor-pointer py-2 font-medium text-ink">忘记密码？</summary>
           <div className="mt-2 space-y-2 leading-6">
             <p>请联系负责部署本系统的服务器管理员，提供你的登录用户名，请管理员核实身份后重置密码。</p>
             <p>重置后使用新密码登录，再到“我的 → 修改密码”设置自己的密码。</p>

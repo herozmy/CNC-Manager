@@ -60,16 +60,16 @@ export default function UploadSheet({ drawingId, programId, file, onClose, onDon
   return (
     <Sheet open title="上传新版本" onClose={() => { if (!pending.current) onClose() }}>
       <form onSubmit={submit} className="space-y-4" noValidate>
-        <div className="rounded-xl bg-slate-50 p-3">
+        <div className="rounded-md bg-canvas p-3">
           <p className="break-all font-semibold">{file.name}</p>
-          <p className="text-sm text-slate-500">{formatBytes(file.size)}</p>
+          <p className="text-sm text-muted">{formatBytes(file.size)}</p>
         </div>
         <fieldset disabled={busy} className="space-y-4">
           <Field label="变更说明（可选）" value={note} onChange={(e) => setNote(e.target.value)} placeholder="如 调整精车进给" maxLength={500} />
         </fieldset>
-        {busy && <p role="status" className="text-sm text-slate-600">正在上传，请保持页面打开…</p>}
+        {busy && <p role="status" className="text-sm text-muted">正在上传，请保持页面打开…</p>}
         {error && (
-          <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+          <p role="alert" className="rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger">
             {error}
           </p>
         )}

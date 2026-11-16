@@ -1,1 +1,90 @@
 @import 'tailwindcss';
+
+@theme inline {
+  --color-canvas: var(--ui-canvas);
+  --color-surface: var(--ui-surface);
+  --color-inset: var(--ui-muted);
+  --color-muted: var(--ui-subtle);
+  --color-hover: var(--ui-hover);
+  --color-ink: var(--ui-ink);
+  --color-body: var(--ui-body);
+  --color-subtle: var(--ui-subtle);
+  --color-line: var(--ui-line);
+  --color-line-strong: var(--ui-line-strong);
+  --color-accent: var(--ui-accent);
+  --color-accent-soft: var(--ui-accent-soft);
+  --color-success: var(--ui-success);
+  --color-success-soft: var(--ui-success-soft);
+  --color-warning: var(--ui-warning);
+  --color-warning-soft: var(--ui-warning-soft);
+  --color-danger: var(--ui-danger);
+  --color-danger-soft: var(--ui-danger-soft);
+}
+
+:root {
+  color-scheme: light;
+  --ui-canvas: #f8fafc;
+  --ui-surface: #ffffff;
+  --ui-muted: #f1f5f9;
+  --ui-hover: #e2e8f0;
+  --ui-ink: #0f172a;
+  --ui-body: #334155;
+  --ui-subtle: #64748b;
+  --ui-line: #e2e8f0;
+  --ui-line-strong: #cbd5e1;
+  --ui-accent: #1d4ed8;
+  --ui-accent-soft: #eff6ff;
+  --ui-success: #047857;
+  --ui-success-soft: #ecfdf5;
+  --ui-warning: #92400e;
+  --ui-warning-soft: #fffbeb;
+  --ui-danger: #b91c1c;
+  --ui-danger-soft: #fef2f2;
+  --nc-keyword: #1d4ed8;
+  --nc-label: #7e22ce;
+  --nc-property: #0369a1;
+  --nc-number: #92400e;
+  --nc-variable: #be123c;
+  --nc-comment: #64748b;
+  --nc-string: #047857;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --ui-canvas: #090d16;
+  --ui-surface: #111827;
+  --ui-muted: #172033;
+  --ui-hover: #22304a;
+  --ui-ink: #f1f5f9;
+  --ui-body: #cbd5e1;
+  --ui-subtle: #94a3b8;
+  --ui-line: #253147;
+  --ui-line-strong: #475569;
+  --ui-accent: #93c5fd;
+  --ui-accent-soft: #152749;
+  --ui-success: #6ee7b7;
+  --ui-success-soft: #0c2b27;
+  --ui-warning: #fcd34d;
+  --ui-warning-soft: #302615;
+  --ui-danger: #fda4af;
+  --ui-danger-soft: #321c29;
+  --nc-keyword: #7dd3fc;
+  --nc-label: #e879f9;
+  --nc-property: #cbd5e1;
+  --nc-number: #6ee7b7;
+  --nc-variable: #fda4af;
+  --nc-comment: #94a3b8;
+  --nc-string: #6ee7b7;
+}
+
+@layer base {
+  body { background: var(--ui-canvas); color: var(--ui-ink); }
+  input, select, textarea { min-width: 0; }
+  input:not([type='checkbox']):not([type='radio']), select, textarea { background-color: var(--ui-surface); color: var(--ui-ink); }
+  button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
+}
+
+@layer utilities {
+  .page-width { width: 100%; max-width: 1440px; margin-inline: auto; }
+  .panel { border: 1px solid var(--ui-line); border-radius: 0.5rem; background: var(--ui-surface); }
+}

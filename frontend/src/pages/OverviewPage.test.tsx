@@ -206,3 +206,34 @@ test('加载失败可重试', async () => {
   await userEvent.setup().click(screen.getByRole('button', { name: '重试' }))
   expect(await screen.findByText('D-1001')).toBeInTheDocument()
 })
+
+test('卡片与台账表共享筛选结果、编辑和删除流程，切换视图不重复加载', async () => {
+  let current = drawing({ drawingNo: 'D-TABLE', price: '12.30' })
+  const calls = mockApi(r => {
+    if (r.method === 'PUT' && r.path === '/drawings/1') { current = { ...current, ...(r.body as DrawingInput) }; return { body: current } }
+    return { body: { items: [current], total: 1, page: 1, size: 20 } }
+  })
+  renderApp(<OverviewPage />, '/', { ...user, role: 'editor' })
+  const u = userEvent.setup()
+  await screen.findByText('D-TABLE')
+  const reads = calls.length
+  await u.click(screen.getByRole('button', { name: '台账表' }))
+  expect(screen.getByRole('table', { name: '图纸台账表' })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: '台账表' })).toHaveAttribute('aria-pressed', 'true')
+  expect(screen.getByRole('link', { name: 'D-TABLE' })).toHaveAttribute('href', '/drawings/1')
+  expect(calls).toHaveLength(reads)
+  await u.click(screen.getByRole('button', { name: '编辑图纸 D-TABLE' }))
+  expect(screen.getByLabelText('价格（元）')).toHaveValue('12.30')
+  await u.clear(screen.getByLabelText('材料'))
+  await u.type(screen.getByLabelText('材料'), '304')
+  await u.click(screen.getByRole('button', { name: '保存修改' }))
+  await screen.findByText('图纸已保存')
+  expect(screen.getByRole('table')).toHaveTextContent('304')
+  await u.click(screen.getByRole('button', { name: '删除图纸 D-TABLE' }))
+  expect(screen.getByRole('dialog', { name: '删除图纸' })).toHaveTextContent('全部版本')
+  await u.click(screen.getByRole('button', { name: '取消' }))
+  expect(calls.some(r => r.method === 'DELETE')).toBe(false)
+  await u.click(screen.getByRole('button', { name: '卡片' }))
+  expect(screen.queryByRole('table')).not.toBeInTheDocument()
+  expect(screen.getByRole('link', { name: /D-TABLE.*304/ })).toBeInTheDocument()
+})

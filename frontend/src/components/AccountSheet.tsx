@@ -59,17 +59,17 @@ export default function AccountSheet({ kind, user, onClose, onSaved }: {
   return <Sheet open title={password ? '修改密码' : '修改名称'} onClose={() => { if (!pending.current) onClose() }}>
     <form onSubmit={submit} noValidate className="space-y-4">
       {password ? <>
-        <p className="text-sm leading-6 text-slate-600">修改后所有设备需要重新登录，请先保存未完成的编辑。</p>
+        <p className="text-sm leading-6 text-muted">修改后所有设备需要重新登录，请先保存未完成的编辑。</p>
         <input type="text" name="username" autoComplete="username" value={user.username} readOnly hidden />
         <Field label="原密码" type="password" autoComplete="current-password" value={current} onChange={(e) => setCurrent(e.target.value)} disabled={busy} autoFocus />
         <Field label="新密码" type="password" autoComplete="new-password" hint="8~128 个字符" value={next} onChange={(e) => setNext(e.target.value)} disabled={busy} />
         <Field label="确认新密码" type="password" autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} disabled={busy} />
-        {dirtyTools && <p className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900">请先保存或撤销未保存的刀具表修改，再修改密码。</p>}
+        {dirtyTools && <p className="rounded-md bg-warning-soft p-3 text-sm text-warning">请先保存或撤销未保存的刀具表修改，再修改密码。</p>}
       </> : <>
-        <p className="text-sm text-slate-600">登录用户名：{user.username}</p>
+        <p className="text-sm text-muted">登录用户名：{user.username}</p>
         <Field label="显示名称" value={name} onChange={(e) => setName(e.target.value)} hint="1~64 个字符，修改后登录用户名保持不变" disabled={busy} autoFocus />
       </>}
-      {error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}
+      {error && <p role="alert" className="rounded-md bg-danger-soft p-3 text-sm text-danger">{error}</p>}
       <div className="grid grid-cols-2 gap-3">
         <Button variant="secondary" onClick={onClose} disabled={busy}>取消</Button>
         <Button type="submit" loading={busy} disabled={password && dirtyTools}>{password ? '确认修改' : '保存名称'}</Button>

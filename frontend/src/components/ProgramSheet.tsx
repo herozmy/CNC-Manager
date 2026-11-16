@@ -119,9 +119,9 @@ export default function ProgramSheet({ drawingId, operationId, ownerUserId, prog
           <ProgramMachinePicker drawingId={drawingId} ownerUserId={ownerUserId} program={referenceProgram} value={form.machineId ?? null} onChange={(machineId) => setForm((old) => ({ ...old, machineId }))} busy={busy || creatingMachine || discard} onAdding={setAddingMachine} onCreating={(value) => { creating.current = value; setCreatingMachine(value) }} />
           <TextArea label="备注" value={form.remark} onChange={set('remark')} error={errors.remark} />
         </fieldset>
-        {error && <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+        {error && <p role="alert" className="rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger">{error}</p>}
         {conflict && <Button variant="secondary" disabled={busy || creatingMachine || addingMachine} onClick={() => setReloadConfirm(true)}>重新载入程序信息</Button>}
-        {reloadConfirm && <div className="space-y-3 rounded-xl bg-amber-50 p-3"><p>重新载入将放弃当前未保存的修改，是否继续？</p><Button variant="secondary" onClick={() => setReloadConfirm(false)}>继续编辑</Button><Button disabled={busy || creatingMachine || addingMachine} onClick={async () => {
+        {reloadConfirm && <div className="space-y-3 rounded-md bg-warning-soft p-3"><p>重新载入将放弃当前未保存的修改，是否继续？</p><Button variant="secondary" onClick={() => setReloadConfirm(false)}>继续编辑</Button><Button disabled={busy || creatingMachine || addingMachine} onClick={async () => {
           if (!program) return
           setBusy(true)
           try { const latest = await api.getProgram(program.id); const values = { programNo: latest.programNo, programName: latest.programName, controller: latest.controller, remark: latest.remark, machineId: latest.machineId ?? null }; setReferenceProgram(latest); setInitial(values); setForm(values); setRevision(latest.revision); setConflict(false); setError(''); setErrors({}); setReloadConfirm(false) } catch (e) { setError(e instanceof Error ? e.message : '载入失败') } finally { setBusy(false) }
@@ -131,7 +131,7 @@ export default function ProgramSheet({ drawingId, operationId, ownerUserId, prog
           <Button type="submit" loading={busy} disabled={addingMachine || creatingMachine || discard || conflict || reloadConfirm}>{program ? '保存修改' : '创建并上传文件'}</Button>
         </div>
       </form>
-      {discard && <div className="mt-4 space-y-3 rounded-xl bg-amber-50 p-3">
+      {discard && <div className="mt-4 space-y-3 rounded-md bg-warning-soft p-3">
         <p>有未保存的修改，确定放弃吗？</p>
         <div className="flex gap-2">
           <Button variant="secondary" onClick={() => setDiscard(false)}>继续编辑</Button>
