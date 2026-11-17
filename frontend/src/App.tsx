@@ -18,6 +18,8 @@ import MachinePage from './pages/MachinePage'
 import NewDrawingPage from './pages/NewDrawingPage'
 import OverviewPage from './pages/OverviewPage'
 import ProgramPage from './pages/ProgramPage'
+import TappingPage from './pages/TappingPage'
+import ToolsPage from './pages/ToolsPage'
 import { ThemeProvider } from './layout/ThemeProvider'
 
 export default function App() {
@@ -95,6 +97,8 @@ function Application() {
         <Route path="drawings/new" element={<NewDrawingPage />} />
         <Route path="drawings/:id" element={<DrawingPage />} />
         <Route path="drawings/:id/programs/:programId" element={<ProgramPage />} />
+        <Route path="tools" element={<ToolsPage />} />
+        <Route path="tools/tapping" element={<TappingPage />} />
         <Route path="machines" element={<MachinesPage />} />
         <Route path="machines/:id" element={<MachinePage />} />
         <Route path="me" element={<MePage />} />

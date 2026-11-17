@@ -1,5 +1,5 @@
 import clsx from 'clsx'
-import { FileCode2, FolderKanban, Moon, PanelLeftClose, PanelLeftOpen, Plus, Sun, UserCircle2 } from 'lucide-react'
+import { Calculator, FileCode2, FolderKanban, Moon, PanelLeftClose, PanelLeftOpen, Plus, Sun, UserCircle2 } from 'lucide-react'
 import { useState } from 'react'
 import { Link, Outlet, useLocation } from 'react-router-dom'
 import { useAccess } from '../auth/permissions'
@@ -9,6 +9,7 @@ import AccountToolbar from './AccountToolbar'
 const items = [
   { to: '/', label: '总览', icon: FolderKanban },
   { to: '/drawings/new', label: '新建图纸', icon: Plus },
+  { to: '/tools', label: '加工助手', icon: Calculator },
   { to: '/me', label: '高级管理', icon: UserCircle2 },
 ] as const
 
@@ -18,7 +19,7 @@ export default function AppShell() {
   const { theme, toggle } = useTheme()
   const [collapsed, setCollapsed] = useState(false)
   const isMine = pathname.startsWith('/me') || pathname.startsWith('/machines') || pathname.startsWith('/admin')
-  const isActive = (to: string) => to === '/me' ? isMine : to === '/drawings/new' ? pathname === to : pathname === '/' || (pathname.startsWith('/drawings/') && pathname !== '/drawings/new')
+  const isActive = (to: string) => to === '/me' ? isMine : to === '/tools' ? pathname === '/tools' || pathname.startsWith('/tools/') : to === '/drawings/new' ? pathname === to : pathname === '/' || (pathname.startsWith('/drawings/') && pathname !== '/drawings/new')
   const visibleItems = items.filter(item => item.to !== '/drawings/new' || access.can('create'))
 
   return <div className="min-h-dvh bg-canvas text-ink [overflow-wrap:anywhere] md:flex">

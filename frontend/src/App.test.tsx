@@ -44,7 +44,7 @@ test.each(['admin', 'editor'] as const)('%s账号从高级管理独立卡片进�
   expect(screen.queryByText('CNC-01')).not.toBeInTheDocument()
   expect(screen.queryByRole('link', { name: '机台' })).not.toBeInTheDocument()
   expect(calls.some(r => r.path.startsWith('/machines'))).toBe(false)
-  expect(within(screen.getByRole('navigation', { name: '主导航' })).getAllByRole('link').map(link => link.getAttribute('aria-label'))).toEqual(['总览', '新建图纸', '高级管理'])
+  expect(within(screen.getByRole('navigation', { name: '主导航' })).getAllByRole('link').map(link => link.getAttribute('aria-label'))).toEqual(['总览', '新建图纸', '加工助手', '高级管理'])
   await u.click(card)
   expect(await screen.findByText('CNC-01')).toBeInTheDocument()
   expect(screen.getByRole('heading', { name: '机台管理' })).toBeInTheDocument()
