@@ -30,7 +30,7 @@ test.each([
   user,
   { ...user, role: 'editor' },
   { ...user, enabled: false },
-])('$role启用状态$enabled的当前账号只显示入口，进入后才显示操作，返回后收起', async currentUser => {
+])('$role启用状态$enabled从头像进入账号管理，高级管理不重复显示入口', async currentUser => {
   const calls = mockApi(r => {
     if (r.path === '/admin/users') return { body: [user] }
     if (r.path === '/auth/status') return { body: { setupRequired: false } }
@@ -39,9 +39,12 @@ test.each([
   })
   renderApp(<App />, '/me')
   const u = userEvent.setup()
-  const entry = await screen.findByRole('link', { name: '账号管理' })
+  await screen.findByRole('heading', { name: '高级管理' })
+  expect(screen.queryByRole('link', { name: '账号管理' })).not.toBeInTheDocument()
+  await u.click(screen.getByRole('button', { name: '账号菜单' }))
+  const entry = screen.getByRole('menuitem', { name: '账号管理' })
   expect(entry).toHaveAttribute('href', '/me/account')
-  expect(entry).toHaveTextContent(currentUser.displayName)
+  expect(screen.getByRole('menu', { name: '账号菜单' })).toBeVisible()
   expect(screen.queryByRole('button', { name: '修改名称' })).not.toBeInTheDocument()
   expect(screen.queryByRole('button', { name: '修改密码' })).not.toBeInTheDocument()
   expect(screen.queryByRole('button', { name: '退出登录' })).not.toBeInTheDocument()
@@ -56,7 +59,8 @@ test.each([
   await u.keyboard('{Escape}')
   expect(screen.getAllByRole('link', { name: '高级管理' }).every(link => link.getAttribute('aria-current') === 'page')).toBe(true)
   await u.click(screen.getByRole('link', { name: '返回高级管理' }))
-  expect(await screen.findByRole('link', { name: '账号管理' })).toBeVisible()
+  expect(await screen.findByRole('heading', { name: '高级管理' })).toBeVisible()
+  expect(screen.queryByRole('link', { name: '账号管理' })).not.toBeInTheDocument()
   expect(screen.queryByRole('button', { name: '修改名称' })).not.toBeInTheDocument()
   expect(calls.filter(r => /^(\/backup|\/machines)/.test(r.path))).toHaveLength(0)
   if (currentUser.role !== 'admin' || !currentUser.enabled) expect(calls.filter(r => r.path.startsWith('/admin'))).toHaveLength(0)
@@ -120,7 +124,11 @@ test('名称回填、非空校验、失败保留后重试，保存只更新显�
   expect(client.getQueryData(['version-tools-draft', 5])).toEqual({ dirty: true })
   expect(calls.filter((r) => r.method === 'PUT').at(-1)?.body).toEqual({ displayName: '车间负责人' })
   await u.click(screen.getByRole('link', { name: '返回高级管理' }))
-  expect(await screen.findByRole('link', { name: '账号管理' })).toHaveTextContent('车间负责人')
+  await screen.findByRole('heading', { name: '高级管理' })
+  expect(screen.queryByRole('link', { name: '账号管理' })).not.toBeInTheDocument()
+  await u.click(screen.getByRole('button', { name: '账号菜单' }))
+  expect(screen.getByText('车间负责人')).toBeVisible()
+  expect(screen.getByRole('menuitem', { name: '账号管理' })).toHaveAttribute('href', '/me/account')
   expect(screen.queryByRole('button', { name: '修改名称' })).not.toBeInTheDocument()
   expect(client.getQueryData(['version-tools-draft', 5])).toEqual({ dirty: true })
 })

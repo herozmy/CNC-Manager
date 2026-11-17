@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import type { ReactNode } from 'react'
-import { Archive, ChevronRight, Factory, UserRound } from 'lucide-react'
+import { Archive, ChevronRight, Factory } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { api } from '../api'
 import { useAccess } from '../auth/permissions'
@@ -31,23 +31,16 @@ export default function MePage() {
   const session = useSession().data
   const meta = useQuery({ queryKey: ['meta'], queryFn: api.meta, staleTime: Infinity })
   if (session?.state !== 'in') return null
-  const { user } = session
 
   return (
     <main className="page-width min-w-0 space-y-6 px-4 pt-4 pb-8 md:px-6">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold text-ink">高级管理</h1>
-          <p className="mt-1 text-sm text-muted">账号信息与管理入口</p>
+          <p className="mt-1 text-sm text-muted">机台与备份管理</p>
         </div>
         {meta.data && <p className="rounded-md border border-line bg-surface px-3 py-2 text-xs text-muted">版本 {meta.data.version}</p>}
       </header>
-      <div className="grid min-w-0 gap-4">
-        <ManagementCard to="/me/account" label="账号管理" title="账号管理" icon={UserRound} description={<>
-          <span className="block font-medium text-body">{user.displayName || user.username}</span>
-          <span className="block">{user.username} · {user.role === 'admin' ? '管理员' : '普通账号'}</span>
-        </>} />
-      </div>
       <section aria-labelledby="management-heading" className="min-w-0 space-y-3">
         <h2 id="management-heading" className="text-sm font-semibold text-body">管理入口</h2>
         <div className={`grid min-w-0 gap-4 ${access.admin ? 'sm:grid-cols-2' : ''}`}>

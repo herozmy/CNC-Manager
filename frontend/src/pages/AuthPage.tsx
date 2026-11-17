@@ -67,7 +67,7 @@ export default function AuthPage({ setup, notice, initialUsername = '' }: { setu
           <summary className="cursor-pointer py-2 font-medium text-ink">忘记密码？</summary>
           <div className="mt-2 space-y-2 leading-6">
             <p>请联系负责部署本系统的服务器管理员，提供你的登录用户名，请管理员核实身份后重置密码。</p>
-            <p>重置后使用新密码登录，再到“高级管理 → 账号管理 → 修改密码”设置自己的密码。</p>
+            <p>重置后使用新密码登录，再到“右上角头像 → 账号管理 → 修改密码”设置自己的密码。</p>
             <p>系统无法查看原密码，暂不支持短信或邮箱找回。无需重新注册或删除数据。</p>
           </div>
         </details>}
