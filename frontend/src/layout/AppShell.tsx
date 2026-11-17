@@ -9,7 +9,7 @@ import AccountToolbar from './AccountToolbar'
 const items = [
   { to: '/', label: '总览', icon: FolderKanban },
   { to: '/drawings/new', label: '新建图纸', icon: Plus },
-  { to: '/me', label: '我的', icon: UserCircle2 },
+  { to: '/me', label: '高级管理', icon: UserCircle2 },
 ] as const
 
 export default function AppShell() {

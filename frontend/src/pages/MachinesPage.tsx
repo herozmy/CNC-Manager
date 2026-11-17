@@ -33,7 +33,7 @@ export default function MachinesPage() {
   if (!access.can('read')) return <main className="p-6">账号不可用，请联系管理员。</main>
   const machines = query.data?.pages.flatMap((page) => page.items) ?? []
   return <main className="page-width min-w-0 space-y-4 px-4 pt-4 pb-8 md:px-6">
-    <Link to="/me" className="inline-flex min-h-12 items-center gap-2 rounded-md px-2 text-sm text-muted hover:bg-hover focus-visible:outline-2 focus-visible:outline-accent"><ArrowLeft className="size-4" aria-hidden />返回我的</Link>
+    <Link to="/me" className="inline-flex min-h-12 items-center gap-2 rounded-md px-2 text-sm text-muted hover:bg-hover focus-visible:outline-2 focus-visible:outline-accent"><ArrowLeft className="size-4" aria-hidden />返回高级管理</Link>
     <header className="flex flex-wrap items-start justify-between gap-3">
       <div className="flex min-w-0 items-center gap-3">
         <span className="flex size-12 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent"><Cpu className="size-6" aria-hidden /></span>

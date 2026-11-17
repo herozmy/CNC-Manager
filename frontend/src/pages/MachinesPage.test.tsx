@@ -53,7 +53,7 @@ test('机台台账加载失败仍可返回与重试，保留搜索及状态筛�
   const calls = mockApi((r) => r.path.startsWith('/machines?') ? fail ? { status: 503 } : { body: page([machine({ enabled: false, programCount: 31 })]) } : undefined)
   renderApp(<MachinesPage />, '/machines?q=FANUC&status=disabled', member)
   await screen.findByText('机台加载失败')
-  expect(screen.getByRole('link', { name: '返回我的' })).toHaveAttribute('href', '/me')
+  expect(screen.getByRole('link', { name: '返回高级管理' })).toHaveAttribute('href', '/me')
   expect(screen.getByLabelText('搜索机台')).toHaveValue('FANUC')
   expect(screen.getByLabelText('机台状态')).toHaveValue('disabled')
   fail = false

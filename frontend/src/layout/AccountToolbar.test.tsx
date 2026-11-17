@@ -30,7 +30,7 @@ test('头像菜单按需打开，再次点击、外部点击和Tab移出时收�
   await u.click(trigger)
   expect(screen.queryByRole('menu')).not.toBeInTheDocument()
   await u.click(trigger)
-  await u.click(screen.getByRole('heading', { name: '我的' }))
+  await u.click(screen.getByRole('heading', { name: '高级管理' }))
   expect(screen.queryByRole('menu')).not.toBeInTheDocument()
   await u.click(trigger)
   await u.tab()

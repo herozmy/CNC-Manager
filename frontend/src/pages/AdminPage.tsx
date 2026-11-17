@@ -47,7 +47,7 @@ export default function AdminPage() {
   return <main className="page-width min-w-0 space-y-4 px-4 pt-3 pb-8 md:px-6">
     <header className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 lg:grid-cols-[minmax(0,1fr)_auto_auto]">
       <div className="flex min-w-0 items-center gap-3">
-        <Link to="/me" aria-label="返回我的" title="返回我的" className="flex size-12 shrink-0 items-center justify-center rounded-lg text-muted hover:bg-hover focus-visible:outline-2 focus-visible:outline-accent"><ArrowLeft className="size-5" aria-hidden /></Link>
+        <Link to="/me" aria-label="返回高级管理" title="返回高级管理" className="flex size-12 shrink-0 items-center justify-center rounded-lg text-muted hover:bg-hover focus-visible:outline-2 focus-visible:outline-accent"><ArrowLeft className="size-5" aria-hidden /></Link>
         <div className="min-w-0"><h1 className="text-xl font-semibold text-ink">账号管理</h1><p className="mt-1 hidden text-sm text-muted md:block">个人设置与其他账号统一管理</p></div>
       </div>
       <div className="order-3 col-span-2 flex flex-wrap gap-2 lg:order-2 lg:col-span-1">

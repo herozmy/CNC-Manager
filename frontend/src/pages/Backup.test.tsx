@@ -29,7 +29,7 @@ async function selectAndCheck() {
   return u
 }
 
-test('我的只显示备份与迁移独立卡片，点击后才加载操作和恢复列表，返回后收起', async () => {
+test('高级管理只显示备份与迁移独立卡片，点击后才加载操作和恢复列表，返回后收起', async () => {
   const calls = server()
   renderApp(<App />, '/me')
   const u = userEvent.setup()
@@ -43,25 +43,25 @@ test('我的只显示备份与迁移独立卡片，点击后才加载操作和�
   expect(await screen.findByText('暂无可恢复备份，创建成功后会自动显示在这里。')).toBeVisible()
   expect(screen.getByRole('button', { name: '创建备份' })).toBeEnabled()
   expect(screen.getByRole('button', { name: '导入备份' })).toBeEnabled()
-  expect(screen.getAllByRole('link', { name: '我的' }).every(link => link.getAttribute('aria-current') === 'page')).toBe(true)
-  await u.click(screen.getByRole('link', { name: '返回我的' }))
+  expect(screen.getAllByRole('link', { name: '高级管理' }).every(link => link.getAttribute('aria-current') === 'page')).toBe(true)
+  await u.click(screen.getByRole('link', { name: '返回高级管理' }))
   expect(await screen.findByRole('link', { name: '备份与迁移' })).toBeVisible()
   expect(screen.queryByRole('button', { name: '创建备份' })).not.toBeInTheDocument()
   expect(screen.queryByText('暂无可恢复备份，创建成功后会自动显示在这里。')).not.toBeInTheDocument()
 })
 
-test('备份页面可直接打开并归属我的导航，可返回我的', async () => {
+test('备份页面可直接打开并归属高级管理导航，可返回高级管理', async () => {
   server()
   renderApp(<App />, '/me/backup')
   const u = userEvent.setup()
   expect(await screen.findByRole('heading', { name: '备份与迁移', level: 1 })).toBeVisible()
   expect(screen.getByRole('button', { name: '导入备份' })).toBeEnabled()
-  expect(screen.getAllByRole('link', { name: '我的' }).every(link => link.getAttribute('aria-current') === 'page')).toBe(true)
-  await u.click(screen.getByRole('link', { name: '返回我的' }))
-  expect(await screen.findByRole('heading', { name: '我的' })).toBeVisible()
+  expect(screen.getAllByRole('link', { name: '高级管理' }).every(link => link.getAttribute('aria-current') === 'page')).toBe(true)
+  await u.click(screen.getByRole('link', { name: '返回高级管理' }))
+  expect(await screen.findByRole('heading', { name: '高级管理' })).toBeVisible()
 })
 
-test('进入备份页面列表加载失败可重试，失败时仍能返回我的', async () => {
+test('进入备份页面列表加载失败可重试，失败时仍能返回高级管理', async () => {
   server()
   const original = fetch
   let requests = 0
@@ -73,7 +73,7 @@ test('进入备份页面列表加载失败可重试，失败时仍能返回我�
   const u = userEvent.setup()
   await u.click(await screen.findByRole('link', { name: '备份与迁移' }))
   expect(await screen.findByText('恢复副本列表暂时不可用。')).toBeVisible()
-  expect(screen.getByRole('link', { name: '返回我的' })).toHaveAttribute('href', '/me')
+  expect(screen.getByRole('link', { name: '返回高级管理' })).toHaveAttribute('href', '/me')
   await u.click(screen.getByRole('button', { name: '重试' }))
   expect(await screen.findByText('暂无可恢复备份，创建成功后会自动显示在这里。')).toBeVisible()
   expect(requests).toBe(2)
@@ -95,7 +95,7 @@ test.each([
   view.unmount()
   renderApp(<App />, '/me/backup')
   expect(await screen.findByText('仅系统管理员可访问备份与迁移。')).toBeVisible()
-  expect(screen.getByRole('link', { name: '返回我的' })).toHaveAttribute('href', '/me')
+  expect(screen.getByRole('link', { name: '返回高级管理' })).toHaveAttribute('href', '/me')
   expect(screen.queryByRole('button', { name: '创建备份' })).not.toBeInTheDocument()
   expect(screen.queryByRole('button', { name: '导入备份' })).not.toBeInTheDocument()
   expect(calls.filter(r => r.path.startsWith('/backup'))).toHaveLength(0)

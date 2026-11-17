@@ -49,28 +49,28 @@ test('头像下拉菜单进入统一账号页，当前账号只展示一次，�
   expect(calls.some(r => r.path.startsWith('/admin/audit-logs'))).toBe(false)
   await u.click(screen.getByRole('link', { name: '查看操作日志 →' }))
   expect(await screen.findByText('没有匹配的记录')).toBeVisible()
-  expect(screen.getAllByRole('link', { name: '我的' }).every(link => link.getAttribute('aria-current') === 'page')).toBe(true)
+  expect(screen.getAllByRole('link', { name: '高级管理' }).every(link => link.getAttribute('aria-current') === 'page')).toBe(true)
   await u.click(screen.getByRole('link', { name: '返回账号管理' }))
-  await u.click(await screen.findByRole('link', { name: '返回我的' }))
+  await u.click(await screen.findByRole('link', { name: '返回高级管理' }))
   expect(await screen.findByRole('link', { name: '账号管理' })).toBeVisible()
   expect(screen.queryByRole('button', { name: '新增账号' })).not.toBeInTheDocument()
 })
 
-test.each(['/admin', '/admin/audit'])('%s直达链接仍有效，并归属我的导航', async route => {
+test.each(['/admin', '/admin/audit'])('%s直达链接仍有效，并归属高级管理导航', async route => {
   navigationServer()
   renderApp(<App />, route)
   const heading = route === '/admin' ? '账号管理' : '操作日志'
   expect(await screen.findByRole('heading', { name: heading, level: 1 })).toBeVisible()
-  expect(screen.getAllByRole('link', { name: '我的' }).every(link => link.getAttribute('aria-current') === 'page')).toBe(true)
+  expect(screen.getAllByRole('link', { name: '高级管理' }).every(link => link.getAttribute('aria-current') === 'page')).toBe(true)
 })
 
-test('账号列表加载失败可重试，失败时仍能返回我的', async () => {
+test('账号列表加载失败可重试，失败时仍能返回高级管理', async () => {
   const calls = navigationServer(user, true)
   renderApp(<App />, '/me')
   const u = userEvent.setup()
   await u.click(await screen.findByRole('link', { name: '账号管理' }))
   expect(await screen.findByText('管理数据加载失败')).toBeVisible()
-  expect(screen.getByRole('link', { name: '返回我的' })).toHaveAttribute('href', '/me')
+  expect(screen.getByRole('link', { name: '返回高级管理' })).toHaveAttribute('href', '/me')
   await u.click(screen.getByRole('button', { name: '重试' }))
   expect(await screen.findByText('暂无其他账号，可点击“新增账号”创建。')).toBeVisible()
   expect(calls.filter(r => r.path === '/admin/users')).toHaveLength(2)

@@ -33,53 +33,53 @@ function machineNavigationServer(currentUser = user, fails = false) {
   return calls
 }
 
-test.each(['admin', 'editor'] as const)('%s账号从我的独立卡片进入机台，进入前不加载列表，返回后收起', async role => {
+test.each(['admin', 'editor'] as const)('%s账号从高级管理独立卡片进入机台，进入前不加载列表，返回后收起', async role => {
   const calls = machineNavigationServer({ ...user, role })
   renderApp(<App />, '/me')
   const u = userEvent.setup()
   const card = await screen.findByRole('link', { name: '机台管理' })
   expect(card).toHaveAttribute('href', '/machines')
-  expect(screen.getByRole('heading', { name: '我的' })).toBeInTheDocument()
+  expect(screen.getByRole('heading', { name: '高级管理' })).toBeInTheDocument()
   expect(screen.queryByLabelText('搜索机台')).not.toBeInTheDocument()
   expect(screen.queryByText('CNC-01')).not.toBeInTheDocument()
   expect(screen.queryByRole('link', { name: '机台' })).not.toBeInTheDocument()
   expect(calls.some(r => r.path.startsWith('/machines'))).toBe(false)
-  expect(within(screen.getByRole('navigation', { name: '主导航' })).getAllByRole('link').map(link => link.getAttribute('aria-label'))).toEqual(['总览', '新建图纸', '我的'])
+  expect(within(screen.getByRole('navigation', { name: '主导航' })).getAllByRole('link').map(link => link.getAttribute('aria-label'))).toEqual(['总览', '新建图纸', '高级管理'])
   await u.click(card)
   expect(await screen.findByText('CNC-01')).toBeInTheDocument()
   expect(screen.getByRole('heading', { name: '机台管理' })).toBeInTheDocument()
-  expect(screen.getAllByRole('link', { name: '我的' }).every(link => link.getAttribute('aria-current') === 'page')).toBe(true)
-  await u.click(screen.getByRole('link', { name: '返回我的' }))
+  expect(screen.getAllByRole('link', { name: '高级管理' }).every(link => link.getAttribute('aria-current') === 'page')).toBe(true)
+  await u.click(screen.getByRole('link', { name: '返回高级管理' }))
   expect(await screen.findByRole('link', { name: '机台管理' })).toBeInTheDocument()
   expect(screen.queryByText('CNC-01')).not.toBeInTheDocument()
   expect(screen.queryByLabelText('搜索机台')).not.toBeInTheDocument()
 })
 
-test('从我的进入机台加载失败可重试，失败时仍能返回我的', async () => {
+test('从高级管理进入机台加载失败可重试，失败时仍能返回高级管理', async () => {
   const calls = machineNavigationServer({ ...user, role: 'editor' }, true)
   renderApp(<App />, '/me')
   const u = userEvent.setup()
   await u.click(await screen.findByRole('link', { name: '机台管理' }))
   expect(await screen.findByText('机台加载失败')).toBeInTheDocument()
-  expect(screen.getByRole('link', { name: '返回我的' })).toHaveAttribute('href', '/me')
+  expect(screen.getByRole('link', { name: '返回高级管理' })).toHaveAttribute('href', '/me')
   await u.click(screen.getByRole('button', { name: '重试' }))
   expect(await screen.findByText('CNC-01')).toBeInTheDocument()
   expect(calls.filter(r => r.path.startsWith('/machines?'))).toHaveLength(2)
 })
 
-test('机台详情直达链接仍有效，并归属我的导航，可逐级返回我的', async () => {
+test('机台详情直达链接仍有效，并归属高级管理导航，可逐级返回高级管理', async () => {
   machineNavigationServer({ ...user, role: 'editor' })
   renderApp(<App />, '/machines/1')
   const u = userEvent.setup()
   expect(await screen.findByRole('heading', { name: 'CNC-01' })).toBeInTheDocument()
-  expect(screen.getAllByRole('link', { name: '我的' }).every(link => link.getAttribute('aria-current') === 'page')).toBe(true)
+  expect(screen.getAllByRole('link', { name: '高级管理' }).every(link => link.getAttribute('aria-current') === 'page')).toBe(true)
   await u.click(screen.getByRole('link', { name: '返回机台管理' }))
   await screen.findByRole('heading', { name: '机台管理' })
-  await u.click(screen.getByRole('link', { name: '返回我的' }))
+  await u.click(screen.getByRole('link', { name: '返回高级管理' }))
   expect(await screen.findByRole('link', { name: '机台管理' })).toBeInTheDocument()
 })
 
-test('停用账号的我的页面不提供机台入口或请求机台列表', async () => {
+test('停用账号的高级管理页面不提供机台入口或请求机台列表', async () => {
   const calls = machineNavigationServer({ ...user, role: 'editor', enabled: false })
   renderApp(<App />, '/me')
   await screen.findByText('版本 local-test')
