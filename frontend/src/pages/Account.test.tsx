@@ -11,6 +11,7 @@ function server() {
   let currentUser = { ...user }
   let failName = true
   const calls = mockApi((r) => {
+    if (r.path === '/admin/users') return { body: [user] }
     if (r.path === '/auth/status') return { body: { setupRequired: false } }
     if (r.path === '/auth/me' && r.method === 'GET') return { body: currentUser }
     if (r.path === '/meta') return { body: { version: '2.1.0-dev' } }
@@ -31,13 +32,14 @@ test.each([
   { ...user, enabled: false },
 ])('$role启用状态$enabled的当前账号只显示入口，进入后才显示操作，返回后收起', async currentUser => {
   const calls = mockApi(r => {
+    if (r.path === '/admin/users') return { body: [user] }
     if (r.path === '/auth/status') return { body: { setupRequired: false } }
     if (r.path === '/auth/me') return { body: currentUser }
     if (r.path === '/meta') return { body: { version: 'local-test' } }
   })
   renderApp(<App />, '/me')
   const u = userEvent.setup()
-  const entry = await screen.findByRole('link', { name: '当前账号' })
+  const entry = await screen.findByRole('link', { name: '账号管理' })
   expect(entry).toHaveAttribute('href', '/me/account')
   expect(entry).toHaveTextContent(currentUser.displayName)
   expect(screen.queryByRole('button', { name: '修改名称' })).not.toBeInTheDocument()
@@ -45,20 +47,25 @@ test.each([
   expect(screen.queryByRole('button', { name: '退出登录' })).not.toBeInTheDocument()
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   await u.click(entry)
-  expect(await screen.findByRole('heading', { name: '当前账号', level: 1 })).toBeVisible()
+  expect(await screen.findByRole('heading', { name: '账号管理', level: 1 })).toBeVisible()
   expect(screen.getByRole('button', { name: '修改名称' })).toBeEnabled()
   expect(screen.getByRole('button', { name: '修改密码' })).toBeEnabled()
-  expect(screen.getByRole('button', { name: '退出登录' })).toBeEnabled()
+  expect(screen.queryByRole('button', { name: '退出登录' })).not.toBeInTheDocument()
+  await u.click(screen.getByRole('button', { name: '账号菜单' }))
+  expect(screen.getByRole('menuitem', { name: '退出登录' })).toBeEnabled()
+  await u.keyboard('{Escape}')
   expect(screen.getAllByRole('link', { name: '我的' }).every(link => link.getAttribute('aria-current') === 'page')).toBe(true)
   await u.click(screen.getByRole('link', { name: '返回我的' }))
-  expect(await screen.findByRole('link', { name: '当前账号' })).toBeVisible()
+  expect(await screen.findByRole('link', { name: '账号管理' })).toBeVisible()
   expect(screen.queryByRole('button', { name: '修改名称' })).not.toBeInTheDocument()
-  expect(calls.filter(r => /^(\/admin|\/backup|\/machines)/.test(r.path))).toHaveLength(0)
+  expect(calls.filter(r => /^(\/backup|\/machines)/.test(r.path))).toHaveLength(0)
+  if (currentUser.role !== 'admin' || !currentUser.enabled) expect(calls.filter(r => r.path.startsWith('/admin'))).toHaveLength(0)
   expect(calls.filter(r => r.method !== 'GET')).toHaveLength(0)
 })
 
 test('未登录直达当前账号页仍进入登录流程', async () => {
   mockApi(r => {
+    if (r.path === '/admin/users') return { body: [user] }
     if (r.path === '/auth/status') return { body: { setupRequired: false } }
     if (r.path === '/auth/me') return { status: 401 }
   })
@@ -69,6 +76,7 @@ test('未登录直达当前账号页仍进入登录流程', async () => {
 
 test('未设置显示名称时回退用户名，取消名称编辑不提交也不改变账号信息', async () => {
   const calls = mockApi(r => {
+    if (r.path === '/admin/users') return { body: [user] }
     if (r.path === '/auth/status') return { body: { setupRequired: false } }
     if (r.path === '/auth/me') return { body: { ...user, displayName: '' } }
     if (r.path === '/meta') return { body: { version: 'local-test' } }
@@ -112,7 +120,7 @@ test('名称回填、非空校验、失败保留后重试，保存只更新显�
   expect(client.getQueryData(['version-tools-draft', 5])).toEqual({ dirty: true })
   expect(calls.filter((r) => r.method === 'PUT').at(-1)?.body).toEqual({ displayName: '车间负责人' })
   await u.click(screen.getByRole('link', { name: '返回我的' }))
-  expect(await screen.findByRole('link', { name: '当前账号' })).toHaveTextContent('车间负责人')
+  expect(await screen.findByRole('link', { name: '账号管理' })).toHaveTextContent('车间负责人')
   expect(screen.queryByRole('button', { name: '修改名称' })).not.toBeInTheDocument()
   expect(client.getQueryData(['version-tools-draft', 5])).toEqual({ dirty: true })
 })

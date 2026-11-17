@@ -6,7 +6,6 @@ import { authorizationKey, clearBusinessCache, SESSION_KEY, setSession, useSessi
 import type { Session } from './auth/session'
 import { ErrorState, Spinner } from './components/ui/State'
 import { api } from './api'
-import AdminPage from './pages/AdminPage'
 import AuditPage from './pages/AuditPage'
 import AppShell from './layout/AppShell'
 import AuthPage from './pages/AuthPage'
@@ -101,7 +100,7 @@ function Application() {
         <Route path="me" element={<MePage />} />
         <Route path="me/account" element={<AccountPage />} />
         <Route path="me/backup" element={<BackupPage />} />
-        <Route path="admin" element={<AdminPage />} />
+        <Route path="admin" element={<Navigate to="/me/account" replace />} />
         <Route path="admin/audit" element={<AuditPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>

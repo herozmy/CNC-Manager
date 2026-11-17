@@ -43,7 +43,7 @@ export default function MePage() {
         {meta.data && <p className="rounded-md border border-line bg-surface px-3 py-2 text-xs text-muted">版本 {meta.data.version}</p>}
       </header>
       <div className="grid min-w-0 gap-4">
-        <ManagementCard to="/me/account" label="当前账号" title="当前账号" icon={UserRound} description={<>
+        <ManagementCard to="/me/account" label="账号管理" title="账号管理" icon={UserRound} description={<>
           <span className="block font-medium text-body">{user.displayName || user.username}</span>
           <span className="block">{user.username} · {user.role === 'admin' ? '管理员' : '普通账号'}</span>
         </>} />

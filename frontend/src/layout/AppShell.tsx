@@ -46,7 +46,7 @@ export default function AppShell() {
     </aside>
 
     <div className="min-w-0 flex-1 pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:pb-0">
-      {!(pathname === '/admin' && access.admin) && <AccountToolbar className="h-12 px-4 md:px-6" />}
+      {!(pathname === '/me/account' && access.admin) && <AccountToolbar className="h-12 px-4 md:px-6" />}
       <div id="page-content" tabIndex={-1} className="min-w-0 outline-none"><Outlet /></div>
     </div>
 

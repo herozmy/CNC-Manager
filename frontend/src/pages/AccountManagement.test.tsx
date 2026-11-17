@@ -29,22 +29,23 @@ function navigationServer(currentUser: User = user, failUsers = false) {
   })
 }
 
-test('账号管理移到顶部头像，点击后加载账号，操作日志在管理页进入并可逐级返回', async () => {
+test('头像下拉菜单进入统一账号页，当前账号只展示一次，日志可逐级返回', async () => {
   const calls = navigationServer()
   renderApp(<App />, '/me')
   const u = userEvent.setup()
-  const card = await screen.findByRole('link', { name: '账号管理' })
-  expect(card).toHaveAttribute('href', '/admin')
-  expect(within(screen.getByRole('banner', { name: '顶部工具栏' })).getByRole('link', { name: '账号管理' })).toBe(card)
-  expect(within(screen.getByRole('main')).queryByRole('link', { name: '账号管理' })).not.toBeInTheDocument()
-  expect(screen.queryByText('数控程序台账')).not.toBeInTheDocument()
-  expect(screen.queryByText('图纸 · 工序 · 程序 · 版本')).not.toBeInTheDocument()
-  expect(screen.queryByRole('link', { name: '操作审计' })).not.toBeInTheDocument()
-  expect(screen.queryByRole('button', { name: '新增账号' })).not.toBeInTheDocument()
+  await u.click(await screen.findByRole('button', { name: '账号菜单' }))
+  const entry = screen.getByRole('menuitem', { name: '账号管理' })
+  expect(entry).toHaveAttribute('href', '/me/account')
   expect(calls.filter(r => r.path.startsWith('/admin'))).toHaveLength(0)
-  await u.click(card)
-  expect(await screen.findByRole('button', { name: '编辑账号 admin' })).toBeEnabled()
-  expect(screen.getAllByRole('link', { name: '我的' }).every(link => link.getAttribute('aria-current') === 'page')).toBe(true)
+  await u.click(entry)
+  expect(await screen.findByRole('heading', { name: '账号管理', level: 1 })).toBeVisible()
+  expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+  expect(screen.getAllByRole('region', { name: '当前账号' })).toHaveLength(1)
+  expect(await screen.findByText('暂无其他账号，可点击“新增账号”创建。')).toBeVisible()
+  expect(within(screen.getByRole('list', { name: '账号列表' })).queryByText('admin')).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: '修改名称' })).toBeEnabled()
+  expect(screen.getByRole('button', { name: '修改密码' })).toBeEnabled()
+  expect(screen.getAllByRole('button', { name: '账号菜单' })).toHaveLength(1)
   expect(calls.some(r => r.path.startsWith('/admin/audit-logs'))).toBe(false)
   await u.click(screen.getByRole('link', { name: '查看操作日志 →' }))
   expect(await screen.findByText('没有匹配的记录')).toBeVisible()
@@ -71,23 +72,23 @@ test('账号列表加载失败可重试，失败时仍能返回我的', async ()
   expect(await screen.findByText('管理数据加载失败')).toBeVisible()
   expect(screen.getByRole('link', { name: '返回我的' })).toHaveAttribute('href', '/me')
   await u.click(screen.getByRole('button', { name: '重试' }))
-  expect(await screen.findByRole('button', { name: '编辑账号 admin' })).toBeEnabled()
+  expect(await screen.findByText('暂无其他账号，可点击“新增账号”创建。')).toBeVisible()
   expect(calls.filter(r => r.path === '/admin/users')).toHaveLength(2)
 })
 
-test.each([member, { ...user, enabled: false }])('$username启用状态$enabled不提供账号管理卡片，直达页面也不请求管理接口', async currentUser => {
+test.each([member, { ...user, enabled: false }])('$username启用状态$enabled进入统一账号页，只能操作自己且不请求管理接口', async currentUser => {
   const calls = navigationServer(currentUser)
   const view = renderApp(<App />, '/me')
-  await screen.findByText('版本 local-test')
-  expect(screen.queryByRole('link', { name: '账号管理' })).not.toBeInTheDocument()
-  expect(screen.queryByRole('link', { name: '操作审计' })).not.toBeInTheDocument()
-  const avatar = within(screen.getByRole('banner', { name: '顶部工具栏' })).getByRole('link', { name: '个人账号设置' })
-  expect(avatar).toHaveAttribute('href', '/me/account')
-  await userEvent.setup().click(avatar)
-  expect(await screen.findByRole('heading', { name: '当前账号', level: 1 })).toBeVisible()
+  const u = userEvent.setup()
+  await u.click(await screen.findByRole('button', { name: '账号菜单' }))
+  await u.click(screen.getByRole('menuitem', { name: '账号管理' }))
+  expect(await screen.findByRole('heading', { name: '账号管理', level: 1 })).toBeVisible()
+  expect(screen.getByRole('button', { name: '修改名称' })).toBeEnabled()
+  expect(screen.queryByRole('button', { name: '新增账号' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: '账号身份' })).not.toBeInTheDocument()
   view.unmount()
   renderApp(<App />, '/admin')
-  expect(await screen.findByText('仅系统管理员可访问账号管理。')).toBeVisible()
+  expect(await screen.findByRole('heading', { name: '账号管理', level: 1 })).toBeVisible()
   expect(calls.filter(r => r.path.startsWith('/admin'))).toHaveLength(0)
 })
 
@@ -196,4 +197,44 @@ test('程序冲突保留草稿，确认载入后使用最新修订号', async ()
   await u.click(screen.getByRole('button', { name: '保存修改' }))
   await waitFor(() => expect(saved).toHaveBeenCalledOnce())
   expect(calls.filter((r) => r.method === 'PUT').at(-1)?.body).toMatchObject({ expectedRevision: 2 })
+})
+
+test('自己的身份设置不重复提供名称编辑，最后管理员保护失败后保留设置', async () => {
+  const calls = mockApi(r => {
+    if (r.path === '/admin/users' && r.method === 'GET') return { body: [user, member] }
+    if (r.path === '/admin/users/1') return { status: 400, body: { error: '系统至少保留一个启用的管理员' } }
+  })
+  renderApp(<AdminPage />)
+  const u = userEvent.setup()
+  await u.click(screen.getByRole('button', { name: '账号身份' }))
+  expect(screen.queryByLabelText('显示名称')).not.toBeInTheDocument()
+  await u.selectOptions(screen.getByLabelText('账号身份'), 'editor')
+  await u.click(screen.getByRole('button', { name: '保存账号' }))
+  expect(await screen.findByRole('alert')).toHaveTextContent('至少保留一个启用的管理员')
+  expect(screen.getByLabelText('账号身份')).toHaveValue('editor')
+  expect(calls.find(r => r.method === 'PUT')?.body).toEqual({ displayName: '管理员', role: 'editor', enabled: true })
+  await u.click(screen.getByRole('button', { name: '关闭' }))
+  expect(screen.getByRole('button', { name: '修改名称' })).toBeEnabled()
+})
+
+test('其他账号密码重置失败保留输入可重试，并不影响当前登录', async () => {
+  let fail = true
+  const calls = mockApi(r => {
+    if (r.path === '/admin/users') return { body: [user, member] }
+    if (r.path === '/admin/users/2/reset-password') {
+      if (fail) { fail = false; return { status: 500, body: { error: '重置失败' } } }
+      return { status: 204 }
+    }
+  })
+  renderApp(<AdminPage />)
+  const u = userEvent.setup()
+  await u.click(await screen.findByRole('button', { name: '重置密码 worker' }))
+  await u.type(screen.getByLabelText('新密码'), 'new-password')
+  await u.click(screen.getByRole('button', { name: '确认重置密码' }))
+  expect(await screen.findByRole('alert')).toHaveTextContent('重置失败')
+  expect(screen.getByLabelText('新密码')).toHaveValue('new-password')
+  await u.click(screen.getByRole('button', { name: '确认重置密码' }))
+  expect(await screen.findByRole('status')).toHaveTextContent('保存成功')
+  expect(screen.getByRole('button', { name: '修改密码' })).toBeEnabled()
+  expect(calls.filter(r => r.path.endsWith('/reset-password'))).toHaveLength(2)
 })
