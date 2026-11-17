@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Link, Outlet, useLocation } from 'react-router-dom'
 import { useAccess } from '../auth/permissions'
 import { useTheme } from './theme'
+import AccountToolbar from './AccountToolbar'
 
 const items = [
   { to: '/', label: '总览', icon: FolderKanban },
@@ -45,12 +46,7 @@ export default function AppShell() {
     </aside>
 
     <div className="min-w-0 flex-1 pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:pb-0">
-      <header aria-label="顶部工具栏" className="flex min-h-14 items-center justify-end gap-2 border-b border-line bg-surface px-4 md:px-6">
-        <button type="button" onClick={toggle} aria-label={theme === 'dark' ? '切换日间模式' : '切换暗色模式'} className="flex size-12 shrink-0 items-center justify-center rounded-md text-muted hover:bg-hover md:hidden">{theme === 'dark' ? <Sun className="size-5" aria-hidden /> : <Moon className="size-5" aria-hidden />}</button>
-        <Link to={access.admin ? '/admin' : '/me/account'} aria-label={access.admin ? '账号管理' : '个人账号设置'} title={access.admin ? '账号管理' : '个人账号设置'} className="flex size-12 shrink-0 items-center justify-center rounded-full text-accent hover:bg-accent-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent">
-          <span className="flex size-9 items-center justify-center rounded-full border border-line bg-accent-soft"><UserCircle2 className="size-6" aria-hidden /></span>
-        </Link>
-      </header>
+      {!(pathname === '/admin' && access.admin) && <AccountToolbar className="h-12 px-4 md:px-6" />}
       <div id="page-content" tabIndex={-1} className="min-w-0 outline-none"><Outlet /></div>
     </div>
 

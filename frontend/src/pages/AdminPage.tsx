@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
-import { ArrowLeft, Check, History, KeyRound, Pencil, Plus, ShieldCheck, UserRound, Users } from 'lucide-react'
+import { ArrowLeft, Check, History, KeyRound, Pencil, Plus, ShieldCheck, UserRound } from 'lucide-react'
 import type { FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api'
@@ -11,6 +11,7 @@ import { Button } from '../components/ui/Button'
 import { Field } from '../components/ui/Field'
 import { Sheet } from '../components/ui/Sheet'
 import { ErrorState, Spinner } from '../components/ui/State'
+import AccountToolbar from '../layout/AccountToolbar'
 
 const emptyUser: UserInput = { username: '', displayName: '', password: '', role: 'editor' }
 const selectClass = 'h-12 w-full rounded-md border border-line-strong bg-surface px-3'
@@ -41,17 +42,17 @@ export default function AdminPage() {
   }
   function openUser(value: User | 'new') { setError(''); setNotice(''); setUser(value); setUserForm(value === 'new' ? { ...emptyUser, enabled: true } : { username: value.username, displayName: value.displayName, password: '', role: value.role === 'admin' ? 'admin' : 'editor', enabled: value.enabled }) }
 
-  return <main className="page-width min-w-0 space-y-4 px-4 pt-4 pb-8 md:px-6">
-    <Link to="/me" className="inline-flex min-h-12 items-center gap-2 rounded-md px-2 text-sm text-muted hover:bg-hover focus-visible:outline-2 focus-visible:outline-accent"><ArrowLeft className="size-4" aria-hidden />返回我的</Link>
-    <header className="flex flex-wrap items-start justify-between gap-4">
+  return <main className="page-width min-w-0 space-y-4 px-4 pt-3 pb-8 md:px-6">
+    <header className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 lg:grid-cols-[minmax(0,1fr)_auto_auto]">
       <div className="flex min-w-0 items-center gap-3">
-        <span className="flex size-12 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent"><Users className="size-6" aria-hidden /></span>
-        <div className="min-w-0"><h1 className="text-xl font-semibold text-ink">账号管理</h1><p className="mt-1 text-sm text-muted">管理账号身份、启用状态与登录密码</p></div>
+        <Link to="/me" aria-label="返回我的" title="返回我的" className="flex size-12 shrink-0 items-center justify-center rounded-lg text-muted hover:bg-hover focus-visible:outline-2 focus-visible:outline-accent"><ArrowLeft className="size-5" aria-hidden /></Link>
+        <div className="min-w-0"><h1 className="text-xl font-semibold text-ink">账号管理</h1><p className="mt-1 hidden text-sm text-muted md:block">管理账号身份、启用状态与登录密码</p></div>
       </div>
-      <div className="flex w-full flex-wrap gap-2 sm:w-auto">
+      <div className="order-3 col-span-2 flex flex-wrap gap-2 lg:order-2 lg:col-span-1">
         <Link aria-label="查看操作日志 →" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-md border border-line-strong bg-surface px-4 text-sm font-medium text-body hover:bg-hover focus-visible:outline-2 focus-visible:outline-accent" to="/admin/audit"><History className="size-4" aria-hidden />操作日志</Link>
         <Button onClick={() => openUser('new')}><Plus className="size-4" aria-hidden />新增账号</Button>
       </div>
+      <AccountToolbar className="order-2 lg:order-3" />
     </header>
     <div className="flex items-start gap-2 rounded-lg border border-line bg-inset px-4 py-3 text-sm leading-6 text-muted"><ShieldCheck className="mt-0.5 size-5 shrink-0 text-accent" aria-hidden /><p>普通账号只管理自己的数据，管理员可查看全部数据。</p></div>
     {notice && <p role="status" className="flex items-center gap-2 rounded-md bg-success-soft p-3 text-sm text-success"><Check className="size-4 shrink-0" aria-hidden />{notice}</p>}
