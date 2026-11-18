@@ -20,6 +20,10 @@ import OverviewPage from './pages/OverviewPage'
 import ProgramPage from './pages/ProgramPage'
 import TappingPage from './pages/TappingPage'
 import ToolsPage from './pages/ToolsPage'
+import GCodePage from './pages/GCodePage'
+import DrillingPage from './pages/DrillingPage'
+import PolarDrillingPage from './pages/PolarDrillingPage'
+import ArrayDrillingPage from './pages/ArrayDrillingPage'
 import { ThemeProvider } from './layout/ThemeProvider'
 
 export default function App() {
@@ -98,6 +102,11 @@ function Application() {
         <Route path="drawings/:id" element={<DrawingPage />} />
         <Route path="drawings/:id/programs/:programId" element={<ProgramPage />} />
         <Route path="tools" element={<ToolsPage />} />
+        <Route path="tools/gcode" element={<GCodePage />} />
+        <Route path="tools/gcode/drilling" element={<DrillingPage />} />
+        <Route path="tools/gcode/line-drilling" element={<ArrayDrillingPage key="line" kind="line" />} />
+        <Route path="tools/gcode/grid-drilling" element={<ArrayDrillingPage key="grid" kind="grid" />} />
+        <Route path="tools/gcode/polar-drilling" element={<PolarDrillingPage />} />
         <Route path="tools/tapping" element={<TappingPage />} />
         <Route path="machines" element={<MachinesPage />} />
         <Route path="machines/:id" element={<MachinePage />} />

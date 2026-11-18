@@ -1,4 +1,4 @@
-import { Calculator, ChevronRight } from 'lucide-react'
+import { Calculator, ChevronRight, Code2 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
 export default function ToolsPage() {
@@ -12,6 +12,10 @@ export default function ToolsPage() {
         <span className="flex size-12 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent"><Calculator className="size-6" aria-hidden /></span>
         <span className="min-w-0 flex-1"><span className="block text-base font-semibold text-ink">公制攻丝</span><span className="mt-2 block text-sm leading-6 text-muted">查询底孔与螺距，输入转速计算进给</span></span>
         <ChevronRight className="size-5 shrink-0 self-center text-subtle group-hover:text-accent" aria-hidden />
+      </Link>
+      <Link to="/tools/gcode" className="panel group flex min-w-0 items-start gap-4 p-4 transition-colors hover:border-accent active:bg-inset focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent sm:min-h-36 md:p-5">
+        <span className="flex size-12 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent"><Code2 className="size-6" aria-hidden /></span>
+        <span className="min-w-0 flex-1"><span className="block text-base font-semibold text-ink">G 代码编程</span><span className="mt-2 block text-sm leading-6 text-muted">极坐标打孔程序生成与孔位核对</span></span><ChevronRight className="size-5 shrink-0 self-center text-subtle group-hover:text-accent" aria-hidden />
       </Link>
     </div>
   </main>
