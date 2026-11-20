@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"bytes"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"mime/multipart"
@@ -14,6 +15,7 @@ import (
 )
 
 type fixture struct {
+	db     *sql.DB
 	h      http.Handler
 	ck     *http.Cookie
 	progID int64
@@ -127,7 +129,7 @@ func TestDiffPaginationAndChangesOnly(t *testing.T) {
 
 func newFixture(t *testing.T, maxBytes int64) *fixture {
 	t.Helper()
-	h, _ := newTestServerMax(t, maxBytes)
+	h, _, db := newTestServerMax(t, maxBytes)
 	ck := setupAdmin(t, h)
 	var d domain.Drawing
 	decode(t, do(t, h, "POST", "/api/drawings", `{"drawingNo":"D-1"}`, ck), &d)
@@ -135,7 +137,7 @@ func newFixture(t *testing.T, maxBytes int64) *fixture {
 	decode(t, do(t, h, "POST", fmt.Sprintf("/api/drawings/%d/operations", d.ID), `{"opNo":10}`, ck), &o)
 	var p domain.Program
 	decode(t, do(t, h, "POST", fmt.Sprintf("/api/operations/%d/programs", o.ID), `{"programNo":"O1234"}`, ck), &p)
-	return &fixture{h: h, ck: ck, progID: p.ID, path: fmt.Sprintf("/api/programs/%d", p.ID)}
+	return &fixture{db: db, h: h, ck: ck, progID: p.ID, path: fmt.Sprintf("/api/programs/%d", p.ID)}
 }
 
 func (f *fixture) upload(t *testing.T, name string, content []byte, note string) *httptest.ResponseRecorder {
@@ -325,6 +327,29 @@ func TestSaveContentAsNewVersionAndEncodingWarning(t *testing.T) {
 	}
 	if rec := do(t, f.h, "POST", "/api/programs/999/versions/content", `{"content":"M30"}`, f.ck); rec.Code != 404 {
 		t.Fatalf("不存在的程序应 404，得到 %d", rec.Code)
+	}
+}
+
+func TestSaveContentAsNewWithMissingCurrentVersion(t *testing.T) {
+	f := newFixture(t, 1<<20)
+	// 模拟旧数据中指向缺失版本的引用。
+	if _, err := f.db.Exec("PRAGMA foreign_keys=OFF"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.db.Exec("UPDATE nc_program SET current_version_id=999 WHERE id=?", f.progID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.db.Exec("PRAGMA foreign_keys=ON"); err != nil {
+		t.Fatal(err)
+	}
+	rec := do(t, f.h, "POST", f.path+"/versions/content", `{"content":"M30"}`, f.ck)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("缺失当前版本应返回 404，得到 %d", rec.Code)
+	}
+	var p domain.Program
+	decode(t, f.get(t, f.path), &p)
+	if p.VersionCount != 0 || p.CurrentVersionID == nil || *p.CurrentVersionID != 999 {
+		t.Fatalf("失败后程序版本发生变化: %+v", p)
 	}
 }
 

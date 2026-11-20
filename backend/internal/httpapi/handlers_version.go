@@ -216,11 +216,14 @@ func (s *Server) handleSaveContentAsNew(w http.ResponseWriter, r *http.Request) 
 	}
 	fallbackEnc, name := ncstore.EncodingUTF8, strings.TrimSpace(in.FileName)
 	if p.CurrentVersionID != nil {
-		if f, err := s.repo.GetVersionFile(r.Context(), *p.CurrentVersionID); err == nil {
-			fallbackEnc = f.Encoding
-			if name == "" {
-				name = f.FileName
-			}
+		f, err := s.repo.GetVersionFile(r.Context(), *p.CurrentVersionID)
+		if err != nil {
+			s.fail(w, err)
+			return
+		}
+		fallbackEnc = f.Encoding
+		if name == "" {
+			name = f.FileName
 		}
 	}
 	if name == "" {

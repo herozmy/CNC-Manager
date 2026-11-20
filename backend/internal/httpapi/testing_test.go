@@ -3,6 +3,7 @@ package httpapi
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"io"
 	"log/slog"
@@ -20,10 +21,11 @@ import (
 
 func newTestServer(t *testing.T) (http.Handler, *repo.Repo) {
 	t.Helper()
-	return newTestServerMax(t, 1<<20)
+	h, r, _ := newTestServerMax(t, 1<<20)
+	return h, r
 }
 
-func newTestServerMax(t *testing.T, maxBytes int64) (http.Handler, *repo.Repo) {
+func newTestServerMax(t *testing.T, maxBytes int64) (http.Handler, *repo.Repo, *sql.DB) {
 	t.Helper()
 	db, err := store.Open(filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
@@ -39,7 +41,7 @@ func newTestServerMax(t *testing.T, maxBytes int64) (http.Handler, *repo.Repo) {
 		t.Fatal(err)
 	}
 	h := New(Options{Version: "test", Repo: r, Files: files, Log: slog.New(slog.NewTextHandler(io.Discard, nil)), SessionLifetime: time.Hour})
-	return h, r
+	return h, r, db.DB
 }
 
 // do 发送请求。写请求自动带同源 Origin；cookies 原样附上。
