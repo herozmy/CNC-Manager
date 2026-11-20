@@ -16,3 +16,7 @@ createRoot(document.getElementById('root')!).render(
     </QueryClientProvider>
   </StrictMode>,
 )
+
+if (import.meta.env.PROD && window.isSecureContext && 'serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').catch((error) => console.warn('PWA 注册失败', error))
+}

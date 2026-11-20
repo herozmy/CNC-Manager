@@ -123,8 +123,9 @@ export default function OperationSheet({ drawingId, ownerUserId, operation, sugg
 
   return (
     <>
-      <Sheet open title={operation ? '编辑工序' : '新增工序'} onClose={() => { if (!pending.current) onClose() }}>
-        <form onSubmit={submit} className="space-y-4" noValidate>
+      <Sheet open wide title={operation ? '编辑工序' : '新增工序'} onClose={() => { if (!pending.current) onClose() }}>
+        <form onSubmit={submit} className="grid gap-5 md:grid-cols-2" noValidate>
+          <section className="min-w-0 space-y-4"><h3 className="border-b border-line pb-2 text-sm font-semibold text-accent">工序与机台</h3>
           <div className="grid grid-cols-3 gap-3">
             <Field label="工序号" value={opNo} onChange={(e) => setOpNo(e.target.value)} error={noError} inputMode="numeric" className="col-span-1" />
             <div className="col-span-2">
@@ -153,6 +154,8 @@ export default function OperationSheet({ drawingId, ownerUserId, operation, sugg
               <div className="flex flex-wrap gap-2"><Button onClick={() => void addMachine()} loading={busy}>新增并选中</Button><Button variant="ghost" onClick={() => setAddingMachine(false)}>取消新增机台</Button></div>
             </fieldset>}
           </section>
+          </section>
+          <section className="min-w-0 space-y-4"><h3 className="border-b border-line pb-2 text-sm font-semibold text-accent">装夹与定位</h3>
           <label className="block space-y-1.5 text-sm font-medium text-body">
             <span>装夹方式</span>
             <select
@@ -185,20 +188,23 @@ export default function OperationSheet({ drawingId, ownerUserId, operation, sugg
             </div>
             <p className="text-xs text-muted">支持正负数，留空按 0 保存，精确到 0.001 mm</p>
           </fieldset>
-          <TextArea label="备注" value={remark} onChange={(e) => setRemark(e.target.value)} />
+          </section>
+          <div className="md:col-span-2"><TextArea label="备注" value={remark} onChange={(e) => setRemark(e.target.value)} /></div>
+          <div className="space-y-2 border-t border-line pt-4 md:col-span-2">
           {error && (
             <p role="alert" className="rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger">
               {error}
             </p>
           )}
-          <Button type="submit" loading={busy} disabled={addingMachine} className="w-full">
+          <div className="flex flex-wrap items-center justify-end gap-2"><Button type="submit" loading={busy} disabled={addingMachine} className="w-full sm:w-auto sm:min-w-28">
             保存
           </Button>
           {operation && (
-            <Button variant="ghost" className="w-full text-danger" disabled={busy} onClick={() => setConfirmDelete(true)}>
+            <Button variant="ghost" className="sm:order-first sm:mr-auto text-danger" disabled={busy} onClick={() => setConfirmDelete(true)}>
               删除此工序
             </Button>
           )}
+          </div></div>
         </form>
       </Sheet>
 

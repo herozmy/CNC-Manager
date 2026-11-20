@@ -53,15 +53,16 @@ export default function NewDrawingPage() {
   if (!access.can('create')) return <main className="p-6">没有新建权限，请联系管理员。</main>
 
   return (
-    <main className="mx-auto max-w-3xl px-4 pt-4 pb-8">
+    <main className="page-width px-4 pt-4 pb-8 md:px-6">
       <header className="mb-4 flex items-center gap-2">
         <Link to="/" aria-label="返回总览" className="flex size-12 items-center justify-center rounded-md hover:bg-hover">
           <ArrowLeft className="size-6" aria-hidden />
         </Link>
-        <h1 className="text-xl font-semibold">新建图纸</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">新建图纸</h1>
       </header>
-      <form onSubmit={submit} className="panel space-y-4 p-4 sm:p-6" noValidate>
-        <fieldset disabled={busy} className="space-y-4">
+      <form onSubmit={submit} className="panel max-w-4xl space-y-5 overflow-hidden" noValidate>
+        <fieldset disabled={busy} className="min-w-0 space-y-5 px-4 pt-5 sm:px-7 sm:pt-6">
+          <legend className="float-left mb-4 w-full border-b border-line pb-3 text-sm font-semibold text-accent">图纸资料</legend>
           {access.admin && <OwnerSelect value={form.ownerUserId ?? ''} onChange={(ownerUserId) => setForm({ ...form, ownerUserId: ownerUserId || undefined })} required />}
           <DrawingFields value={form} onChange={setForm} noError={noError} priceError={priceError} />
         </fieldset>
@@ -70,9 +71,9 @@ export default function NewDrawingPage() {
             {error}
           </p>
         )}
-        <Button type="submit" loading={busy} className="w-full">
+        <div className="flex justify-end border-t border-line bg-inset px-4 py-3 sm:px-7"><Button type="submit" loading={busy} className="w-full sm:w-auto">
           创建图纸
-        </Button>
+        </Button></div>
       </form>
     </main>
   )

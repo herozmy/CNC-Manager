@@ -26,7 +26,7 @@ export function VersionBadge({ no }: { no: number | null }) {
 function ProgramRow({ drawingId, p }: { drawingId: number; p: Program }) {
   return (
     <li>
-      <Link to={`/drawings/${drawingId}/programs/${p.id}`} className="flex min-h-14 items-center justify-between gap-3 rounded-md border border-line bg-canvas px-3 py-3 hover:border-accent active:bg-hover">
+      <Link to={`/drawings/${drawingId}/programs/${p.id}`} className="flex min-h-14 items-center justify-between gap-3 px-3 py-3 hover:bg-accent-soft active:bg-hover">
         <div className="min-w-0">
           <p className="font-mono text-sm font-semibold text-accent">{p.programNo}</p>
           <p className="truncate text-sm text-muted">程序机台：{[p.machineCode, p.machineName].filter(Boolean).join(' · ') || '未关联机台'}</p>
@@ -48,11 +48,11 @@ function OperationCard({ drawingId, op, onEdit, onDelete, onAddProgram }: { draw
   const machine = [op.machineCode, op.machineName].filter(Boolean).join(' · ')
   const facts = [machine && `机台：${machine}`, op.fixture && `装夹 ${op.fixture}`].filter(Boolean)
   return (
-    <section className="rounded-lg border border-line bg-surface shadow-sm">
-      <div className="flex items-center gap-1 px-2">
+    <section className="overflow-hidden rounded-md border border-line bg-surface">
+      <div className={`flex items-center gap-1 border-l-[3px] px-2 ${expanded ? 'border-accent bg-accent-soft' : 'border-transparent'}`}>
         <h2 aria-label={`${op.opNo}# ${op.opName}`} className="min-w-0 flex-1 text-base font-semibold">
           <button type="button" aria-label={`${expanded ? '收起' : '展开'}工序 ${op.opNo}`} aria-expanded={expanded} aria-controls={panelId} onClick={() => setExpanded(!expanded)} className="flex min-h-16 w-full items-center gap-2 rounded-md px-2 py-3 text-left hover:bg-canvas focus-visible:outline-2 focus-visible:outline-accent">
-            <span className="min-w-0 flex-1 truncate text-accent" title={`${op.opNo}# ${op.opName}`}>{op.opNo}# {op.opName}</span>
+            <span className="min-w-0 flex-1 break-words text-ink" title={`${op.opNo}# ${op.opName}`}><span className="mr-2 font-mono text-accent">{op.opNo}#</span> {op.opName}</span>
             <span className="shrink-0 text-xs font-normal text-muted sm:text-sm">{op.programs.length} 个程序</span>
             <ChevronDown aria-hidden className={`size-5 shrink-0 text-muted ${expanded ? 'rotate-180' : ''}`} />
           </button>
@@ -71,16 +71,16 @@ function OperationCard({ drawingId, op, onEdit, onDelete, onAddProgram }: { draw
           {facts.length > 0 && <p className="text-sm text-muted [overflow-wrap:anywhere]">{facts.join(' · ')}</p>}
           {op.centeringMethod && <p className="mt-1 text-sm text-muted [overflow-wrap:anywhere]">分中方式：{op.centeringMethod}</p>}
           {op.remark && <p className="mt-1 text-sm text-muted [overflow-wrap:anywhere]">{op.remark}</p>}
-          <dl aria-label="坐标（mm）" className="mt-3 grid grid-cols-3 gap-2">
+          <dl aria-label="坐标（mm）" className="mt-3 grid grid-cols-3 divide-x divide-line overflow-hidden rounded-md border border-line">
             {([['X', op.xCoordinate ?? 0], ['Y', op.yCoordinate ?? 0], ['Z', op.zHeight]] as const).map(([axis, value]) => (
-              <div key={axis} className="min-w-0 rounded-md bg-canvas px-3 py-2">
+              <div key={axis} className="min-w-0 bg-canvas px-3 py-3">
                 <dt className="text-xs text-muted">{axis}（mm）</dt>
-                <dd className="break-all font-semibold tabular-nums">{value}</dd>
+                <dd className="mt-1 break-all font-mono text-lg font-semibold tabular-nums">{value}</dd>
               </div>
             ))}
           </dl>
           {op.programs.length > 0 ? (
-            <ul className="mt-4 grid grid-cols-1 gap-2 md:grid-cols-2">
+            <ul className="mt-4 divide-y divide-line border-y border-line">
               {op.programs.map((p) => (
                 <ProgramRow key={p.id} drawingId={drawingId} p={p} />
               ))}
@@ -88,7 +88,7 @@ function OperationCard({ drawingId, op, onEdit, onDelete, onAddProgram }: { draw
           ) : (
             <p className="mt-3 text-sm text-subtle">暂无程序</p>
           )}
-          {access.can('create') && <Button variant="secondary" onClick={onAddProgram} className="mt-3 w-full" aria-label={`在 ${op.opNo}# 下新增程序`}>
+          {access.can('create') && <Button variant="secondary" onClick={onAddProgram} className="mt-3 w-full sm:w-auto" aria-label={`在 ${op.opNo}# 下新增程序`}>
             <Plus className="size-5" aria-hidden />
             新增程序
           </Button>}
@@ -135,17 +135,21 @@ export default function DrawingPage() {
             <p className="mb-2 text-sm text-muted">所属账号：{query.data.ownerName || '待分配'}</p>
             {access.admin && query.data.ownerUserId === 0 && <form className="mb-4 space-y-3 rounded-md bg-warning-soft p-3" onSubmit={async (e) => { e.preventDefault(); if (!assignOwner || assignBusy) return; setAssignBusy(true); setAssignError(''); try { await api.assignDrawingOwner(id, assignOwner); await Promise.all([qc.invalidateQueries({ queryKey: ['drawing', id] }), qc.invalidateQueries({ queryKey: ['drawings'] }), qc.invalidateQueries({ queryKey: ['admin-users'] })]) } catch (err) { setAssignError(err instanceof Error ? err.message : '分配失败') } finally { setAssignBusy(false) } }}><p>此图纸仅管理员可见。分配后，其工序、程序和版本将由目标账号管理。</p><OwnerSelect required value={assignOwner} onChange={setAssignOwner} /><Button type="submit" loading={assignBusy}>确认分配图纸</Button>{assignError && <p role="alert" className="text-danger">{assignError}</p>}</form>}
             <div className="flex items-start justify-between gap-3">
-              <h1 className="min-w-0 break-words font-mono text-xl font-semibold text-accent">{query.data.drawingNo}</h1>
+              <h1 className="min-w-0 break-words font-mono text-2xl font-semibold tracking-tight text-ink md:text-3xl">{query.data.drawingNo}</h1>
               {access.can('edit') && <Button variant="secondary" className="shrink-0 px-3" onClick={() => { setSaved(false); setSheet({ kind: 'drawing' }) }}>
                 <Pencil className="size-4" aria-hidden />编辑图纸
               </Button>}
             </div>
-            <p className="mt-2 w-fit max-w-full break-words rounded-lg bg-inset px-2 py-1 text-sm text-body">类型：{query.data.name || '未分类'}</p>
+            <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 border-t border-line pt-3"><p className="w-fit max-w-full break-words rounded-lg bg-inset px-2 py-1 text-sm text-body">类型：{query.data.name || '未分类'}</p>
             {query.data.material && <p className="mt-1 break-words text-sm text-muted">{query.data.material}</p>}
             <p className="mt-1 break-words text-sm text-muted tabular-nums">价格：{query.data.price == null ? '未填写' : `${query.data.price} 元`}</p>
+            </div>
             {query.data.remark && <p className="mt-2 rounded-md bg-warning-soft p-3 text-sm text-body">{query.data.remark}</p>}
           </header>
           {saved && <p role="status" className="mb-4 rounded-md bg-success-soft p-3 text-sm text-success">图纸已保存</p>}
+          <div className="mb-3 flex items-center justify-between gap-3"><h2 className="text-lg font-semibold">加工工序 <span className="ml-1 font-mono text-sm text-muted">{ops.length}</span></h2>
+            {ops.length > 0 && access.can('create') && <Button onClick={() => setSheet({ kind: 'op' })}><Plus className="size-4" />新增工序</Button>}
+          </div>
           {ops.length === 0 ? (
             <EmptyState title="暂无工序">
               {access.can('create') && <Button onClick={() => setSheet({ kind: 'op' })}>新增第一道工序</Button>}
@@ -155,10 +159,7 @@ export default function DrawingPage() {
               {ops.map((op) => (
                 <OperationCard key={op.id} drawingId={id} op={op} onDelete={() => setDeleting(op)} onEdit={() => setSheet({ kind: 'op', op })} onAddProgram={() => setSheet({ kind: 'program', operationId: op.id })} />
               ))}
-              {access.can('create') && <Button variant="secondary" className="w-full" onClick={() => setSheet({ kind: 'op' })}>
-                <Plus className="size-5" aria-hidden />
-                新增工序
-              </Button>}
+
             </div>
           )}
         </>

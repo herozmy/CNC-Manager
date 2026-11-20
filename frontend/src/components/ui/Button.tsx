@@ -10,7 +10,7 @@ interface Props extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const styles: Record<Variant, string> = {
-  primary: 'bg-blue-600 text-white hover:bg-blue-500 active:bg-blue-700',
+  primary: 'bg-action text-on-action hover:brightness-110 active:brightness-95',
   secondary: 'bg-surface text-ink border border-line-strong hover:bg-inset active:bg-hover',
   ghost: 'text-body hover:bg-hover active:bg-hover',
   danger: 'bg-red-600 text-white hover:bg-red-500 active:bg-red-700',

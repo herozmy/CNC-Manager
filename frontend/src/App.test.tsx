@@ -130,7 +130,7 @@ test('未登录显示登录页；密码错误给出提示；登录成功进入�
   await u.type(screen.getByLabelText('密码'), 'right-pass')
   await u.click(screen.getByRole('button', { name: '登录' }))
   expect(await screen.findByText('D-1001')).toBeInTheDocument()
-  expect(screen.getByRole('heading', { name: '总览' })).toBeInTheDocument()
+  expect(screen.getByRole('heading', { name: '图纸台账' })).toBeInTheDocument()
 })
 
 test('已登录直接进入总览，并提供新建图纸入口', async () => {

@@ -21,7 +21,7 @@ export default function OverviewPage() {
   const [deleting, setDeleting] = useState<Drawing | null>(null)
   const [editing, setEditing] = useState<Drawing | null>(null)
   const [saved, setSaved] = useState(false)
-  const [displayMode, setDisplayMode] = useState<'grid' | 'table'>('grid')
+  const [displayMode, setDisplayMode] = useState<'grid' | 'table'>(() => window.matchMedia?.('(min-width: 1024px)').matches ? 'table' : 'grid')
   const q = useDebounced(input.trim())
   const query = useInfiniteQuery({
     queryKey: ['drawings', q, ownerUserId],
@@ -32,17 +32,17 @@ export default function OverviewPage() {
   })
   const items = query.data?.pages.flatMap((p) => p.items) ?? []
   const total = query.data?.pages[0]?.total ?? 0
-  if (!access.can('read')) return <main className="p-6"><h1 className="text-xl font-semibold">总览</h1><p className="mt-4">账号不可用，请联系管理员。</p>{access.can('create') && <Link to="/drawings/new" className="mt-4 inline-block">新建图纸</Link>}</main>
+  if (!access.can('read')) return <main className="p-6"><h1 className="text-2xl font-semibold tracking-tight">图纸台账</h1><p className="mt-4">账号不可用，请联系管理员。</p>{access.can('create') && <Link to="/drawings/new" className="mt-4 inline-block">新建图纸</Link>}</main>
 
   return (
     <main className="page-width min-w-0 px-4 pt-5 pb-8 md:px-6">
       <header className="mb-5 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold">总览</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">图纸台账</h1>
           {query.isSuccess && <p className="text-sm text-muted">{q ? `找到 ${total} 张图纸` : `共 ${total} 张图纸`}</p>}
         </div>
-        {access.can('create') && <Link to="/drawings/new" className="hidden md:block">
-          <Button>新建图纸</Button>
+        {access.can('create') && <Link to="/drawings/new" className="hidden min-h-12 items-center rounded-md bg-action px-5 text-sm font-semibold text-on-action hover:brightness-110 md:inline-flex">
+          新建图纸
         </Link>}
       </header>
       {access.admin && <div className="mb-3"><OwnerSelect value={ownerUserId} onChange={setOwnerUserId} includeUnassigned includeDisabled label="筛选所属账号" /></div>}
@@ -61,8 +61,8 @@ export default function OverviewPage() {
           />
         </label>
         <div role="group" aria-label="图纸显示方式" className="inline-flex shrink-0 gap-1 rounded-md border border-line bg-surface p-1">
-          <button type="button" aria-pressed={displayMode === 'grid'} onClick={() => setDisplayMode('grid')} className={`flex min-h-10 items-center gap-1.5 rounded px-3 text-sm ${displayMode === 'grid' ? 'bg-blue-600 text-white' : 'text-muted hover:bg-hover'}`}><LayoutGrid className="size-4" aria-hidden />卡片</button>
-          <button type="button" aria-pressed={displayMode === 'table'} onClick={() => setDisplayMode('table')} className={`flex min-h-10 items-center gap-1.5 rounded px-3 text-sm ${displayMode === 'table' ? 'bg-blue-600 text-white' : 'text-muted hover:bg-hover'}`}><List className="size-4" aria-hidden />台账表</button>
+          <button type="button" aria-pressed={displayMode === 'grid'} onClick={() => setDisplayMode('grid')} className={`flex min-h-10 items-center gap-1.5 rounded px-3 text-sm ${displayMode === 'grid' ? 'bg-accent-soft text-accent' : 'text-muted hover:bg-hover'}`}><LayoutGrid className="size-4" aria-hidden />卡片</button>
+          <button type="button" aria-pressed={displayMode === 'table'} onClick={() => setDisplayMode('table')} className={`flex min-h-10 items-center gap-1.5 rounded px-3 text-sm ${displayMode === 'table' ? 'bg-accent-soft text-accent' : 'text-muted hover:bg-hover'}`}><List className="size-4" aria-hidden />台账表</button>
         </div>
       </div>
 
