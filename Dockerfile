@@ -23,15 +23,17 @@ ARG VCS_REF=unknown
 LABEL org.opencontainers.image.title="CNC-Manager v2" \
       org.opencontainers.image.source="https://github.com/herozmy/CNC-Manager" \
       org.opencontainers.image.revision=$VCS_REF
-RUN apk add --no-cache ca-certificates tzdata \
+RUN apk add --no-cache ca-certificates tzdata python3 \
     && addgroup -g 1000 app && adduser -D -u 1000 -G app app \
     && mkdir /data && chown app:app /data
-COPY --from=build /out/cnc-manager /usr/local/bin/cnc-manager
+COPY --from=build /out/cnc-manager /usr/local/lib/cnc-manager-bundled
 COPY --from=build /out/migrate-v1 /usr/local/bin/migrate-v1
 WORKDIR /data
-USER 1000:1000
 ENV CNC_ADDR=0.0.0.0:8080 CNC_DATA_DIR=/data TZ=Asia/Shanghai
 VOLUME /data
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 CMD wget -qO- http://127.0.0.1:8080/api/meta >/dev/null || exit 1
+COPY --chmod=0755 scripts/self-update/launcher.py /usr/local/bin/cnc-manager
+RUN python3 -c 'import uuid; print(uuid.uuid4())' > /usr/local/lib/cnc-image-id
+USER 1000:1000
 ENTRYPOINT ["cnc-manager"]

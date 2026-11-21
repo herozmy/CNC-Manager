@@ -1,8 +1,11 @@
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import type { ReactNode } from 'react'
 import { Archive, ChevronRight, Factory } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
+import { Button } from '../components/ui/Button'
+import InstallUpdate from '../components/InstallUpdate'
+import { checkRelease } from '../lib/releaseVersion'
 import { api } from '../api'
 import { useAccess } from '../auth/permissions'
 import { useSession } from '../auth/session'
@@ -30,6 +33,11 @@ export default function MePage() {
   const access = useAccess()
   const session = useSession().data
   const meta = useQuery({ queryKey: ['meta'], queryFn: api.meta, staleTime: Infinity })
+  const update = useMutation({ mutationFn: async () => {
+    const { data } = await meta.refetch({ throwOnError: true })
+    if (!data) throw new Error('无法读取当前版本')
+    return checkRelease(data.version)
+  } })
   if (session?.state !== 'in') return null
 
   return (
@@ -39,8 +47,18 @@ export default function MePage() {
           <h1 className="text-xl font-semibold text-ink">高级管理</h1>
           <p className="mt-1 text-sm text-muted">机台与备份管理</p>
         </div>
-        {meta.data && <p className="rounded-md border border-line bg-surface px-3 py-2 text-xs text-muted">版本 {meta.data.version}</p>}
+        <div className="flex flex-wrap items-center gap-3">
+          {meta.data && <span className="font-mono text-sm text-muted">版本 {meta.data.version}</span>}
+          <Button variant="secondary" loading={update.isPending} onClick={() => update.mutate()}>
+            {update.isPending ? '正在检查…' : '检查更新'}
+          </Button>
+        </div>
       </header>
+      {update.data && <p role="status" className="text-sm text-body">{update.data.message}
+        {update.data.link && <a className="ml-3 text-accent underline" href={update.data.link} target="_blank" rel="noreferrer">查看发布说明</a>}
+      </p>}
+      {access.admin && <InstallUpdate target={update.data?.target} />}
+      {update.isError && <p role="alert" className="text-sm text-danger">检查失败，请确认可以连接服务器和 GitHub 后重试。</p>}
       <section aria-labelledby="management-heading" className="min-w-0 space-y-3">
         <h2 id="management-heading" className="text-sm font-semibold text-body">管理入口</h2>
         <div className={`grid min-w-0 gap-4 ${access.admin ? 'sm:grid-cols-2' : ''}`}>

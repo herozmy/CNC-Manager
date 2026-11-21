@@ -16,3 +16,7 @@
 **/*.[mM][dD]
 **/*.[mM][aA][rR][kK][dD][oO][wW][nN]
 backend/server
+
+!scripts/
+!scripts/self-update/
+!scripts/self-update/launcher.py

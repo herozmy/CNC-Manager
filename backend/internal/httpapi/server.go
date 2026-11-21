@@ -82,6 +82,8 @@ func New(o Options) http.Handler {
 			p.Post("/auth/logout", s.handleLogout)
 			p.Route("/admin", func(a chi.Router) {
 				a.Use(s.requireAdmin)
+				a.Get("/update", s.handleSelfUpdate)
+				a.Post("/update", s.handleSelfUpdate)
 				a.Get("/users", s.handleListUsers)
 				a.Post("/users", s.handleCreateUser)
 				a.Put("/users/{id}", s.handleUpdateUser)
