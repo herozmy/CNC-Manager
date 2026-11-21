@@ -7,7 +7,7 @@ import type { Ref } from 'react'
 import { ncHighlight, ncLanguage } from '../lib/nc-language'
 import { Button } from './ui/Button'
 
-export interface NCCodeEditorHandle { getValue: () => string }
+export interface NCCodeEditorHandle { getValue: () => string; focus: () => void }
 export interface NCCodeEditorProps {
   initialValue: string
   label?: string
@@ -24,7 +24,7 @@ export default function NCCodeEditor({ initialValue, label = 'NC 程序内容', 
   const [error, setError] = useState('')
   const [position, setPosition] = useState('1:1')
   const [lineCount, setLineCount] = useState(1)
-  useImperativeHandle(ref, () => ({ getValue: () => view.current?.state.doc.toString() ?? initialValue }), [initialValue])
+  useImperativeHandle(ref, () => ({ focus: () => view.current?.focus(), getValue: () => view.current?.state.doc.toString() ?? initialValue }), [initialValue])
 
   useEffect(() => {
     if (!host.current) return

@@ -1,3 +1,4 @@
+import { useBlocker } from 'react-router-dom'
 import { useAccess } from '../auth/permissions'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
@@ -44,8 +45,19 @@ function Editor({ initial: loaded, drawingId, programId, onClose, onSaved, onRel
   const [contentDirty, setContentDirty] = useState(false)
   const [note, setNote] = useState('')
   const [conflict, setConflict] = useState(false)
-  const [confirm, setConfirm] = useState<'discard' | 'overwrite' | 'reload' | null>(null)
+  const [localConfirm, setConfirm] = useState<'discard' | 'overwrite' | 'reload' | null>(null)
   const dirty = contentDirty || note !== ''
+  const blocker = useBlocker(dirty)
+  const confirm = blocker.state === 'blocked' ? 'discard' : localConfirm
+  const keepEditing = () => {
+    if (blocker.state === 'blocked') blocker.reset()
+    setConfirm(null)
+    editor.current?.focus()
+  }
+  const discard = () => {
+    if (blocker.state === 'blocked') blocker.proceed()
+    else onClose()
+  }
   const reload = useMutation({ mutationFn: onReload, onError: () => setConfirm(null) })
   const save = useMutation({
     mutationFn: (overwrite: boolean) => {
@@ -88,7 +100,7 @@ function Editor({ initial: loaded, drawingId, programId, onClose, onSaved, onRel
         <p className="text-sm text-muted">另存的新版本会自动设为当前版本。保存时沿用原文件名与编码。</p>
         <div className="grid gap-2 sm:grid-cols-2">
           <Button disabled={!dirty || save.isPending || reload.isPending || !!confirm} onClick={() => save.mutate(false)}>另存新版本</Button>
-          <Button variant="secondary" disabled={!dirty || save.isPending || reload.isPending || !!confirm || conflict} onClick={() => setConfirm('overwrite')}>覆盖此版本</Button>
+          <Button variant="secondary" disabled={!contentDirty || save.isPending || reload.isPending || !!confirm || conflict} onClick={() => setConfirm('overwrite')}>覆盖此版本</Button>
         </div>
       </>)}
       {save.isPending && <p role="status">正在保存…</p>}
@@ -101,8 +113,8 @@ function Editor({ initial: loaded, drawingId, programId, onClose, onSaved, onRel
       {confirm && <div className="space-y-3 rounded-md bg-warning-soft p-3">
         <p>{confirm === 'discard' ? '有未保存的修改，确定放弃吗？' : confirm === 'reload' ? '确定放弃当前草稿并载入最新内容吗？' : `确定覆盖 V${initial.versionNo} 吗？此版本原内容将被替换，且不新增版本。`}</p>
         <div className="flex gap-2">
-          <Button variant="secondary" disabled={save.isPending || reload.isPending} onClick={() => setConfirm(null)}>继续编辑</Button>
-          <Button variant="danger" loading={save.isPending || reload.isPending} onClick={() => confirm === 'discard' ? onClose() : confirm === 'reload' ? reload.mutate() : save.mutate(true)}>{confirm === 'discard' ? '放弃修改' : confirm === 'reload' ? '放弃并载入' : '确认覆盖'}</Button>
+          <Button variant="secondary" disabled={save.isPending || reload.isPending} onClick={keepEditing}>继续编辑</Button>
+          <Button variant="danger" loading={save.isPending || reload.isPending} onClick={() => confirm === 'discard' ? discard() : confirm === 'reload' ? reload.mutate() : save.mutate(true)}>{confirm === 'discard' ? '放弃修改' : confirm === 'reload' ? '放弃并载入' : '确认覆盖'}</Button>
         </div>
       </div>}
     </div>

@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render } from '@testing-library/react'
 import type { ReactElement } from 'react'
-import { MemoryRouter } from 'react-router-dom'
+import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { vi } from 'vitest'
 import App from './App'
 import type { User } from './api/types'
@@ -43,9 +43,10 @@ export function renderApp(ui: ReactElement, route = '/', currentUser: User | nul
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } })
   client.setQueryDefaults(SESSION_KEY, { gcTime: Infinity })
   if (ui.type !== App && currentUser) client.setQueryData(SESSION_KEY, { state: 'in', user: currentUser })
+  const router = createMemoryRouter([{ path: '*', element: ui }], { initialEntries: [route] })
   const utils = render(
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={[route]}>{ui}</MemoryRouter>
+      <RouterProvider router={router} />
     </QueryClientProvider>,
   )
   return { ...utils, client }

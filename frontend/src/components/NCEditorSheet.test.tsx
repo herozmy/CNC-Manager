@@ -108,3 +108,11 @@ test('冲突保留草稿，载入失败不丢失内容，确认载入后使用�
   await waitFor(() => expect(onSaved).toHaveBeenCalledOnce())
   expect(calls.filter((r) => r.method === 'PUT').at(-1)?.body).toMatchObject({ expectedSHA256: 'latest-sha' })
 })
+
+test('只改变更说明允许另存，覆盖需要修改 NC 内容', async () => {
+  const { u } = setup()
+  await u.click(await screen.findByRole('button', { name: '编辑内容' }))
+  await u.type(screen.getByLabelText('变更说明（另存新版本时生效）'), '核对通过')
+  expect(screen.getByRole('button', { name: '另存新版本' })).toBeEnabled()
+  expect(screen.getByRole('button', { name: '覆盖此版本' })).toBeDisabled()
+})
