@@ -1,3 +1,5 @@
+//go:build unix
+
 // Package datalock excludes concurrent servers and offline maintenance on one data directory.
 package datalock
 

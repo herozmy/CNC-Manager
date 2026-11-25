@@ -12,7 +12,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"time"
 	"unicode/utf8"
 
@@ -45,10 +44,9 @@ func openDB(data, mode string) (*sql.DB, error) {
 	if !info.Mode().IsRegular() {
 		return nil, errors.New("cnc.db 必须是已有的普通文件")
 	}
-	u := url.URL{Scheme: "file", Path: path}
+	u := url.URL{Path: filepath.ToSlash(path)}
 	q := url.Values{"mode": {mode}, "_pragma": {"foreign_keys(1)", "busy_timeout(15000)"}}
-	u.RawQuery = q.Encode()
-	db, err := sql.Open("sqlite", u.String())
+	db, err := sql.Open("sqlite", "file:"+u.EscapedPath()+"?"+q.Encode())
 	if err != nil {
 		return nil, err
 	}
@@ -272,29 +270,4 @@ func (r *contextReader) Read(p []byte) (int, error) {
 		return 0, err
 	}
 	return r.r.Read(p)
-}
-
-func restoreOwner(data string, owner fs.FileInfo) error {
-	stat := owner.Sys().(*syscall.Stat_t)
-	var result error
-	for _, name := range []string{"cnc.db", "cnc.db-wal", "cnc.db-shm", ".cnc-manager.lock"} {
-		path := filepath.Join(data, name)
-		info, err := os.Lstat(path)
-		if errors.Is(err, os.ErrNotExist) {
-			continue
-		}
-		if err != nil {
-			result = errors.Join(result, err)
-			continue
-		}
-		if !info.Mode().IsRegular() {
-			result = errors.Join(result, fmt.Errorf("拒绝修改特殊文件所有者：%s", name))
-			continue
-		}
-		current := info.Sys().(*syscall.Stat_t)
-		if current.Uid != stat.Uid || current.Gid != stat.Gid {
-			result = errors.Join(result, os.Chown(path, int(stat.Uid), int(stat.Gid)))
-		}
-	}
-	return result
 }

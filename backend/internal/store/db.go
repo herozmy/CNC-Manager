@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
@@ -31,7 +32,8 @@ func Open(dbPath string) (*sqlx.DB, error) {
 	if err := os.MkdirAll(filepath.Dir(dbPath), 0o755); err != nil {
 		return nil, fmt.Errorf("创建数据库目录失败: %w", err)
 	}
-	dsn := "file:" + filepath.ToSlash(dbPath) +
+	pathURL := url.URL{Path: filepath.ToSlash(dbPath)}
+	dsn := "file:" + pathURL.EscapedPath() +
 		"?_pragma=journal_mode(WAL)" +
 		"&_pragma=busy_timeout(5000)" +
 		"&_pragma=foreign_keys(1)" +

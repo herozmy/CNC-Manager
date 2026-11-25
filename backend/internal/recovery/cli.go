@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -26,7 +27,7 @@ func Run(ctx context.Context, args []string, in *os.File, out io.Writer) error {
 	serviceName := flags.String("service", "cnc-manager-v2.service", "管理的 systemd 服务名称")
 	user := flags.String("user", "", "指定登录用户名；省略则选择账号")
 	list := flags.Bool("list", false, "只列出账号，不重置密码")
-	offline := flags.Bool("no-service", false, "仅用于已停止服务的离线目录；旧版服务须手动确认停止")
+	offline := flags.Bool("no-service", runtime.GOOS == "windows", "仅用于已停止服务的离线目录；旧版服务须手动确认停止")
 	flags.Usage = func() {
 		fmt.Fprintln(out, "用法：cnc-manager reset-password [选项]\n选择账号、隐藏输入新密码、备份数据并恢复服务；不需要 Python。")
 		flags.PrintDefaults()

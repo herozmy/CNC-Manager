@@ -45,9 +45,12 @@ func fixture(t *testing.T, username string) (*Manager, *sqlx.DB) {
 	return m, db
 }
 
+// GBK comment and CRLF must survive a transfer byte for byte.
+const sampleNC = "O1000\r\n(\xbe\xab\xb3\xb5)\r\nG01 X1.5\r\nM30\r\n"
+
 func seed(t *testing.T, m *Manager, db *sqlx.DB) string {
 	t.Helper()
-	blob, err := m.Files.Save(strings.NewReader("O1000\nG01 X1.5\nM30\n"))
+	blob, err := m.Files.Save(strings.NewReader(sampleNC))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -127,7 +130,7 @@ func TestMigrationRoundTripAcrossKeysAndRecovery(t *testing.T) {
 		t.Fatal("destination account survived overwrite")
 	}
 	got, err := dest.Files.ReadAll(rel)
-	if err != nil || string(got) != "O1000\nG01 X1.5\nM30\n" {
+	if err != nil || string(got) != sampleNC {
 		t.Fatalf("NC not restored: %q %v", got, err)
 	}
 	keyAfter, _ := os.ReadFile(dest.Layout.KeyPath)
@@ -166,6 +169,38 @@ func TestMigrationRoundTripAcrossKeysAndRecovery(t *testing.T) {
 	dstDB.Get(&drawings, `SELECT COUNT(*) FROM drawing`)
 	if drawings != 0 {
 		t.Fatal("recovery did not restore original contents")
+	}
+}
+
+func TestPortableBackupBothDirections(t *testing.T) {
+	ctx := context.Background()
+	lf, lfDB := fixture(t, "workshop")
+	crlf, crlfDB := fixture(t, "office")
+	// SQLite preserves interior newlines in schema SQL from the build checkout.
+	for db, newline := range map[*sqlx.DB]string{lfDB: "\n", crlfDB: "\r\n"} {
+		if _, err := db.Exec("DROP INDEX ux_machine_tool_pocket; CREATE UNIQUE INDEX ux_machine_tool_pocket ON machine_tool (" + newline + "machine_id, pocket_no)"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	rel := seed(t, lf, lfDB)
+	for _, pair := range [][2]*Manager{{lf, crlf}, {crlf, lf}} {
+		raw := archive(t, pair[0])
+		stage, err := pair[1].Inspect(ctx, bytes.NewReader(raw), int64(len(raw)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = pair[1].Apply(ctx, stage)
+		stage.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, _, err := pair[1].Repo.Login(ctx, "workshop", "password123", time.Hour); err != nil {
+			t.Fatal(err)
+		}
+		got, err := pair[1].Files.ReadAll(rel)
+		if err != nil || string(got) != sampleNC {
+			t.Fatalf("NC content changed: %x, %v", got, err)
+		}
 	}
 }
 

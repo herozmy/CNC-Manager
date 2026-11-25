@@ -63,7 +63,8 @@ func (r *Repo) CheckBackupDB(ctx context.Context, path string) (BackupSummary, [
 	if err := db.GetContext(ctx, &integrity, `PRAGMA integrity_check`); err != nil || integrity != "ok" {
 		return summary, nil, fmt.Errorf("数据库完整性检查失败")
 	}
-	const schemaQuery = `SELECT type || ':' || name || ':' || COALESCE(sql, '') FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' ORDER BY type, name`
+	// SQLite retains checkout line endings inside CREATE statements, including in existing databases.
+	const schemaQuery = `SELECT type || ':' || name || ':' || replace(COALESCE(sql, ''), char(13,10), char(10)) FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' ORDER BY type, name`
 	var expected, actual []string
 	if err := r.db.SelectContext(ctx, &expected, schemaQuery); err != nil {
 		return summary, nil, err

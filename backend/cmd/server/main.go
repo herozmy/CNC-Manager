@@ -6,10 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"syscall"
 	"time"
 
@@ -27,6 +29,20 @@ import (
 var version = "dev"
 
 func main() {
+	if len(os.Args) > 1 {
+		attachCLIConsole()
+	}
+	// Keep the portable database next to the executable regardless of the launch directory.
+	if runtime.GOOS == "windows" && os.Getenv("CNC_DATA_DIR") == "" {
+		exe, err := os.Executable()
+		if err == nil {
+			err = os.Setenv("CNC_DATA_DIR", filepath.Join(filepath.Dir(exe), "data"))
+		}
+		if err != nil {
+			reportStartupError(err)
+			os.Exit(1)
+		}
+	}
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
 		case "reset-password":
@@ -50,7 +66,7 @@ func main() {
 	}
 	log := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	if err := run(log); err != nil {
-		log.Error("服务退出", "err", err)
+		reportStartupError(err)
 		os.Exit(1)
 	}
 }
@@ -95,8 +111,18 @@ func run(log *slog.Logger) error {
 		Handler:           httpapi.New(httpapi.Options{DataDir: cfg.DataDir, Version: version, Repo: r, Files: files, Log: log, SessionLifetime: cfg.SessionLifetime, Static: web.Handler()}),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
+	listener, err := net.Listen("tcp", cfg.Addr)
+	if err != nil {
+		return err
+	}
+	defer listener.Close()
+	closeDesktop, err := startDesktop(listener.Addr().(*net.TCPAddr), stop)
+	if err != nil {
+		return err
+	}
+	defer closeDesktop()
 	errc := make(chan error, 1)
-	go func() { errc <- srv.ListenAndServe() }()
+	go func() { errc <- srv.Serve(listener) }()
 	log.Info("CNC-Manager 已启动", "version", version, "addr", cfg.Addr, "data", cfg.DataDir)
 
 	select {

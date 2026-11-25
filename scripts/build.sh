@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 构建前端并编译内嵌前端的 Linux amd64 单文件服务。产物：.local/release/
+# 构建前端并编译内嵌前端的 Linux 和 Windows amd64 单文件服务。产物：.local/release/
 set -euo pipefail
 cd "$(dirname "$0")/.."
 VERSION="$(tr -d '[:space:]' < VERSION)"
@@ -10,5 +10,8 @@ rm -f .local/release/cnc-reset-password
 (cd backend && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
   go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" \
   -o "../.local/release/cnc-manager" ./cmd/server)
-echo "已生成 .local/release/cnc-manager (${VERSION})"
+(cd backend && CGO_ENABLED=0 GOOS=windows GOARCH=amd64 \
+  go build -trimpath -ldflags "-H=windowsgui -s -w -X main.version=${VERSION}" \
+  -o "../.local/release/cnc-manager.exe" ./cmd/server)
+echo "已生成 .local/release/cnc-manager 和 cnc-manager.exe (${VERSION})"
 echo "密码重置已内置：cnc-manager reset-password（无需 Python）"
