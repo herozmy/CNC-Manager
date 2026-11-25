@@ -141,7 +141,10 @@ test('已登录直接进入总览，并提供新建图纸入口', async () => {
   })
   renderApp(<App />)
   expect(await screen.findByText('还没有图纸')).toBeInTheDocument()
-  expect(screen.getAllByRole('link', { name: /新建/ }).length).toBeGreaterThan(0)
+  expect(within(screen.getByRole('navigation', { name: '桌面导航' })).queryByRole('link', { name: '新建图纸' })).not.toBeInTheDocument()
+  for (const area of [screen.getByRole('main'), screen.getByRole('navigation', { name: '主导航' })]) {
+    expect(within(area).getByRole('link', { name: '新建图纸' })).toHaveAttribute('href', '/drawings/new')
+  }
 })
 
 test('会话过期（接口返回 401）后回到登录页', async () => {

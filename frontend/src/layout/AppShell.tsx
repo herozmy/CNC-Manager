@@ -34,7 +34,7 @@ export default function AppShell() {
       </div>
       <nav aria-label="桌面导航" className="flex-1 space-y-1 px-2 py-4">
         {!collapsed && <p className="mb-2 px-3 text-xs text-neutral-500">核心台账</p>}
-        {visibleItems.map(({ to, label, icon: Icon }) => <Link key={to} to={to} aria-label={label} title={collapsed ? label : undefined} aria-current={isActive(to) ? 'page' : undefined} className={clsx('flex min-h-12 items-center gap-3 rounded-md px-3 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-amber-400', collapsed && 'justify-center px-0', isActive(to) ? 'bg-amber-400/10 text-amber-300 shadow-[inset_3px_0_0_#eab157]' : 'text-neutral-300 hover:bg-neutral-800')}>
+        {items.filter(item => item.to !== '/drawings/new').map(({ to, label, icon: Icon }) => <Link key={to} to={to} aria-label={label} title={collapsed ? label : undefined} aria-current={isActive(to) ? 'page' : undefined} className={clsx('flex min-h-12 items-center gap-3 rounded-md px-3 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-amber-400', collapsed && 'justify-center px-0', isActive(to) ? 'bg-amber-400/10 text-amber-300 shadow-[inset_3px_0_0_#eab157]' : 'text-neutral-300 hover:bg-neutral-800')}>
           <Icon className="size-5 shrink-0" aria-hidden />{!collapsed && <span>{label}</span>}
         </Link>)}
       </nav>
