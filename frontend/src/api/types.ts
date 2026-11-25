@@ -253,3 +253,15 @@ export interface MachineInput {
   ownerUserId?: number
 }
 export interface MachineFilter { q: string; page: number; size?: number; enabled?: boolean; ownerUserId?: number }
+
+export interface ScheduleSettings {
+  retention: number
+  frequency: 'off' | 'daily' | 'weekly'
+  weekday: number
+  time: string
+}
+
+export interface BackupSchedule extends ScheduleSettings {
+  next: string | null
+  lastResult: string
+}

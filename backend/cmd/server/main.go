@@ -106,9 +106,10 @@ func run(log *slog.Logger) error {
 
 	go cleanSessions(ctx, r, log)
 
+	handler := httpapi.New(httpapi.Options{DataDir: cfg.DataDir, Version: version, Repo: r, Files: files, Log: log, SessionLifetime: cfg.SessionLifetime, Static: web.Handler()})
 	srv := &http.Server{
 		Addr:              cfg.Addr,
-		Handler:           httpapi.New(httpapi.Options{DataDir: cfg.DataDir, Version: version, Repo: r, Files: files, Log: log, SessionLifetime: cfg.SessionLifetime, Static: web.Handler()}),
+		Handler:           handler,
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	listener, err := net.Listen("tcp", cfg.Addr)
@@ -121,6 +122,9 @@ func run(log *slog.Logger) error {
 		return err
 	}
 	defer closeDesktop()
+	workerDone := make(chan struct{})
+	go func() { defer close(workerDone); handler.RunBackupSchedule(ctx) }()
+	defer func() { stop(); <-workerDone }()
 	errc := make(chan error, 1)
 	go func() { errc <- srv.Serve(listener) }()
 	log.Info("CNC-Manager 已启动", "version", version, "addr", cfg.Addr, "data", cfg.DataDir)

@@ -7,8 +7,11 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/jmoiron/sqlx"
 
@@ -19,7 +22,7 @@ import (
 	"cnc-manager/internal/store"
 )
 
-func backupServer(t *testing.T) (http.Handler, *sqlx.DB) {
+func backupServer(t *testing.T) (*Server, *sqlx.DB) {
 	t.Helper()
 	layout := config.NewLayout(t.TempDir())
 	db, err := store.Open(layout.DBPath)
@@ -242,5 +245,131 @@ func TestCreateBackupWithoutDownload(t *testing.T) {
 	h.ServeHTTP(response, req)
 	if response.Code != 403 {
 		t.Fatal(response.Code)
+	}
+}
+
+func TestBackupSchedule(t *testing.T) {
+	h, db := backupServer(t)
+	admin := setupAdmin(t, h)
+	const endpoint = "/api/backup/schedule"
+	const weekly = `{"frequency":"weekly","weekday":1,"time":"08:30"}`
+	var p backupSchedule
+	decode(t, do(t, h, "GET", endpoint, "", admin), &p)
+	if p.Frequency != "off" || p.Next != nil {
+		t.Fatal(p)
+	}
+	if got := do(t, h, "PUT", endpoint, `{"frequency":"daily","time":"25:00"}`, admin); got.Code != 400 {
+		t.Fatal(got.Code)
+	}
+	rec := do(t, h, "PUT", endpoint, weekly, admin)
+	if rec.Code != 200 {
+		t.Fatal(rec.Body)
+	}
+	decode(t, rec, &p)
+	if p.Next == nil || p.Next.In(beijing).Weekday() != time.Monday || p.Next.In(beijing).Format("15:04") != "08:30" {
+		t.Fatal(p)
+	}
+	due := *p.Next
+	for _, at := range []time.Time{due.Add(-time.Second), due, due.Add(time.Minute)} {
+		if err := h.runDueBackup(context.Background(), at); err != nil {
+			t.Fatal(err)
+		}
+	}
+	items, err := h.backup.Recoveries()
+	if err != nil || len(items) != 1 || !strings.HasPrefix(items[0].Name, "scheduled-") {
+		t.Fatal(items, err)
+	}
+	saved, err := h.readSchedule()
+	if err != nil || !saved.Next.Equal(due.AddDate(0, 0, 7)) {
+		t.Fatal(saved, err)
+	}
+	if rec := do(t, h, "PUT", endpoint, `{"frequency":"off","weekday":1,"time":"08:30"}`, admin); rec.Code != 200 {
+		t.Fatal(rec.Body)
+	}
+	if err := h.runDueBackup(context.Background(), *saved.Next); err != nil {
+		t.Fatal(err)
+	}
+	if items, _ := h.backup.Recoveries(); len(items) != 1 {
+		t.Fatal(items)
+	}
+	if _, err := db.Exec("UPDATE app_user SET role='viewer'"); err != nil {
+		t.Fatal(err)
+	}
+	for _, method := range []string{"GET", "PUT"} {
+		if rec := do(t, h, method, endpoint, weekly, admin); rec.Code != 403 {
+			t.Fatal(rec.Code)
+		}
+	}
+}
+
+func TestScheduleRetention(t *testing.T) {
+	h, _ := backupServer(t)
+	admin := setupAdmin(t, h)
+	ctx := context.Background()
+	const endpoint = "/api/backup/schedule"
+	const legacy = `{"frequency":"daily","weekday":1,"time":"08:00"}`
+	if err := os.WriteFile(filepath.Join(h.backup.Layout.Root, "backup-schedule.json"), []byte(legacy), 0600); err != nil {
+		t.Fatal(err)
+	}
+	p, err := h.readSchedule()
+	if err != nil || p.Retention != 7 {
+		t.Fatal(p, err)
+	}
+	for _, value := range []string{"0", "366", "1.5"} {
+		body := strings.TrimSuffix(legacy, "}") + `,"retention":` + value + "}"
+		if rec := do(t, h, "PUT", endpoint, body, admin); rec.Code != 400 {
+			t.Fatal(rec.Code)
+		}
+	}
+	dir := filepath.Join(h.backup.Layout.Root, "backups")
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	names := []string{"scheduled-20260101-000000-1.zip", "scheduled-20260102-000000-1.zip", "manual-20260101-000000-1.zip", "pre-import-20260101-000000-1.zip"}
+	for i, name := range names {
+		path := filepath.Join(dir, name)
+		if err := os.WriteFile(path, []byte("existing"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		stamp := time.Unix(int64(i+1), 0)
+		if err := os.Chtimes(path, stamp, stamp); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if rec := do(t, h, "PUT", endpoint, `{"frequency":"daily","weekday":1,"time":"08:00","retention":2}`, admin); rec.Code != 200 {
+		t.Fatal(rec.Body)
+	}
+	decode(t, do(t, h, "PUT", endpoint, legacy, admin), &p)
+	if p.Retention != 2 {
+		t.Fatal(p)
+	}
+	key := h.backup.Layout.KeyPath
+	h.backup.Layout.KeyPath = key + ".missing"
+	if err := h.runDueBackup(ctx, *p.Next); err == nil {
+		t.Fatal("expected archive failure")
+	}
+	before, err := h.backup.Recoveries()
+	if err != nil || len(before) != 4 {
+		t.Fatal(before, err)
+	}
+	h.backup.Layout.KeyPath = key
+	p, err = h.readSchedule()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = h.runDueBackup(ctx, *p.Next); err != nil {
+		t.Fatal(err)
+	}
+	after, err := h.backup.Recoveries()
+	if err != nil || len(after) != 4 {
+		t.Fatal(after, err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, names[0])); !os.IsNotExist(err) {
+		t.Fatal("oldest scheduled archive remained", err)
+	}
+	for _, name := range names[1:] {
+		if data, err := os.ReadFile(filepath.Join(dir, name)); err != nil || string(data) != "existing" {
+			t.Fatal(name, err)
+		}
 	}
 }

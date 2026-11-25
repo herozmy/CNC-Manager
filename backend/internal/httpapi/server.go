@@ -29,6 +29,7 @@ type Options struct {
 
 // Server 持有依赖与登录限速状态。
 type Server struct {
+	http.Handler
 	backup          *backup.Manager
 	maintenance     sync.RWMutex
 	version         string
@@ -47,7 +48,7 @@ type loginAttempt struct {
 }
 
 // New 构造根处理器。
-func New(o Options) http.Handler {
+func New(o Options) *Server {
 	if o.Log == nil {
 		o.Log = slog.Default()
 	}
@@ -94,6 +95,8 @@ func New(o Options) http.Handler {
 			p.Route("/backup", func(b chi.Router) {
 				b.Use(s.requireBackupAdmin)
 				b.Get("/export", s.handleBackupExport)
+				b.Get("/schedule", s.handleGetSchedule)
+				b.Put("/schedule", s.handleSetSchedule)
 				b.Post("/create", s.handleBackupCreate)
 				b.Post("/inspect", s.handleBackupInspect)
 				b.Post("/import", s.handleBackupImport)
@@ -147,7 +150,8 @@ func New(o Options) http.Handler {
 	if o.Static != nil {
 		r.NotFound(o.Static.ServeHTTP)
 	}
-	return trimTrailingSlash(r)
+	s.Handler = trimTrailingSlash(r)
+	return s
 }
 
 func (s *Server) handleMeta(w http.ResponseWriter, _ *http.Request) {

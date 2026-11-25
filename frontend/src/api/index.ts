@@ -1,6 +1,6 @@
 import { http } from './client'
 import type {
-  Machine, MachineInput, MachineFilter, MachineOption, UserInput, UserUpdate, AuditEntry, AuditFilter, BackupPreview, BackupRecovery, ToolTable, ProgramToolInput, ParseResult, ContentInput, VersionContent, VersionSaveResult, VersionDiff, Drawing, DrawingDetail, DrawingInput, Meta, Operation, OperationInput, Page, Program, ProgramInput, UploadResult, User, Version,
+  Machine, MachineInput, MachineFilter, MachineOption, UserInput, UserUpdate, AuditEntry, AuditFilter, BackupSchedule, ScheduleSettings, BackupPreview, BackupRecovery, ToolTable, ProgramToolInput, ParseResult, ContentInput, VersionContent, VersionSaveResult, VersionDiff, Drawing, DrawingDetail, DrawingInput, Meta, Operation, OperationInput, Page, Program, ProgramInput, UploadResult, User, Version,
 } from './types'
 
 export const api = {
@@ -36,6 +36,8 @@ export const api = {
     http.post<User>('/auth/setup', { username, displayName, password }),
   logout: () => http.post<void>('/auth/logout'),
   createBackup: () => http.post<{ name: string }>('/backup/create'),
+  backupSchedule: () => http.get<BackupSchedule>('/backup/schedule'),
+  saveBackupSchedule: (settings: ScheduleSettings) => http.put<BackupSchedule>('/backup/schedule', settings),
   backupRecoveries: () => http.get<BackupRecovery[]>('/backup/recoveries'),
   deleteRecovery: (name: string) => http.del<void>(`/backup/recoveries/${encodeURIComponent(name)}`),
   downloadRecovery: (name: string) => http.getBlob(`/backup/recoveries/${encodeURIComponent(name)}`),

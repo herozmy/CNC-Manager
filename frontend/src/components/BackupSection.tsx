@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
 import { Archive, Upload } from 'lucide-react'
 import { api } from '../api'
+import { BackupScheduleForm } from './BackupScheduleForm'
 import { ApiError } from '../api/client'
 import type { BackupPreview, BackupRecovery } from '../api/types'
 import { setSession } from '../auth/session'
@@ -10,6 +11,11 @@ import { Sheet } from './ui/Sheet'
 
 const errorMessage = (e: unknown) => e instanceof ApiError ? e.message : '连接中断，请确认服务器状态后重试'
 const date = (value: string) => new Date(value).toLocaleString('zh-CN', { hour12: false })
+
+function backupKind(name: string) {
+  if (name.startsWith('scheduled-')) return '计划备份'
+  return name.startsWith('manual-') ? '手动备份' : '导入前备份'
+}
 
 function saveDownload(blob: Blob, name: string) {
   const url = URL.createObjectURL(blob)
@@ -31,7 +37,7 @@ export default function BackupSection() {
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const pending = useRef(false)
-  const recoveries = useQuery({ queryKey: ['backup-recoveries'], queryFn: api.backupRecoveries })
+  const recoveries = useQuery({ queryKey: ['backup-recoveries'], queryFn: api.backupRecoveries, refetchInterval: 30000 })
 
   async function create() {
     if (pending.current) return
@@ -75,6 +81,7 @@ export default function BackupSection() {
       <Button variant="secondary" className="px-2" disabled={busy} onClick={() => setOpen(true)}><Upload className="size-4 shrink-0" aria-hidden />导入备份</Button>
     </div>
     <p className="text-xs leading-5 text-muted">仅管理员可操作。备份包含账号及文件解密密钥，请妥善保管；未保存的编辑不会包含在备份中。</p>
+    <BackupScheduleForm />
     {busy && <p role="status" className="text-sm text-muted">正在处理，请保持页面打开。数据较多时需要稍候。</p>}
     {error && <p role="alert" className="text-sm text-danger">{error}</p>}
     {notice && <p role="status" className="text-sm text-success">{notice}</p>}
@@ -84,7 +91,7 @@ export default function BackupSection() {
       <p className="mb-2 text-xs leading-5 text-muted">备份成功后保存在服务器。需要恢复时，下载对应备份，再使用“导入备份”检查并确认覆盖。</p>
       <ul className="max-h-64 space-y-3 overflow-y-auto">
         {recoveries.data.map((item) => <li key={item.name} className="flex items-center justify-between gap-2 text-sm">
-          <span>{item.name.startsWith('manual-') ? '手动备份' : '导入前备份'} · {date(item.createdAt)}<span className="block text-xs text-muted">{(item.sizeBytes / 1048576).toFixed(2)} MB</span></span>
+          <span>{backupKind(item.name)} · {date(item.createdAt)}<span className="block text-xs text-muted">{(item.sizeBytes / 1048576).toFixed(2)} MB</span></span>
           <div className="flex shrink-0 gap-2"><Button variant="secondary" className="shrink-0 px-3 text-sm" disabled={busy} onClick={() => download(item.name)} aria-label={`下载 ${date(item.createdAt)} 的恢复副本`}>下载</Button>
           <Button variant="danger" className="px-3 text-sm" disabled={busy} onClick={() => { setDeleting(item); setDeleteError('') }} aria-label={`删除 ${date(item.createdAt)} 的备份`}>删除</Button></div>
         </li>)}
@@ -93,7 +100,7 @@ export default function BackupSection() {
     {recoveries.isError && <p className="text-sm text-muted">恢复副本列表暂时不可用。<button className="ml-2 underline" onClick={() => recoveries.refetch()}>重试</button></p>}
     {deleting && <Sheet open title="删除备份" onClose={() => { if (!pending.current) setDeleting(null) }}>
       <div className="space-y-4">
-        <p className="text-sm leading-6">确定删除 {date(deleting.createdAt)} 的{deleting.name.startsWith('manual-') ? '手动备份' : '导入前备份'}？</p>
+        <p className="text-sm leading-6">确定删除 {date(deleting.createdAt)} 的{backupKind(deleting.name)}？</p>
         <p className="break-all text-xs text-muted">{deleting.name}</p>
         <p className="text-sm leading-6 text-danger">删除后无法从服务器恢复此备份。当前业务数据和已下载到设备的副本不受影响。</p>
         {deleteError && <p role="alert" className="text-sm text-danger">{deleteError}</p>}

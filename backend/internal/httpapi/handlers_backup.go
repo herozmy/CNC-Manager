@@ -22,7 +22,7 @@ func (s *Server) guardMaintenance(next http.Handler) http.Handler {
 		// subsequent business requests authenticate. In-flight file operations finish
 		// before a revocation takes effect, never midway through an authorized write.
 		adminWrite := strings.HasPrefix(r.URL.Path, "/api/admin/") && r.Method != http.MethodGet && r.Method != http.MethodHead
-		exclusive := adminWrite || (r.Method == http.MethodDelete && strings.HasPrefix(r.URL.Path, "/api/backup/recoveries/")) || r.URL.Path == "/api/backup/create" || r.URL.Path == "/api/backup/export" || r.URL.Path == "/api/backup/import"
+		exclusive := adminWrite || (r.Method == http.MethodPut && r.URL.Path == "/api/backup/schedule") || (r.Method == http.MethodDelete && strings.HasPrefix(r.URL.Path, "/api/backup/recoveries/")) || r.URL.Path == "/api/backup/create" || r.URL.Path == "/api/backup/export" || r.URL.Path == "/api/backup/import"
 		if exclusive {
 			s.maintenance.Lock()
 			defer s.maintenance.Unlock()

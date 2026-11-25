@@ -293,3 +293,24 @@ test('删除备份须确认，取消不删除，失败可重试，成功刷新�
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   expect(deletes).toBe(2)
 })
+
+test('管理员保存每周整站备份计划', async () => {
+  const calls = mockApi(r => {
+    if (r.path === '/auth/status') return { body: { setupRequired: false } }
+    if (r.path === '/auth/me') return { body: user }
+    if (r.path === '/meta') return { body: { version: 'test' } }
+    if (r.path === '/backup/recoveries') return { body: [] }
+    if (r.path === '/backup/schedule') return { body: r.body ?? { frequency: 'off', weekday: 1, retention: 7, time: '02:00', next: null, lastResult: '' } }
+  })
+  renderApp(<App />, '/me/backup')
+  const u = userEvent.setup()
+  await u.click(await screen.findByText('整站备份计划'))
+  await u.selectOptions(await screen.findByLabelText('备份频率'), 'weekly')
+  await u.selectOptions(screen.getByLabelText('星期'), '5')
+  const retention = screen.getByLabelText('计划备份保留份数')
+  await u.clear(retention)
+  await u.type(retention, '3')
+  await u.click(screen.getByRole('button', { name: '保存计划' }))
+  expect(await screen.findByText('备份计划已保存。')).toBeVisible()
+  expect(calls).toContainEqual({ method: 'PUT', path: '/backup/schedule', body: { frequency: 'weekly', weekday: 5, retention: 3, time: '02:00' } })
+})

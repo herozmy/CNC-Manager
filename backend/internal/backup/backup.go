@@ -35,7 +35,7 @@ var blobName = regexp.MustCompile(`^data/nc/[a-f0-9]{2}/[a-f0-9]{2}/[a-f0-9]{64}
 // v1 stores the uploaded extension verbatim, unlike v2's fixed .nc suffix.
 // Its filename length limit can also remove the extension from long names.
 var legacyBlobName = regexp.MustCompile(`^data/nc/[a-f0-9]{2}/[a-f0-9]{2}/[a-f0-9]{64}(?:\.(?i:nc|tap|txt|prg|mpf|spf|h|eia|iso|cnc|gcode|min|dnc))?$`)
-var recoveryName = regexp.MustCompile(`^(?:pre-import|manual)-[0-9]{8}-[0-9]{6}-[0-9]+\.zip$`)
+var recoveryName = regexp.MustCompile(`^(?:pre-import|manual|scheduled)-[0-9]{8}-[0-9]{6}-[0-9]+\.zip$`)
 
 type Manifest struct {
 	Format    string `json:"format"`
@@ -507,6 +507,31 @@ func (m *Manager) Recoveries() ([]Recovery, error) {
 		return items[i].CreatedAt > items[j].CreatedAt
 	})
 	return items, nil
+}
+
+// PruneScheduled always keeps the archive just published, even when timestamps tie.
+func (m *Manager) PruneScheduled(newest string, keep int) error {
+	if keep < 1 {
+		return fmt.Errorf("计划备份至少保留一份")
+	}
+	items, err := m.Recoveries()
+	if err != nil {
+		return err
+	}
+	remaining := keep - 1
+	for _, item := range items {
+		if item.Name == newest || !strings.HasPrefix(item.Name, "scheduled-") {
+			continue
+		}
+		if remaining > 0 {
+			remaining--
+			continue
+		}
+		if err := os.Remove(filepath.Join(m.Layout.Root, "backups", item.Name)); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+	}
+	return nil
 }
 
 func (m *Manager) RecoveryPath(name string) (string, error) {
