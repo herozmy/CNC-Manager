@@ -1,0 +1,25 @@
+.preparation-print { display: none; }
+@page preparation { size: A4 portrait; margin: 14mm; }
+@media print {
+  body:has(> .preparation-print) > :not(.preparation-print) { display: none !important; }
+  body:has(> .preparation-print) { background: white; }
+  .preparation-print {
+    display: block;
+    page: preparation;
+    color: black;
+    background: white;
+    font: 11pt/1.5 sans-serif;
+    overflow-wrap: anywhere;
+  }
+  .preparation-print h1 { text-align: center; font-size: 21pt; font-weight: bold; }
+  .preparation-print h2 { margin: 6mm 0 2mm; font-weight: bold; break-after: avoid; }
+  .preparation-print dl { display: grid; grid-template-columns: 1fr 1fr; border-top: 1px solid #777; }
+  .preparation-print dl.instructions { display: block; }
+  .preparation-print dl div { border-bottom: 1px solid #aaa; padding: 2mm; }
+  .preparation-print dt { font-size: 9pt; color: #444; }
+  .preparation-print dd, .preparation-print td { white-space: pre-wrap; min-height: 6mm; }
+  .preparation-print table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  .preparation-print th, .preparation-print td { border: 1px solid #777; padding: 2mm; text-align: left; vertical-align: top; }
+  .preparation-print th:first-child { width: 14%; }
+  .preparation-print tr { break-inside: avoid; }
+}

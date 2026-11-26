@@ -147,6 +147,7 @@ export default function DrawingPage() {
             <p className="mt-1 break-words text-sm text-muted tabular-nums">价格：{query.data.price == null ? '未填写' : `${query.data.price} 元`}</p>
             </div>
             {query.data.remark && <p className="mt-2 rounded-md bg-warning-soft p-3 text-sm text-body">{query.data.remark}</p>}
+            <Link to={`/drawings/${id}/preparation`} className="mt-3 inline-flex min-h-12 items-center rounded-md border border-line-strong px-4 text-sm font-semibold text-ink hover:bg-inset">加工准备单</Link>
           </header>
           {saved && <p role="status" className="mb-4 rounded-md bg-success-soft p-3 text-sm text-success">图纸已保存</p>}
           <div className="mb-3 flex items-center justify-between gap-3"><h2 className="text-lg font-semibold">加工工序 <span className="ml-1 font-mono text-sm text-muted">{ops.length}</span></h2>

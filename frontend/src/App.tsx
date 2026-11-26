@@ -20,6 +20,7 @@ import OverviewPage from './pages/OverviewPage'
 import ProgramPage from './pages/ProgramPage'
 import TappingPage from './pages/TappingPage'
 import ToolsPage from './pages/ToolsPage'
+import PreparationPage, { DrawingPreparationPage } from './pages/PreparationPage'
 import GCodePage from './pages/GCodePage'
 import DrillingPage from './pages/DrillingPage'
 import PolarDrillingPage from './pages/PolarDrillingPage'
@@ -100,8 +101,10 @@ function Application() {
         <Route index element={<OverviewPage />} />
         <Route path="drawings/new" element={<NewDrawingPage />} />
         <Route path="drawings/:id" element={<DrawingPage />} />
+        <Route path="drawings/:id/preparation" element={<DrawingPreparationPage />} />
         <Route path="drawings/:id/programs/:programId" element={<ProgramPage />} />
         <Route path="tools" element={<ToolsPage />} />
+        <Route path="tools/preparation" element={<PreparationPage />} />
         <Route path="tools/gcode" element={<GCodePage />} />
         <Route path="tools/gcode/drilling" element={<DrillingPage />} />
         <Route path="tools/gcode/line-drilling" element={<ArrayDrillingPage key="line" kind="line" />} />
