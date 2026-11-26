@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Camera, Upload } from 'lucide-react'
 import { api } from '../api'
 import { Button } from './ui/Button'
-import { Sheet } from './ui/Sheet'
+import PhotoPreview from './PhotoPreview'
 
 async function preparePhoto(file: File): Promise<Blob> {
   const url = URL.createObjectURL(file)
@@ -89,10 +89,9 @@ export default function OperationPhotos({ operationId, editable }: { operationId
         <img loading="lazy" className="size-20 rounded-md object-cover" src={photoUrl(digest)} alt={`装夹照片 ${i + 1}`} />
       </button>)}
     </div>}
-    {selected && <Sheet open title="装夹照片" onClose={() => { if (!busy) setSelected(null) }}>
-      <img className="max-h-[65vh] w-full object-contain" src={photoUrl(selected)} alt="装夹照片大图" />
+    {selected && <PhotoPreview key={selected} operationId={operationId} digest={selected} src={photoUrl(selected)} editable={editable} onClose={() => { if (!busy) setSelected(null) }}>
       {error && <p role="alert">{error}</p>}
       {editable && <Button className="mt-3" variant="danger" disabled={busy} onClick={remove}>删除照片</Button>}
-    </Sheet>}
+    </PhotoPreview>}
   </section>
 }

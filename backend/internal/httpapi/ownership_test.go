@@ -83,6 +83,8 @@ func TestPersonalOwnershipAcrossAllBusinessEndpoints(t *testing.T) {
 		{"POST", fmt.Sprintf("/api/drawings/%d/operations", db.ID), map[string]any{"opNo": 20}},
 		{"PUT", fmt.Sprintf("/api/drawings/%d/operations/order", db.ID), map[string]any{"ids": []int64{op.ID}}},
 		{"GET", fmt.Sprintf("/api/operations/%d/photos", op.ID), nil},
+		{"GET", fmt.Sprintf("/api/operations/%d/photos/other/annotations", op.ID), nil},
+		{"PUT", fmt.Sprintf("/api/operations/%d/photos/other/annotations", op.ID), map[string]any{"revision": 0, "marks": []any{}}},
 		{"GET", fmt.Sprintf("/api/operations/%d/photos/other", op.ID), nil},
 		{"POST", fmt.Sprintf("/api/operations/%d/photos", op.ID), "image"},
 		{"DELETE", fmt.Sprintf("/api/operations/%d/photos/other", op.ID), nil},

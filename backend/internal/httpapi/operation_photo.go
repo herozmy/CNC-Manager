@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"bytes"
+	"cnc-manager/internal/repo"
 	"github.com/go-chi/chi/v5"
 	"image/jpeg"
 	"io"
@@ -75,4 +76,34 @@ func (s *Server) deleteOperationPhoto(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(204)
+}
+
+func (s *Server) getAnnotations(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	a, err := s.repo.GetAnnotations(r.Context(), id, chi.URLParam(r, "digest"))
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	writeJSON(w, 200, a)
+}
+
+func (s *Server) saveAnnotations(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	var a repo.PhotoAnnotations
+	if !decodeJSONLimit(w, r, &a, 65536) {
+		return
+	}
+	a, err := s.repo.SaveAnnotations(r.Context(), id, chi.URLParam(r, "digest"), a)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	writeJSON(w, 200, a)
 }

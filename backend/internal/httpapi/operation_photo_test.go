@@ -38,6 +38,18 @@ func TestOperationPhotoRoundTrip(t *testing.T) {
 	if len(photos) != 1 || photos[0] != digest {
 		t.Fatal(photos)
 	}
+	annotationURL := path + "/" + digest + "/annotations"
+	const annotations = `{"revision":0,"marks":[{"kind":"arrow","x":20,"y":80,"x2":200,"y2":250},{"kind":"text","x":10,"y":100,"text":"固定端"}]}`
+	if rec := do(t, h, "PUT", annotationURL, `{"marks":[{"kind":"text","text":"bad","x":1200}]}`, admin); rec.Code != 400 {
+		t.Fatal(rec.Body)
+	}
+	saved := do(t, h, "PUT", annotationURL, annotations, admin)
+	if saved.Code != 200 {
+		t.Fatal(saved.Body)
+	}
+	if rec := do(t, h, "PUT", annotationURL, annotations, admin); rec.Code != 409 {
+		t.Fatal("stale write accepted", rec.Code)
+	}
 	raw := do(t, h, "GET", "/api/backup/export", "", admin)
 	if raw.Code != 200 {
 		t.Fatal(raw.Body)
@@ -55,6 +67,9 @@ func TestOperationPhotoRoundTrip(t *testing.T) {
 		t.Fatal(rec.Body)
 	}
 	admin = sessionCookie(t, do(t, h, "POST", "/api/auth/login", `{"username":"admin","password":"password123"}`))
+	if a := do(t, h, "GET", annotationURL, "", admin); a.Code != 200 || a.Body.String() != saved.Body.String() {
+		t.Fatal("marks not restored", a.Body)
+	}
 	restored := do(t, h, "GET", path+"/"+digest, "", admin)
 	if restored.Code != 200 || !bytes.Equal(restored.Body.Bytes(), data.Bytes()) || restored.Header().Get("Content-Type") != "image/jpeg" {
 		t.Fatal("photo restore failed", restored.Code)

@@ -71,7 +71,7 @@ func TestMigrateCreatesSchemaAndIsIdempotent(t *testing.T) {
 	if n != 7 {
 		t.Fatalf("核心表数量 = %d，期望 7", n)
 	}
-	if err := db.Get(&n, `SELECT COUNT(*) FROM schema_migration`); err != nil || n != 9 {
+	if err := db.Get(&n, `SELECT COUNT(*) FROM schema_migration`); err != nil || n != 10 {
 		t.Fatalf("迁移记录 = %d, err=%v", n, err)
 	}
 }

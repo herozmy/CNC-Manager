@@ -124,6 +124,8 @@ func New(o Options) *Server {
 			p.With(s.requirePermission(domain.PermissionEdit)).Put("/drawings/{id}/operations/order", s.handleReorderOperations)
 
 			p.Get("/operations/{id}/photos", s.listOperationPhotos)
+			p.Get("/operations/{id}/photos/{digest}/annotations", s.getAnnotations)
+			p.With(s.requirePermission(domain.PermissionEdit)).Put("/operations/{id}/photos/{digest}/annotations", s.saveAnnotations)
 			p.Get("/operations/{id}/photos/{digest}", s.getOperationPhoto)
 			p.With(s.requirePermission(domain.PermissionEdit)).Post("/operations/{id}/photos", s.addOperationPhoto)
 			p.With(s.requirePermission(domain.PermissionEdit)).Delete("/operations/{id}/photos/{digest}", s.deleteOperationPhoto)

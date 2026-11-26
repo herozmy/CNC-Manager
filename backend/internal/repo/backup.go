@@ -14,7 +14,7 @@ import (
 )
 
 // The list is explicit: archive SQL is never executed against the live database.
-var backupTables = []string{"business_role", "drawing", "machine", "machine_tool", "tool", "operation", "operation_photo", "nc_blob", "nc_program", "nc_version", "program_tool", "app_user", "audit_log"}
+var backupTables = []string{"business_role", "drawing", "machine", "machine_tool", "tool", "operation", "operation_photo", "photo_annotation", "nc_blob", "nc_program", "nc_version", "program_tool", "app_user", "audit_log"}
 
 type BackupSummary struct {
 	Users      int      `json:"users"`
@@ -81,9 +81,15 @@ func (r *Repo) CheckBackupDB(ctx context.Context, path string) (BackupSummary, [
 	if err := db.SelectContext(ctx, &actualMigrations, `SELECT version FROM schema_migration ORDER BY version`); err != nil {
 		return summary, nil, err
 	}
-	// Only upgrade an exact pre-photo schema, inside the extracted snapshot.
-	if len(expectedMigrations) > 0 && expectedMigrations[len(expectedMigrations)-1] == "0009_operation_photo" && slices.Equal(actualMigrations, expectedMigrations[:len(expectedMigrations)-1]) {
-		oldSchema := slices.DeleteFunc(slices.Clone(expected), func(entry string) bool { return strings.HasPrefix(entry, "table:operation_photo:") })
+	// Upgrade only known photo-era schemas after matching every existing schema entry.
+	var missing []string
+	if len(actualMigrations) < len(expectedMigrations) && slices.Equal(actualMigrations, expectedMigrations[:len(actualMigrations)]) {
+		missing = expectedMigrations[len(actualMigrations):]
+	}
+	if slices.Equal(missing, []string{"0010_photo_annotation"}) || slices.Equal(missing, []string{"0009_operation_photo", "0010_photo_annotation"}) {
+		oldSchema := slices.DeleteFunc(slices.Clone(expected), func(entry string) bool {
+			return strings.HasPrefix(entry, "table:photo_annotation:") || (len(missing) == 2 && strings.HasPrefix(entry, "table:operation_photo:"))
+		})
 		if slices.Equal(oldSchema, actual) {
 			if err := store.Migrate(ctx, db); err != nil {
 				return summary, nil, err

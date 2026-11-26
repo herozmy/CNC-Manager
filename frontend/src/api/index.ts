@@ -1,3 +1,4 @@
+import type { PhotoAnnotations } from './types'
 import { http } from './client'
 import type {
   Machine, MachineInput, MachineFilter, MachineOption, UserInput, UserUpdate, AuditEntry, AuditFilter, BackupSchedule, ScheduleSettings, BackupPreview, BackupRecovery, ToolTable, ProgramToolInput, ParseResult, ContentInput, VersionContent, VersionSaveResult, VersionDiff, Drawing, DrawingDetail, DrawingInput, Meta, Operation, OperationInput, Page, Program, ProgramInput, UploadResult, User, Version,
@@ -35,6 +36,8 @@ export const api = {
   setup: (username: string, displayName: string, password: string) =>
     http.post<User>('/auth/setup', { username, displayName, password }),
   logout: () => http.post<void>('/auth/logout'),
+  photoAnnotations: (operationId: number, digest: string) => http.get<PhotoAnnotations>(`/operations/${operationId}/photos/${digest}/annotations`),
+  savePhotoAnnotations: (operationId: number, digest: string, value: PhotoAnnotations) => http.put<PhotoAnnotations>(`/operations/${operationId}/photos/${digest}/annotations`, value),
   operationPhotos: (id: number) => http.get<string[]>(`/operations/${id}/photos`),
   addOperationPhoto: (id: number, jpeg: Blob) => http.post<string>(`/operations/${id}/photos`, jpeg),
   deleteOperationPhoto: (id: number, digest: string) => http.del<void>(`/operations/${id}/photos/${digest}`),

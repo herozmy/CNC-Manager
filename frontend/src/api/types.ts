@@ -265,3 +265,16 @@ export interface BackupSchedule extends ScheduleSettings {
   next: string | null
   lastResult: string
 }
+
+export interface PhotoMark {
+  kind: 'ellipse' | 'arrow' | 'text'
+  x: number
+  y: number
+  x2: number
+  y2: number
+  text?: string
+}
+export interface PhotoAnnotations {
+  marks: PhotoMark[]
+  revision: number
+}
