@@ -36,6 +36,7 @@ export function cancelAuthRequests() {
 async function request<T>(method: string, path: string, body?: unknown, binary = false): Promise<T> {
   // FormData 由浏览器自己带 multipart 边界，不能手动设置 Content-Type
   const isForm = body instanceof FormData
+  const isBlob = body instanceof Blob
   const business = !path.startsWith('/auth/') && path !== '/meta'
   const auth = path.startsWith('/auth/')
   const epoch = business ? businessEpoch : authEpoch
@@ -47,8 +48,8 @@ async function request<T>(method: string, path: string, body?: unknown, binary =
   const res = await fetch(`/api${path}`, {
     method,
     signal: business || auth ? controller.signal : undefined,
-    headers: body === undefined || isForm ? undefined : { 'Content-Type': 'application/json' },
-    body: body === undefined ? undefined : isForm ? body : JSON.stringify(body),
+    headers: body === undefined || isForm || isBlob ? undefined : { 'Content-Type': 'application/json' },
+    body: body === undefined ? undefined : isForm || isBlob ? body : JSON.stringify(body),
   })
   checkScope()
   if (res.status === 204) return undefined as T

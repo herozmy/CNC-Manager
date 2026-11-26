@@ -35,6 +35,9 @@ export const api = {
   setup: (username: string, displayName: string, password: string) =>
     http.post<User>('/auth/setup', { username, displayName, password }),
   logout: () => http.post<void>('/auth/logout'),
+  operationPhotos: (id: number) => http.get<string[]>(`/operations/${id}/photos`),
+  addOperationPhoto: (id: number, jpeg: Blob) => http.post<string>(`/operations/${id}/photos`, jpeg),
+  deleteOperationPhoto: (id: number, digest: string) => http.del<void>(`/operations/${id}/photos/${digest}`),
   createBackup: () => http.post<{ name: string }>('/backup/create'),
   backupSchedule: () => http.get<BackupSchedule>('/backup/schedule'),
   saveBackupSchedule: (settings: ScheduleSettings) => http.put<BackupSchedule>('/backup/schedule', settings),

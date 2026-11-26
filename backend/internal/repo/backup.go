@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"slices"
+	"strings"
 
 	"github.com/jmoiron/sqlx"
 
@@ -12,7 +14,7 @@ import (
 )
 
 // The list is explicit: archive SQL is never executed against the live database.
-var backupTables = []string{"business_role", "drawing", "machine", "machine_tool", "tool", "operation", "nc_blob", "nc_program", "nc_version", "program_tool", "app_user", "audit_log"}
+var backupTables = []string{"business_role", "drawing", "machine", "machine_tool", "tool", "operation", "operation_photo", "nc_blob", "nc_program", "nc_version", "program_tool", "app_user", "audit_log"}
 
 type BackupSummary struct {
 	Users      int      `json:"users"`
@@ -72,15 +74,28 @@ func (r *Repo) CheckBackupDB(ctx context.Context, path string) (BackupSummary, [
 	if err := db.SelectContext(ctx, &actual, schemaQuery); err != nil {
 		return summary, nil, err
 	}
-	if !reflect.DeepEqual(expected, actual) {
-		return summary, nil, fmt.Errorf("备份与当前数据库结构不兼容，请使用与备份相同版本的程序导入")
-	}
 	var expectedMigrations, actualMigrations []string
 	if err := r.db.SelectContext(ctx, &expectedMigrations, `SELECT version FROM schema_migration ORDER BY version`); err != nil {
 		return summary, nil, err
 	}
 	if err := db.SelectContext(ctx, &actualMigrations, `SELECT version FROM schema_migration ORDER BY version`); err != nil {
 		return summary, nil, err
+	}
+	// Only upgrade an exact pre-photo schema, inside the extracted snapshot.
+	if len(expectedMigrations) > 0 && expectedMigrations[len(expectedMigrations)-1] == "0009_operation_photo" && slices.Equal(actualMigrations, expectedMigrations[:len(expectedMigrations)-1]) {
+		oldSchema := slices.DeleteFunc(slices.Clone(expected), func(entry string) bool { return strings.HasPrefix(entry, "table:operation_photo:") })
+		if slices.Equal(oldSchema, actual) {
+			if err := store.Migrate(ctx, db); err != nil {
+				return summary, nil, err
+			}
+			if err := db.SelectContext(ctx, &actual, schemaQuery); err != nil {
+				return summary, nil, err
+			}
+			actualMigrations = expectedMigrations
+		}
+	}
+	if !reflect.DeepEqual(expected, actual) {
+		return summary, nil, fmt.Errorf("备份与当前数据库结构不兼容，请使用与备份相同版本的程序导入")
 	}
 	if !reflect.DeepEqual(expectedMigrations, actualMigrations) {
 		return summary, nil, fmt.Errorf("备份的数据库迁移版本不兼容")

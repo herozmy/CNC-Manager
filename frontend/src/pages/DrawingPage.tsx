@@ -9,6 +9,7 @@ import { ApiError } from '../api/client'
 import type { Operation, Program } from '../api/types'
 import DeleteSheet from '../components/DeleteSheet'
 import DrawingEditSheet from '../components/DrawingEditSheet'
+import OperationPhotos from '../components/OperationPhotos'
 import OperationSheet from '../components/OperationSheet'
 import ProgramSheet from '../components/ProgramSheet'
 import { Button } from '../components/ui/Button'
@@ -79,6 +80,7 @@ function OperationCard({ drawingId, op, onEdit, onDelete, onAddProgram }: { draw
               </div>
             ))}
           </dl>
+          <OperationPhotos operationId={op.id} editable={access.can('edit')} />
           {op.programs.length > 0 ? (
             <ul className="mt-4 divide-y divide-line border-y border-line">
               {op.programs.map((p) => (
